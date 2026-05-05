@@ -145,6 +145,8 @@ Bond is always returned — it is never permanently slashed. The lock period is 
 
 **5,000 ARM** (0.042% of 12M total supply) must be held at snapshot to submit a proposal. An address that cannot meet the threshold can receive delegation from others to qualify.
 
+**Mutability:** `PROPOSAL_THRESHOLD` is a compile-time `constant` in the current implementation — adjusting it requires a UUPS governor upgrade (Extended proposal), not a Standard/Extended single-proposal path. The directional classification table below describes the design intent; concrete adjustment will be implemented via the post-launch governor upgrade.
+
 ### Standard vs. extended classification
 
 A proposal is automatically **extended** if it grants authority,
@@ -232,6 +234,8 @@ changes between creation and execution.
 If any action in a batched proposal is classified as extended, the
 entire proposal is extended.
 
+**Implementation note: `setProposalTypeParams`.** The directional rows for Quorum / Voting period / Execution delay / Proposal delay describe the *intent* of the classification system. The concrete `setProposalTypeParams(ProposalType, ProposalParams)` function bundles all four params for a given proposal type into one call, making per-field directional comparison expensive at the classifier layer. The current implementation registers this selector as **flat-Extended**: any change to proposal-type params runs at the Extended bar regardless of direction. This is conservative (defaults to the higher consensus bar) but means a tightening-only param change pays Extended cycle time. Future governor upgrades may decompose this into per-field directional setters; until then, batch your tightening changes into a single Extended proposal rather than expecting the classifier to recognize them as Standard.
+
 **Note: veto ratification votes** (see §Security Council) are a fourth proposal category with distinct parameters — they are triggered automatically when the SC vetoes a queued proposal, have a fixed 7-day voting period, use standard quorum, and carry the unique side effect of SC ejection on AGAINST outcome. The governor contract must implement this as a separate proposal type alongside standard, extended, and signaling.
 
 ### Signaling proposals
@@ -267,9 +271,11 @@ A signaling proposal is a non-executable proposal used to measure token-holder p
 
 **Quorum floor: 100,000 ARM.** Quorum is the greater of the percentage-based threshold and this absolute floor. This prevents governance passing on near-zero turnout regardless of how much ARM has been claimed and delegated at any given time. At the base raise of 1.2M ARM, 100,000 ARM represents ~8.3% of the crowdfund allocation — meaningful coordinated participation.
 
+**Mutability:** `QUORUM_FLOOR` is a compile-time `constant` in the current implementation — adjusting it requires a UUPS governor upgrade (Extended proposal), not the directional Standard/Extended path described in the classification table. The post-launch governor upgrade will introduce a setter; until then, the floor is fixed.
+
 **Governance quiet period.** No proposals may be submitted for the first 7 days after crowdfund finalization. This is a **one-time constructor-set bootstrapping constant**, not a reusable governance parameter. It applies once and has no effect after expiry. Any emergency during this window is handled by the Security Council.
 
-All reusable governance parameters listed above are themselves governable — loosening changes require an extended proposal, tightening changes require a standard proposal (see §Standard vs. extended classification). The one-time governance quiet period (7 days post-crowdfund finalization) is a constructor-set bootstrapping constant and is not governable — see §Governance quiet period.
+Most reusable governance parameters listed above are themselves governable — loosening changes require an extended proposal, tightening changes require a standard proposal (see §Standard vs. extended classification). Two exceptions in the current implementation: `PROPOSAL_THRESHOLD` and `QUORUM_FLOOR` are compile-time constants (see their respective sections) — adjusting them requires a UUPS governor upgrade, scheduled for a post-launch governor revision. The one-time governance quiet period (7 days post-crowdfund finalization) is a constructor-set bootstrapping constant and is not governable — see §Governance quiet period.
 
 ---
 
@@ -669,7 +675,7 @@ The treasury, redemption contract, RevenueLock, and Crowdfund addresses are **ha
 Participants can still call `claim()` after wind-down and then redeem. The denominator already accounts for their entitled-unclaimed ARM, so claim timing does not affect payout fairness. As holders redeem, the redemption contract's ARM balance grows and its portion is excluded from the denominator, ensuring correct pro-rata math for sequential redemptions.
 
 **Properties:**
-- **Permissionless.** No governance vote needed. No snapshot. No merkle tree. No claim window. Deposit ARM, receive your share, whenever you want.
+- **Permissionless.** No governance vote needed. No snapshot. No merkle tree. No claim window. Deposit ARM, receive your share, whenever you want — subject to a one-time **7-day post-trigger redemption delay** (`REDEMPTION_DELAY` immutable). The delay provides a social-coordination window for permissionless `sweepToken` / `sweepETH` callers to move treasury assets to the redemption contract before any redemption can execute. Once the delay elapses, redemption is open indefinitely.
 - **Self-service.** Each holder decides when to redeem. No coordination required.
 - **Sequential correctness and claim invariance.** Claiming or releasing ARM does not change circulating supply. Before a claim/release, entitled ARM is counted as circulating (included in the denominator via allocation math, not the contract balance). After a claim/release, the same ARM is in a wallet and still counted as circulating. Redemption outcomes are therefore independent of claim/release timing. Early and late redeemers receive the same per-ARM payout regardless of whether revenue-lock beneficiaries have called `release()` or crowdfund participants have called `claim()`.
 - **No burn required.** ARM deposited into the redemption contract is locked permanently. The denominator calculation excludes it, so the math stays correct.

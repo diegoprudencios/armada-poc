@@ -75,7 +75,7 @@ Complete every item before calling the deploy script. Sign off with initials and
 |---|---|---|
 | ARM token decimals | 18 | ☐ |
 | USDC token decimals | 6 | ☐ |
-| ARM token address matches CREATE2 precomputed address | `[address]` | ☐ |
+| ARM token address recorded in deployment manifest | `[address]` | ☐ |
 
 ### Infrastructure
 
@@ -130,10 +130,10 @@ Record: `contract_address = [address]`, `deploy_tx = [hash]`, `block = [number]`
 | | |
 |---|---|
 | **Actor** | Deployer |
-| **Action** | Verify `ARM.balanceOf(crowdfundContract)` = 1,800,000e18. The ARM token constructor mints directly to the crowdfund contract — no manual transfer needed. |
-| **Preconditions** | Step 3 complete; ARM token deployed (constructor minted 1.8M directly to crowdfund contract) |
+| **Action** | Verify `ARM.balanceOf(crowdfundContract)` = 1,800,000e18. The deployer transfers ARM to the crowdfund contract via `armToken.transfer(crowdfundContract, 1_800_000e18)` after both contracts are deployed. (See `scripts/deploy_crowdfund.ts` for the canonical step.) |
+| **Preconditions** | Step 3 complete; ARM token deployed; deployer has executed the funding transfer to the crowdfund |
 | **On-chain confirmation** | `ARM.balanceOf(crowdfundContract)` = 1,800,000e18 |
-| **Fallback** | If balance is wrong: ARM token was deployed with incorrect constructor params. Redeploy ARM token. |
+| **Fallback** | If balance is wrong: re-run the funding transfer, or check that the deployer holds sufficient ARM. |
 
 ### Step 5: Load ARM
 
