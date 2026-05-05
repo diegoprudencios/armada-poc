@@ -129,6 +129,8 @@ The numerator (votes cast) is snapshotted at proposal creation via `getPastVotes
 
 ### Proposal bond
 
+**Not implemented at launch.** The bond mechanism described below is part of the planned post-launch governor upgrade scope. The current `ArmadaGovernor` does not implement bond posting, locking, return, or slashing — the proposal threshold (5,000 delegated ARM) is the only spam defense at launch. The bond becomes meaningful only after global ARM transfers are enabled (see §Pre-transfer-unlock exception below); the implementation will land in a UUPS governor upgrade alongside the other mechanisms listed in §Future governance upgrades.
+
 A bond of **1,000 ARM** is posted at submission.
 
 | Outcome | Bond treatment |
@@ -253,7 +255,7 @@ A signaling proposal is a non-executable proposal used to measure token-holder p
 - Voting works identically: FOR / AGAINST / ABSTAIN, quorum check, vote changing during the voting period.
 - **No QUEUED or EXECUTED state.** After the voting period ends, the proposal resolves to SUCCEEDED or DEFEATED based on quorum and majority. No timelock queue, no execution transaction.
 - SC veto does not apply — there is nothing queued to veto.
-- Signaling proposals do not count toward the steward circuit breaker's consecutive-low-participation tracker — they are not steward proposals.
+- Signaling proposals do not count toward the steward circuit breaker's consecutive-low-participation tracker — they are not steward proposals. (Circuit breaker is not implemented at launch — see §Circuit breaker.)
 
 ---
 
@@ -382,6 +384,8 @@ This inverts the normal proposal flow for routine operational spending: the stew
 - **The 5% Extended classification rule does not apply to `stewardSpend()`.** That rule gates the per-tx `distribute()` / `distributeETH()` channel. The steward channel is pre-authorized via the per-token Steward Budget table — adding a token, increasing a limit, or extending a window already requires an Extended proposal (§Governable). Within an authorized budget, individual `stewardSpend()` proposals are governed by the budget table and the aggregate treasury outflow limits, not by per-tx 5% classification. Both gates are enforced at queue time: a `stewardSpend()` whose aggregate per-token amount exceeds either the steward budget limit or the effective outflow limit is rejected before reaching the timelock.
 
 ### Circuit breaker
+
+**Not implemented at launch.** The 5-consecutive-low-participation auto-pause described below is part of the planned post-launch governor upgrade scope. The current implementation has no consecutive-low-participation tracker, no `stewardChannelPaused` flag, and no re-authorization function. At launch, the steward channel's defenses against minimal-participation capture are the SC veto on individual stewardSpend proposals and the steward removal path (Standard proposal). Circuit-breaker enforcement will land in a UUPS governor upgrade.
 
 **If 5 consecutive steward proposals have participation below 30%** (regardless of whether quorum was technically reached), the steward channel automatically pauses. No further steward proposals can be submitted until a standard governance proposal explicitly re-authorizes the steward channel (requires quorum + majority FOR). This prevents both governance apathy (nobody votes) and minimal-participation capture (an attacker votes just enough to clear quorum without genuine community engagement).
 
@@ -762,7 +766,7 @@ Governance can cancel a pending loosening by passing a proposal that sets the pa
 
 If governance submits a new loosening change while a previous one is still pending, the new value replaces the pending change and resets the 24-day activation timer. Governance's most recent decision is authoritative.
 
-**Upgradeability caveat:** `ArmadaTreasuryGov` is UUPS-upgradeable via governance proposal. A malicious governance upgrade could replace the contract logic including the delay mechanism itself. The defense against malicious upgrades is the Security Council veto during the upgrade proposal's execution delay window, combined with community review of new implementations. This is a fundamental property of upgradeable contracts, not a limitation specific to the outflow delay mechanism.
+**Upgradeability caveat:** `ArmadaTreasuryGov` is **non-upgradeable in the current implementation** — `extends ReentrancyGuard` only, no `Initializable` / no `UUPSUpgradeable` / no `_authorizeUpgrade`, deployed via plain constructor. Treasury logic — including the outflow delay mechanism described in this section — cannot be changed without redeploying the entire treasury and migrating all funds, roles, and references. Treasury UUPS-upgradeability is part of the planned post-launch upgrade scope (see §Contract Upgrade Scope and §Future governance upgrades); until then, treasury logic is fixed at deployment.
 
 ---
 
@@ -771,7 +775,7 @@ If governance submits a new loosening change while a previous one is still pendi
 | Contract | Upgradeable? | Mechanism | Why |
 |---|---|---|---|
 | **ARM token** | No | — | Trust bedrock. All invariants are unconditional. See ARM_TOKEN.md §9. |
-| **Treasury** | Implementation TBD (confirm with Ian) | Controlled by governor/timelock | All outflows require governance proposal execution (standard or steward channel), subject to treasury outflow limits. The treasury address is immutable in all contracts that reference it (fee module, yield vault, crowdfund, wind-down contract). The wind-down contract has pre-authorized sweep authority. The treasury cannot delegate ARM (token-enforced: `delegate()` reverts for treasury address). If the treasury is a contract (not the timelock itself), its owner/controller must be the timelock. |
+| **Treasury** | No (at launch) — UUPS planned post-launch | Currently controlled by governor/timelock only via `onlyOwner` setters; logic is non-upgradeable until the post-launch UUPS migration ships. | All outflows require governance proposal execution (standard or steward channel), subject to treasury outflow limits. The treasury address is immutable in all contracts that reference it (fee module, yield vault, crowdfund, wind-down contract). The wind-down contract has pre-authorized sweep authority. The treasury cannot delegate ARM (token-enforced: `delegate()` reverts for treasury address). The treasury contract is itself owned by the timelock. |
 | **Crowdfund contract** | No | — | Non-upgradeable. All parameters are constructor-set. Post-finalization, all privileged functions are permanently inactive. See CROWDFUND.md. |
 | **Redemption contract** | No | — | Permissionless post-wind-down. Four excluded addresses hardcoded in constructor (treasury, revenue-lock, crowdfund, redemption). No admin, no governance interaction. |
 | **Revenue-lock contract** | No | — | Beneficiaries must trust the milestone schedule and release logic cannot change. |
@@ -886,3 +890,6 @@ The following mechanisms are candidates for governance upgrades as the protocol 
   governance systems. This is a governor upgrade, not a token
   change.
 - **Two-stage governance-critical upgrades.** Governor, timelock, and treasury upgrades will require a two-stage approval + ratification process with mandatory 14-day review period between stages and payload-hash binding. The initial deployment uses the standard Extended proposal path. See §Governance-critical upgrade lifecycle. This is the highest-priority post-launch governor upgrade.
+- **Proposal bond mechanism.** Bond posting, time-locked return on quorum-not-met / voted-down outcomes, and immediate unlock on pass. Activates once global ARM transfers are enabled. See §Proposal bond.
+- **Treasury UUPS migration.** Convert `ArmadaTreasuryGov` from a plain constructor-deployed contract to a UUPS proxy so future governance can adjust outflow logic, add new asset types, or fix bugs without a full treasury redeployment + fund migration. The migration itself will require a one-time treasury redeployment with coordinated fund transfer; thereafter, future treasury logic changes flow through governance-gated UUPS upgrades.
+- **Steward circuit breaker.** Auto-pause the steward channel after 5 consecutive proposals with participation below 30%. Re-authorization requires a standard governance proposal. See §Circuit breaker for details. This closes the minimal-participation capture vector for hostile-elected stewards under apathetic communities.
