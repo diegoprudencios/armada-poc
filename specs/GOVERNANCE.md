@@ -97,7 +97,7 @@ The ARM token's architectural enforcement (delegation-at-circulation for all pri
 - Revenue-locked early network tokens not yet unlocked
 - Allocated-but-unclaimed crowdfund tokens (vote-inert until claimed)
 
-Both the numerator (votes cast) and the denominator (circulating voting power) are snapshotted at proposal creation. A batch of revenue-milestone unlocks mid-vote cannot move the goalposts.
+The numerator (votes cast) is snapshotted at proposal creation via `getPastVotes`. The denominator combines `getPastTotalSupply(snapshotBlock)` with **live** balances of the treasury and excluded addresses — these are read at vote-close time, not snapshotted. In practice the values are stable: `ArmadaToken` mints once in the constructor (totalSupply is fixed) and excluded balances change only via governance-routed paths, so a batch of revenue-milestone unlocks mid-vote cannot move the goalposts.
 
 ### Attack surface
 
@@ -297,7 +297,8 @@ All reusable governance parameters listed above are themselves governable — lo
 | **Steward** | Steward budget table — add token, increase limit, extend window (loosening) | Extended |
 | **Steward** | Steward budget table — remove token, decrease limit, shorten window (tightening) | Standard |
 | **Security Council** | SC address replacement via governance | Extended |
-| **Adapters** | Authorize new adapters, deauthorize old adapters | Standard |
+| **Adapters** | Authorize new adapter (loosening — grants protocol access) | Extended |
+| **Adapters** | Deauthorize / fully deauthorize adapter (tightening — revokes access) | Standard |
 | **Upgrades** | Governor contract upgrade (UUPS, governance-gated) | Extended |
 | **Upgrades** | Fee module upgrade (UUPS, governance-gated) | Extended |
 | **Upgrades** | Revenue counter upgrade (UUPS, governance-gated) | Extended |
@@ -837,7 +838,7 @@ This is deliberately slow. Governance-critical upgrades should be the hardest ac
 
 The governor maintains a registry of authorized adapter addresses. Adapters interact with the shielded pool and external protocols (Aave, CCTP, future yield sources, future relayer infrastructure).
 
-**Adding a new adapter:** Deploy the adapter contract independently. Submit a standard governance proposal to authorize it (`authorizeAdapter(address)`). Once authorized, the adapter can interact with the protocol. Existing adapters remain active — new additions are additive, not replacements.
+**Adding a new adapter:** Deploy the adapter contract independently. Submit an extended governance proposal to authorize it (`authorizeAdapter(address)`) — this is a loosening action that grants the adapter access to the shielded-yield surface, so it sits at the higher consensus bar. Once authorized, the adapter can interact with the protocol. Existing adapters remain active — new additions are additive, not replacements.
 
 **Removing an adapter:** submit a standard governance proposal to deauthorize (`deauthorizeAdapter(address)`). For adapters with user positions (e.g., yield adapter with deposits), deauthorization should set the adapter to **withdraw-only mode** rather than immediate full deauthorization — users need time to exit their positions.
 

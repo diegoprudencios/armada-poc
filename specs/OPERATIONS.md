@@ -207,7 +207,7 @@ Week 1 is the highest-risk operational phase. Hop-0 participants are added, laun
 
 Each day during week 1, the operator should verify:
 
-- [ ] Current hop-0 count (observer or `seedCount()` view)
+- [ ] Current hop-0 count (observer or `getHopStats(0).whitelistCount` view on `ArmadaCrowdfund`)
 - [ ] Remaining hop-0 budget: 160 − current count
 - [ ] Remaining launch-team hop-1 budget: 60 − issued count
 - [ ] Remaining launch-team hop-2 budget: 60 − issued count

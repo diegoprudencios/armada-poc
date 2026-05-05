@@ -496,17 +496,20 @@ Each alert must include:
 
 ## 12b. Treasury Outflow Pending-State Runbook
 
-**What:** Monitor `OutflowLimitIncreaseScheduled`, `OutflowLimitActivated`, and `OutflowLimitDecreased` events emitted by `ArmadaTreasuryGov`.
+**What:** Monitor the nine `Outflow*` events emitted by `ArmadaTreasuryGov`, split across three parameter axes:
+- `OutflowLimitAbsoluteIncreaseScheduled` / `OutflowLimitAbsoluteActivated` / `OutflowLimitAbsoluteDecreased` — absolute USDC limit changes.
+- `OutflowLimitBpsIncreaseScheduled` / `OutflowLimitBpsActivated` / `OutflowLimitBpsDecreased` — bps-of-treasury limit changes.
+- `OutflowWindowDurationDecreaseScheduled` / `OutflowWindowDurationActivated` / `OutflowWindowDurationIncreased` — rolling-window duration changes.
 
 **Why:** Outflow parameter changes have a 24-day activation delay on loosening. This is the primary structural defense against governance capture of the treasury. Monitoring the pending state lets the community and Security Council observe a pending loosening during the 24-day window and respond before it takes effect.
 
 **Alert conditions:**
-- `OutflowLimitIncreaseScheduled` emitted — new loosening is pending, 24 days until activation. This is the window for community review and SC veto of the originating proposal.
-- `OutflowLimitActivated` emitted — pending change took effect. Confirm this matches expected governance activity.
-- New `OutflowLimitIncreaseScheduled` while a previous pending increase is unexpired — governance changed its mind or unusual activity. Investigate.
+- Any `*IncreaseScheduled` or `WindowDurationDecreaseScheduled` event emitted — new loosening is pending, 24 days until activation. This is the window for community review and SC veto of the originating proposal.
+- Any `*Activated` event emitted — pending change took effect. Confirm this matches expected governance activity.
+- A new `*IncreaseScheduled` (or `WindowDurationDecreaseScheduled`) while a previous pending change on the same axis is unexpired — governance changed its mind or unusual activity. Investigate.
 - Multiple Scheduled/Activated cycles in rapid succession — signal of unusual governance activity.
 
-**Optional operational task:** Call `activatePendingLimit(address token)` on `ArmadaTreasuryGov` shortly after `pendingActivation` timestamp to trigger the `OutflowLimitActivated` event at the correct time rather than waiting for the next outflow operation. Not security-critical but improves monitoring timeliness.
+**Optional operational task:** Call `activatePendingOutflowParams(address token)` on `ArmadaTreasuryGov` shortly after the `activatesAt` timestamp emitted in the corresponding `*IncreaseScheduled` / `WindowDurationDecreaseScheduled` event (or read from `pendingLimitAbsoluteActivation` / `pendingLimitBpsActivation` / `pendingWindowDurationActivation` on the per-token outflow config). This triggers the corresponding `*Activated` event at the correct time rather than waiting for the next outflow operation. Not security-critical but improves monitoring timeliness.
 
 ---
 
@@ -536,7 +539,7 @@ Each alert must include:
 
 **Why:** A proposal may pass governance and enter the timelock queue but revert at execution because the treasury outflow limit would be exceeded. The proposal remains retryable indefinitely — there is no expiry — but there is no on-chain event indicating the execution was attempted and failed.
 
-**Detection:** Proposal in Queued state where `block.timestamp > scheduledTimestamp + executionDelay` and no `ProposalExecuted` event has been emitted.
+**Detection:** Proposal in Queued state where `block.timestamp > timelock.getTimestamp(timelockOperationId)` and no `ProposalExecuted` event has been emitted. The `Proposal` struct stores no `scheduledTimestamp` — queue timing lives on the `TimelockController` and is reachable via `timelock.getTimestamp(bytes32 id)`. The `executionDelay` is already baked into the timelock's stored ETA (the timelock returns `block.timestamp + minDelay` when `scheduleBatch` is called).
 
 **Diagnosis:** Call `getOutflowStatus(token)` on `ArmadaTreasuryGov` to read `(effectiveLimit, recentOutflow, available)`. Compare `available` against the proposal's spend amount. If `available < spendAmount`, the proposal is outflow-blocked.
 

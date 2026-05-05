@@ -158,9 +158,9 @@ ObservedRevenueUpdated(uint256 oldMax, uint256 newMax, uint256 reportedByCounter
 |---|---|---|
 | `allocation(address beneficiary)` | uint256 | Total allocation for this beneficiary |
 | `released(address beneficiary)` | uint256 | Total ARM already released to this beneficiary |
-| `releasable(address beneficiary)` | uint256 | ARM currently available to release, computed from `maxObservedRevenue` |
-| `unlockPercentage()` | uint256 (bps) | Current unlock percentage based on `maxObservedRevenue` (not raw counter) |
-| `currentRevenue()` | uint256 | Current value of `maxObservedRevenue` (the ratcheted, rate-limited observation — not `RevenueCounter.recognizedRevenueUsd()` directly) |
+| `releasable(address beneficiary)` | uint256 | ARM currently available to release. Computed against `getCappedObservedRevenue()` — the projected value `maxObservedRevenue` would advance to if `syncObservedRevenue()` were called now, mirroring what `release()` will see post-update. |
+| `unlockPercentage()` | uint256 (bps) | Current unlock percentage. Computed against `getCappedObservedRevenue()` (same projected ceiling as `releasable`) so consumers see what `release()` will yield without paying for a separate sync transaction. |
+| `currentRevenue()` | uint256 | Raw cumulative revenue as reported by `RevenueCounter.recognizedRevenueUsd()`. **Diagnostic only** — does NOT flow through the ratchet. Entitlement uses `maxObservedRevenue` / `getCappedObservedRevenue()`. A sustained divergence between `currentRevenue()` and `getCappedObservedRevenue()` indicates either an over-reporting RevenueCounter being rate-limited or a malicious upgrade in progress. |
 | `getCappedObservedRevenue()` | uint256 | What `maxObservedRevenue` would become if `syncObservedRevenue()` were called right now. Read-only: does not modify state or advance `lastSyncTimestamp`. Use for monitoring dashboards. |
 | `maxObservedRevenue` | uint256 | Current active ratchet value. Monotonically non-decreasing. |
 | `lastSyncTimestamp` | uint256 | Timestamp of last `_updateMaxObservedRevenue()` call. Advances unconditionally. |

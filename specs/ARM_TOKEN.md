@@ -380,7 +380,7 @@ These are the exact properties the crowdfund contract depends on. Test compatibi
 
 | Event | Fields | Notes |
 |---|---|---|
-| `TransferabilityEnabled` | — | Emitted once when governance unlocks transfers. Irreversible. |
+| `TransferableSet(bool transferable)` | `bool transferable` | Emitted once when transfers are unlocked (by governor executor or wind-down contract). The `bool` is always `true` in current usage — `setTransferable(false)` is not exposed. Irreversible. |
 
 ### Revenue events
 
@@ -460,5 +460,5 @@ ARM Token Contract
   │     ├── release(delegatee) calls transfer + delegateOnBehalf
   │     └── releases proportional to governance-attested revenue counter
   └── consumed by: Monitoring
-        └── reads Transfer, DelegateChanged, TransferabilityEnabled events
+        └── reads Transfer, DelegateChanged, TransferableSet events
 ```
