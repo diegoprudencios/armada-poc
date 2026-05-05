@@ -34,6 +34,27 @@ contract ArmadaCrowdfund is ReentrancyGuard, EIP712 {
     uint8 public constant NUM_HOPS = 3;
     uint256 public constant HOP2_FLOOR_BPS = 500;  // 5% of saleSize reserved for hop-2
 
+    /// @notice Per-hop ceiling shares (basis points of the post-hop2-floor available pool).
+    ///         Sum exceeds 100% intentionally; rollover from earlier hops absorbs the gap.
+    uint16 public constant HOP0_CEILING_BPS = 7000; // 70%
+    uint16 public constant HOP1_CEILING_BPS = 4500; // 45%
+
+    /// @notice Per-slot effective USDC caps at each hop. Multiplied by `invitesReceived`
+    ///         to derive an address's effective slot allowance at that hop.
+    uint256 public constant HOP0_CAP_USDC = 15_000 * 1e6;
+    uint256 public constant HOP1_CAP_USDC = 4_000 * 1e6;
+    uint256 public constant HOP2_CAP_USDC = 1_000 * 1e6;
+
+    /// @notice Per-hop outgoing-invite stacking caps (per `invitesReceived`).
+    uint8 public constant HOP0_MAX_INVITES = 3;
+    uint8 public constant HOP1_MAX_INVITES = 2;
+    uint8 public constant HOP2_MAX_INVITES = 0;
+
+    /// @notice Per-hop incoming-invite stacking caps (max edges that scale a node).
+    uint16 public constant HOP0_MAX_INVITES_RECEIVED = 1;
+    uint16 public constant HOP1_MAX_INVITES_RECEIVED = 10;
+    uint16 public constant HOP2_MAX_INVITES_RECEIVED = 20;
+
     uint256 public constant WINDOW_DURATION = 21 days;
     uint256 public constant LAUNCH_TEAM_INVITE_PERIOD = 7 days;
     uint256 public constant CLAIM_DEADLINE_DURATION = 1095 days; // 3 years
@@ -96,8 +117,13 @@ contract ArmadaCrowdfund is ReentrancyGuard, EIP712 {
     // Claim deadline — set at finalization, after which unclaimed ARM is sweepable
     uint256 public claimDeadline;
 
-    // Timestamp when finalize() was called — used by ArmadaGovernor for the
-    // 7-day governance quiet period. Set on both normal and refundMode paths.
+    /// @notice Timestamp when finalize() was called. Set on every finalization path
+    ///         — success, capped-demand-below-MIN_SALE refund, and post-allocation
+    ///         refund. Consumers that need to distinguish a successful sale from a
+    ///         refundMode finalization must check `phase == Phase.Finalized && !refundMode`
+    ///         in addition to `finalizedAt > 0`. Used by ArmadaGovernor to anchor the
+    ///         7-day governance quiet period (which starts on any finalization,
+    ///         including refundMode).
     uint256 public finalizedAt;
 
     // EIP-712 invite nonce tracking — used/revoked nonces per inviter
@@ -123,7 +149,7 @@ contract ArmadaCrowdfund is ReentrancyGuard, EIP712 {
     event Cancelled(address indexed caller, uint256 timestamp);
     event RefundClaimed(address indexed participant, uint256 usdcAmount);
     event UnallocatedArmWithdrawn(address indexed treasury, uint256 amount);
-    event ArmLoaded();
+    event ArmLoaded(address indexed caller, uint256 balance, uint256 required);
     event InviteNonceRevoked(address indexed inviter, uint256 nonce);
     event Allocated(address indexed participant, uint256 armTransferred, uint256 refundUsdc, address delegate);
     event AllocatedHop(address indexed participant, uint8 indexed hop, uint256 acceptedUsdc);
@@ -163,9 +189,9 @@ contract ArmadaCrowdfund is ReentrancyGuard, EIP712 {
         launchTeamInviteEnd = _openTimestamp + LAUNCH_TEAM_INVITE_PERIOD;
         // phase defaults to Phase.Active (value 0)
 
-        hopConfigs[0] = HopConfig({ ceilingBps: 7000, capUsdc: 15_000 * 1e6, maxInvites: 3, maxInvitesReceived: 1 });
-        hopConfigs[1] = HopConfig({ ceilingBps: 4500, capUsdc: 4_000 * 1e6,  maxInvites: 2, maxInvitesReceived: 10 });
-        hopConfigs[2] = HopConfig({ ceilingBps: 0,    capUsdc: 1_000 * 1e6,  maxInvites: 0, maxInvitesReceived: 20 });
+        hopConfigs[0] = HopConfig({ ceilingBps: HOP0_CEILING_BPS, capUsdc: HOP0_CAP_USDC, maxInvites: HOP0_MAX_INVITES, maxInvitesReceived: HOP0_MAX_INVITES_RECEIVED });
+        hopConfigs[1] = HopConfig({ ceilingBps: HOP1_CEILING_BPS, capUsdc: HOP1_CAP_USDC, maxInvites: HOP1_MAX_INVITES, maxInvitesReceived: HOP1_MAX_INVITES_RECEIVED });
+        hopConfigs[2] = HopConfig({ ceilingBps: 0,                capUsdc: HOP2_CAP_USDC, maxInvites: HOP2_MAX_INVITES, maxInvitesReceived: HOP2_MAX_INVITES_RECEIVED });
     }
 
     // ============ Seed Management ============
@@ -214,7 +240,7 @@ contract ArmadaCrowdfund is ReentrancyGuard, EIP712 {
         require(balance >= requiredArm, "ArmadaCrowdfund: insufficient ARM for MAX_SALE");
 
         armLoaded = true;
-        emit ArmLoaded();
+        emit ArmLoaded(msg.sender, balance, requiredArm);
     }
 
     // ============ Invitations ============

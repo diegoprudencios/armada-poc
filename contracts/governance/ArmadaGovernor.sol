@@ -96,6 +96,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     error Gov_DuplicateExcludedAddress();
     error Gov_OutflowInfeasible();
     error Gov_StewardBudgetInfeasible();
+    error Gov_NoChange();
 
     // ============ Types ============
 
@@ -652,6 +653,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
             revert Gov_NotTimelock();
         }
         address oldSC = securityCouncil;
+        if (oldSC == newSC) revert Gov_NoChange();
         securityCouncil = newSC;
         emit SecurityCouncilUpdated(oldSC, newSC);
     }
@@ -1553,6 +1555,6 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
 
     // ============ Storage Gap ============
 
-    /// @dev Reserved storage for future upgrades. 25 state slots + 25 gap = 50 total.
+    /// @dev Reserved storage for future upgrades. 18 state slots + 25 gap.
     uint256[25] private __gap;
 }

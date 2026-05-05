@@ -32,6 +32,24 @@ contract RevenueLock {
     /// @notice Maximum basis points (100%)
     uint256 private constant BPS_100 = 10000;
 
+    /// @notice Unlock-schedule milestones. Revenue thresholds are denominated in
+    ///         18-decimal USD to match `RevenueCounter.recognizedRevenueUsd`. Each
+    ///         tier maps a cumulative-revenue threshold to an unlock percentage in
+    ///         basis points (out of `BPS_100`). `_unlockBpsForRevenue` checks tiers
+    ///         in descending order and returns the first match.
+    uint256 private constant MILESTONE_100PCT_REVENUE_USD = 1_000_000e18;
+    uint256 private constant MILESTONE_100PCT_BPS = 10000;
+    uint256 private constant MILESTONE_80PCT_REVENUE_USD = 500_000e18;
+    uint256 private constant MILESTONE_80PCT_BPS = 8000;
+    uint256 private constant MILESTONE_60PCT_REVENUE_USD = 250_000e18;
+    uint256 private constant MILESTONE_60PCT_BPS = 6000;
+    uint256 private constant MILESTONE_40PCT_REVENUE_USD = 100_000e18;
+    uint256 private constant MILESTONE_40PCT_BPS = 4000;
+    uint256 private constant MILESTONE_25PCT_REVENUE_USD = 50_000e18;
+    uint256 private constant MILESTONE_25PCT_BPS = 2500;
+    uint256 private constant MILESTONE_10PCT_REVENUE_USD = 10_000e18;
+    uint256 private constant MILESTONE_10PCT_BPS = 1000;
+
     // ============ Immutable References ============
 
     /// @notice ARM governance token
@@ -387,15 +405,16 @@ contract RevenueLock {
     }
 
     /// @dev Step function: returns the unlock bps for a given cumulative revenue.
-    ///      No interpolation — jumps at each threshold.
+    ///      No interpolation — jumps at each threshold. Revenue is 18-decimal USD;
+    ///      the milestone constants above carry the canonical thresholds.
     function _unlockBpsForRevenue(uint256 revenue) internal pure returns (uint256) {
         // Milestones checked in descending order for early return at highest reached
-        if (revenue >= 1_000_000e18) return 10000; // 100%
-        if (revenue >= 500_000e18)   return 8000;  // 80%
-        if (revenue >= 250_000e18)   return 6000;  // 60%
-        if (revenue >= 100_000e18)   return 4000;  // 40%
-        if (revenue >= 50_000e18)    return 2500;  // 25%
-        if (revenue >= 10_000e18)    return 1000;  // 10%
+        if (revenue >= MILESTONE_100PCT_REVENUE_USD) return MILESTONE_100PCT_BPS;
+        if (revenue >= MILESTONE_80PCT_REVENUE_USD)  return MILESTONE_80PCT_BPS;
+        if (revenue >= MILESTONE_60PCT_REVENUE_USD)  return MILESTONE_60PCT_BPS;
+        if (revenue >= MILESTONE_40PCT_REVENUE_USD)  return MILESTONE_40PCT_BPS;
+        if (revenue >= MILESTONE_25PCT_REVENUE_USD)  return MILESTONE_25PCT_BPS;
+        if (revenue >= MILESTONE_10PCT_REVENUE_USD)  return MILESTONE_10PCT_BPS;
         return 0;
     }
 
