@@ -709,9 +709,18 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
         bool majorityAgainst = quorumMet && (p.againstVotes > p.forVotes);
 
         if (majorityAgainst) {
-            // Community denies the veto → eject SC, restore proposal
-            address oldSC = securityCouncil;
-            securityCouncil = address(0);
+            // Community denies the veto → eject the VETOING SC if still in slot,
+            // restore proposal regardless. The vetoing SC's identity is recorded
+            // as p.proposer at veto time (audit-104). If the slot has been swapped
+            // since (legitimate SC rotation during the 7-day ratification window),
+            // skip the eject so the new SC isn't punished for the prior SC's veto.
+            // Off-chain accountability for the original vetoer remains discoverable
+            // via the ratification proposal's proposer field.
+            address vetoingSC = p.proposer;
+            bool ejecting = (securityCouncil == vetoingSC);
+            if (ejecting) {
+                securityCouncil = address(0);
+            }
 
             // Restore the original proposal to Queued state
             Proposal storage orig = _proposals[vetoedId];
@@ -730,8 +739,10 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
             );
 
             emit ProposalRestored(vetoedId);
-            emit SecurityCouncilEjected(ratificationId);
-            emit SecurityCouncilUpdated(oldSC, address(0));
+            if (ejecting) {
+                emit SecurityCouncilEjected(ratificationId);
+                emit SecurityCouncilUpdated(vetoingSC, address(0));
+            }
             emit RatificationResolved(ratificationId, false);
         } else {
             // FOR wins or quorum not met → veto stands
