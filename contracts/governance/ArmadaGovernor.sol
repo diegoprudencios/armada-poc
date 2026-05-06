@@ -97,6 +97,8 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     error Gov_OutflowInfeasible();
     error Gov_StewardBudgetInfeasible();
     error Gov_NoChange();
+    error Gov_CannotRevokeGovernorRole(bytes32 role);
+    error Gov_CannotRenounceTimelockAdmin();
 
     // ============ Types ============
 
@@ -170,17 +172,17 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     uint256 public constant PROPOSAL_THRESHOLD = 5_000e18;
 
     // Bounds for governance-updatable proposal parameters
-    uint256 public constant MIN_VOTING_DELAY = 1 days;
-    uint256 public constant MAX_VOTING_DELAY = 14 days;
-    uint256 public constant MIN_VOTING_PERIOD = 1 days;
-    uint256 public constant MAX_VOTING_PERIOD = 30 days;
-    uint256 public constant MIN_EXECUTION_DELAY = 1 days;
-    uint256 public constant MAX_EXECUTION_DELAY = 14 days;
-    uint256 public constant MIN_QUORUM_BPS = 500;   // 5%
-    uint256 public constant MAX_QUORUM_BPS = 5000;  // 50%
+    uint256 internal constant MIN_VOTING_DELAY = 1 days;
+    uint256 internal constant MAX_VOTING_DELAY = 14 days;
+    uint256 internal constant MIN_VOTING_PERIOD = 1 days;
+    uint256 internal constant MAX_VOTING_PERIOD = 30 days;
+    uint256 internal constant MIN_EXECUTION_DELAY = 1 days;
+    uint256 internal constant MAX_EXECUTION_DELAY = 14 days;
+    uint256 internal constant MIN_QUORUM_BPS = 500;   // 5%
+    uint256 internal constant MAX_QUORUM_BPS = 5000;  // 50%
 
     // Succeeded proposals must be queued within this window or they expire
-    uint256 public constant QUEUE_GRACE_PERIOD = 14 days;
+    uint256 internal constant QUEUE_GRACE_PERIOD = 14 days;
 
     // Mirror of ArmadaTreasuryGov.LIMIT_ACTIVATION_DELAY. Duplicated here (instead of
     // read cross-contract) to keep the governor under the 24576-byte mainnet deploy limit.
@@ -196,7 +198,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     // One-time bootstrapping constant; not governable.
     address public crowdfundAddress;
     bool public crowdfundAddressLocked;
-    uint256 public constant QUIET_PERIOD_DURATION = 7 days;
+    uint256 internal constant QUIET_PERIOD_DURATION = 7 days;
 
     // Wind-down integration: when triggered, governance permanently stops accepting new proposals.
     // The wind-down contract is registered via one-time setter; only it can flip the flag.
@@ -219,18 +221,42 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
 
     // Treasury >5% threshold for automatic extended classification of distribute() calls.
     // The distribute selector is checked specially: if amount > 5% of treasury balance, Extended.
-    bytes4 public constant DISTRIBUTE_SELECTOR = bytes4(keccak256("distribute(address,address,uint256)"));
-    bytes4 public constant DISTRIBUTE_ETH_SELECTOR = bytes4(keccak256("distributeETH(address,uint256)"));
-    bytes4 public constant STEWARD_SPEND_SELECTOR = bytes4(keccak256("stewardSpend(address,address,uint256)"));
-    uint256 public constant TREASURY_EXTENDED_THRESHOLD_BPS = 500; // 5%
+    bytes4 internal constant DISTRIBUTE_SELECTOR = bytes4(keccak256("distribute(address,address,uint256)"));
+    bytes4 internal constant DISTRIBUTE_ETH_SELECTOR = bytes4(keccak256("distributeETH(address,uint256)"));
+    bytes4 internal constant STEWARD_SPEND_SELECTOR = bytes4(keccak256("stewardSpend(address,address,uint256)"));
+    uint256 internal constant TREASURY_EXTENDED_THRESHOLD_BPS = 500; // 5%
 
-    // Timelock.updateDelay(uint256) — propose-time cap at MAX_EXECUTION_DELAY. This is
-    // a protocol-wide bound on _minDelay, NOT a brick-prevention mechanism. Brick
-    // prevention is handled in queue() by reconciling p.executionDelay against the
-    // live _minDelay (forwarding max(snapshot, current floor) to scheduleBatch). The
-    // cap remains because raising _minDelay above MAX_EXECUTION_DELAY would slow every
-    // proposal type (including Steward) past the protocol's design ceiling.
-    bytes4 public constant UPDATE_DELAY_SELECTOR = bytes4(keccak256("updateDelay(uint256)"));
+    // Timelock-targeting calldata that the propose-time guard recognizes. The guard
+    // (_validateTimelockCalldata) defends three role-cardinality / parameter-bound
+    // invariants that no individual function signature exposes on its own:
+    //   1. _minDelay <= MAX_EXECUTION_DELAY — bounds the protocol-wide effective
+    //      execution delay so no proposal type is slowed past the design ceiling.
+    //      (Brick prevention against _minDelay > p.executionDelay is enforced
+    //      separately in queue() via runtime reconciliation; this guard is no
+    //      longer load-bearing for that property.)
+    //   2. Governor retains PROPOSER / EXECUTOR / CANCELLER on the timelock — the
+    //      production deploy grants these roles only to this governor, so revoking
+    //      any of them permanently bricks queue / execute / veto respectively.
+    //   3. Timelock self retains TIMELOCK_ADMIN_ROLE — the production deploy
+    //      renounces deployer admin (deploy_crowdfund.ts:332), leaving only the
+    //      timelock self with admin. Renouncing it closes all future role grants;
+    //      combined with (2), eliminates every on-chain recovery surface.
+    // Future role-management features (e.g. adding a backup proposer multisig)
+    // must intentionally bypass this guard via a separate code path that re-evaluates
+    // the invariants — a parallel propose-time pipeline must not silently inherit
+    // the same allowlist.
+    bytes4 internal constant UPDATE_DELAY_SELECTOR = bytes4(keccak256("updateDelay(uint256)"));
+    bytes4 internal constant REVOKE_ROLE_SELECTOR = bytes4(keccak256("revokeRole(bytes32,address)"));
+    bytes4 internal constant RENOUNCE_ROLE_SELECTOR = bytes4(keccak256("renounceRole(bytes32,address)"));
+
+    // Timelock role hashes precomputed from the OZ AccessControl + TimelockController
+    // role-name strings. Avoids three external view calls per role-revoke check at
+    // runtime. Verified against TimelockController constants on every compile via
+    // the explicit equality assertions in test-foundry/GovernorUpdateDelayCap.t.sol.
+    bytes32 internal constant TIMELOCK_PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
+    bytes32 internal constant TIMELOCK_EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
+    bytes32 internal constant TIMELOCK_CANCELLER_ROLE = keccak256("CANCELLER_ROLE");
+    bytes32 internal constant TIMELOCK_ADMIN_ROLE = keccak256("TIMELOCK_ADMIN_ROLE");
 
     // Fail-closed classification: selectors not in extendedSelectors AND not in
     // standardSelectors default to Extended. This prevents bypass via unclassified
@@ -1521,31 +1547,70 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
         }
     }
 
-    /// @dev Revert if any action would call timelock.updateDelay(X) with X > MAX_EXECUTION_DELAY.
-    ///      Bounds the protocol-wide effective execution delay so governance cannot
-    ///      inadvertently slow every proposal type past the design ceiling. Brick
-    ///      prevention against _minDelay > p.executionDelay is enforced separately in
-    ///      queue() via runtime reconciliation; this guard is no longer load-bearing
-    ///      for that property. Malformed calldata (< 4B selector, or < 36B = selector +
-    ///      uint256) is skipped; it would revert later at the timelock anyway.
+    /// @dev Reject timelock-targeting calldata that would violate any of the three
+    ///      cardinality / parameter-bound invariants documented at the
+    ///      UPDATE_DELAY_SELECTOR declaration. Skips malformed calldata (would revert
+    ///      at the timelock anyway). Values decoded directly via mload instead of
+    ///      abi.decode to keep the loop body compact.
     function _validateTimelockCalldata(address[] memory targets, bytes[] memory calldatas) internal view {
         // Hoist timelock address out of the loop (audit-76).
         address tl = address(timelock);
         for (uint256 i = 0; i < targets.length; i++) {
             if (targets[i] != tl) continue;
             bytes memory cd = calldatas[i];
-            if (cd.length < 36) continue;
-            if (bytes4(cd) != UPDATE_DELAY_SELECTOR) continue;
+            if (cd.length < 4) continue;
+            bytes4 sel = bytes4(cd);
 
-            // Read the uint256 argument directly from offset 36 of the bytes memory
-            // (32 length prefix + 4 selector). Avoids the byte-by-byte copy that
-            // abi.decode would require with calldata-style slicing on a memory bytes.
-            uint256 newDelay;
-            assembly ("memory-safe") {
-                newDelay := mload(add(cd, 36))
+            if (sel == UPDATE_DELAY_SELECTOR) {
+                // updateDelay(uint256) — calldata length must be 4 + 32.
+                if (cd.length < 36) continue;
+                uint256 newDelay;
+                assembly ("memory-safe") {
+                    newDelay := mload(add(cd, 36))
+                }
+                if (newDelay > MAX_EXECUTION_DELAY) {
+                    revert Gov_UpdateDelayExceedsCap(newDelay, MAX_EXECUTION_DELAY);
+                }
+                continue;
             }
-            if (newDelay > MAX_EXECUTION_DELAY) {
-                revert Gov_UpdateDelayExceedsCap(newDelay, MAX_EXECUTION_DELAY);
+
+            // Both revokeRole and renounceRole take (bytes32 role, address account).
+            // Decode once and branch on selector to defend the two distinct
+            // role-cardinality invariants.
+            if (sel != REVOKE_ROLE_SELECTOR && sel != RENOUNCE_ROLE_SELECTOR) continue;
+            if (cd.length < 68) continue;
+            bytes32 role;
+            address account;
+            assembly ("memory-safe") {
+                role := mload(add(cd, 36))
+                account := mload(add(cd, 68))
+            }
+
+            if (sel == REVOKE_ROLE_SELECTOR) {
+                // Block revocation of any role the governor itself holds and
+                // requires to function (queue / execute / veto). Revoking the same
+                // role from a non-governor account (e.g. a future backup proposer)
+                // is allowed.
+                if (
+                    account == address(this) &&
+                    (
+                        role == TIMELOCK_PROPOSER_ROLE ||
+                        role == TIMELOCK_EXECUTOR_ROLE ||
+                        role == TIMELOCK_CANCELLER_ROLE
+                    )
+                ) {
+                    revert Gov_CannotRevokeGovernorRole(role);
+                }
+            } else {
+                // Block renunciation of TIMELOCK_ADMIN_ROLE by the timelock itself.
+                // OZ AccessControl requires msg.sender == account on renounce, and
+                // when this calldata fires via the queue+execute pipeline msg.sender
+                // is the timelock — so account == timelock is the only renounce
+                // shape that actually executes for the admin role. Closing it
+                // permanently disables all future grantRole calls.
+                if (account == tl && role == TIMELOCK_ADMIN_ROLE) {
+                    revert Gov_CannotRenounceTimelockAdmin();
+                }
             }
         }
     }
