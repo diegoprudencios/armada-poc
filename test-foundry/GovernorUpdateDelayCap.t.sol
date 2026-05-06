@@ -59,6 +59,11 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         armToken.delegate(bob);
 
         vm.roll(block.number + 1);
+
+        // Grant the governor PROPOSER_ROLE so the queue-time tests can call scheduleBatch.
+        // Existing propose-only tests don't need this but are unaffected by the grant.
+        timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));
+        timelock.grantRole(timelock.EXECUTOR_ROLE(), address(governor));
     }
 
     // ======== Helpers ========
@@ -195,5 +200,109 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         vm.prank(alice);
         uint256 id = governor.propose(ProposalType.Signaling, targets, values, calldatas, "signaling only");
         assertGt(id, 0, "signaling proposals must bypass the updateDelay guard");
+    }
+
+    // ======== queue-time _minDelay reconciliation (audit-103) ========
+
+    // WHY: Pre-fix, queue() forwarded p.executionDelay verbatim to scheduleBatch. If a
+    // governance action raised _minDelay above the snapshotted delay (e.g. to 8 days,
+    // within the 14d propose-time cap), every queued proposal reverted on the OZ
+    // delay >= getMinDelay() check — a permanent governance brick with no on-chain
+    // recovery in production role layout. Post-fix, queue() widens the snapshot to
+    // max(p.executionDelay, timelock.getMinDelay()), making the brick structurally
+    // impossible.
+    //
+    // This test pins the reconciliation: a Standard proposal snapshotted at 2d still
+    // queues successfully after _minDelay is raised to 8d, and the timelock receives
+    // the widened 8d delay (not the stale 2d).
+    function test_queue_widensSnapshotToLiveMinDelay_standard() public {
+        // Snapshot a Standard proposal at the default 2d execution delay.
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
+            _singleAction(address(0xDEAD), abi.encodeWithSignature("setRevenueThreshold(uint256)", uint256(1)));
+        vm.prank(alice);
+        uint256 id = governor.propose(ProposalType.Standard, targets, values, calldatas, "std snapshot 2d");
+
+        // Vote and reach Succeeded.
+        (, , uint256 voteStart, uint256 voteEnd, , , , , ) = governor.getProposal(id);
+        if (block.timestamp <= voteStart) vm.warp(voteStart + 1);
+        vm.prank(alice);
+        governor.castVote(id, 1);
+        vm.warp(voteEnd + 1);
+
+        // Raise the timelock's _minDelay to 8d via a direct timelock self-call.
+        // (Real protocol path: governance proposal calling timelock.updateDelay(8 days).)
+        vm.prank(address(timelock));
+        timelock.updateDelay(8 days);
+        assertEq(timelock.getMinDelay(), 8 days, "minDelay raised to 8d");
+
+        // Pre-fix: this would revert with "TimelockController: insufficient delay".
+        // Post-fix: queue() widens the forwarded delay to 8d and scheduleBatch succeeds.
+        uint256 queuedAt = block.timestamp;
+        governor.queue(id);
+
+        // Verify the timelock recorded the widened delay, not the stale 2d snapshot.
+        bytes32 timelockId = timelock.hashOperationBatch(targets, values, calldatas, 0, _proposalSalt(id));
+        uint256 eta = timelock.getTimestamp(timelockId);
+        assertEq(eta, queuedAt + 8 days, "timelock ETA reflects widened 8d delay");
+    }
+
+    // WHY: Same behavior for Extended (snapshot 7d). With minDelay raised to 10d, the
+    // queue widens to 10d. Confirms the widening applies regardless of proposal type.
+    function test_queue_widensSnapshotToLiveMinDelay_extended() public {
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
+            _singleAction(address(governor), abi.encodeWithSignature("proposalCount()"));
+        vm.prank(alice);
+        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "ext snapshot 7d");
+
+        (, , uint256 voteStart, uint256 voteEnd, , , , , ) = governor.getProposal(id);
+        if (block.timestamp <= voteStart) vm.warp(voteStart + 1);
+        vm.prank(alice);
+        governor.castVote(id, 1);
+        vm.prank(bob);
+        governor.castVote(id, 1);
+        vm.warp(voteEnd + 1);
+
+        vm.prank(address(timelock));
+        timelock.updateDelay(10 days);
+
+        uint256 queuedAt = block.timestamp;
+        governor.queue(id);
+
+        bytes32 timelockId = timelock.hashOperationBatch(targets, values, calldatas, 0, _proposalSalt(id));
+        assertEq(timelock.getTimestamp(timelockId), queuedAt + 10 days, "Extended also widens to 10d");
+    }
+
+    // WHY: The widening is one-directional — it never SHORTENS the snapshot delay. If
+    // _minDelay is below the snapshot, the snapshot wins. Pins the conservative direction
+    // and prevents a future refactor from accidentally clamping in the wrong direction.
+    function test_queue_doesNotShortenSnapshotWhenMinDelayLower() public {
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
+            _singleAction(address(governor), abi.encodeWithSignature("proposalCount()"));
+        vm.prank(alice);
+        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "ext snapshot 7d, minDelay stays 2d");
+
+        (, , uint256 voteStart, uint256 voteEnd, , , , , ) = governor.getProposal(id);
+        if (block.timestamp <= voteStart) vm.warp(voteStart + 1);
+        vm.prank(alice);
+        governor.castVote(id, 1);
+        vm.prank(bob);
+        governor.castVote(id, 1);
+        vm.warp(voteEnd + 1);
+
+        // _minDelay stays at 2d (constructor default), snapshot = 7d. Snapshot wins.
+        assertEq(timelock.getMinDelay(), 2 days, "minDelay unchanged");
+        uint256 queuedAt = block.timestamp;
+        governor.queue(id);
+
+        bytes32 timelockId = timelock.hashOperationBatch(targets, values, calldatas, 0, _proposalSalt(id));
+        assertEq(timelock.getTimestamp(timelockId), queuedAt + 7 days, "snapshot 7d preserved when minDelay lower");
+    }
+
+    // ======== Helper (audit-103) ========
+
+    // WHY: queue() salts the timelock operation by bytes32(proposalId). Mirror that
+    // exactly so we can re-derive the timelock id to call getTimestamp().
+    function _proposalSalt(uint256 proposalId) internal pure returns (bytes32) {
+        return bytes32(proposalId);
     }
 }

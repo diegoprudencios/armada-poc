@@ -224,12 +224,12 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     bytes4 public constant STEWARD_SPEND_SELECTOR = bytes4(keccak256("stewardSpend(address,address,uint256)"));
     uint256 public constant TREASURY_EXTENDED_THRESHOLD_BPS = 500; // 5%
 
-    // Timelock.updateDelay(uint256) — guarded at propose() time. Setting the timelock's
-    // _minDelay above MAX_EXECUTION_DELAY would permanently brick queue() because every
-    // proposal's executionDelay (≤ MAX_EXECUTION_DELAY) would fall below getMinDelay().
-    // NOTE: This guard is governor-scoped. It assumes PROPOSER_ROLE on the timelock is
-    // held ONLY by this governor. If another proposer is ever granted the role, that
-    // path bypasses this check and this guard must be re-evaluated.
+    // Timelock.updateDelay(uint256) — propose-time cap at MAX_EXECUTION_DELAY. This is
+    // a protocol-wide bound on _minDelay, NOT a brick-prevention mechanism. Brick
+    // prevention is handled in queue() by reconciling p.executionDelay against the
+    // live _minDelay (forwarding max(snapshot, current floor) to scheduleBatch). The
+    // cap remains because raising _minDelay above MAX_EXECUTION_DELAY would slow every
+    // proposal type (including Steward) past the protocol's design ceiling.
     bytes4 public constant UPDATE_DELAY_SELECTOR = bytes4(keccak256("updateDelay(uint256)"));
 
     // Fail-closed classification: selectors not in extendedSelectors AND not in
@@ -1077,11 +1077,16 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
 
         bytes32 timelockId = tl.hashOperationBatch(tgts, vals, cdatas, 0, salt);
 
+        // Reconcile against live _minDelay: forward max(snapshot, current floor) so a
+        // post-snapshot updateDelay() raise cannot revert scheduleBatch on the OZ
+        // delay >= getMinDelay() check. The widening preserves the spec'd executionDelay
+        // as a floor while letting governance lift the floor higher if it chooses.
+        uint256 minDelay = tl.getMinDelay();
         tl.scheduleBatch(
             tgts, vals, cdatas,
             0, // no predecessor
             salt,
-            p.executionDelay
+            minDelay > p.executionDelay ? minDelay : p.executionDelay
         );
 
         emit ProposalQueued(proposalId, timelockId);
@@ -1506,24 +1511,28 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     }
 
     /// @dev Revert if any action would call timelock.updateDelay(X) with X > MAX_EXECUTION_DELAY.
-    ///      Setting _minDelay above the governor's max per-proposal executionDelay permanently
-    ///      bricks queue() (OZ TimelockController._schedule requires delay >= getMinDelay).
-    ///      Malformed calldata (< 4B selector, or < 36B = selector + uint256) is skipped;
-    ///      it would revert later at the timelock anyway and is not a minDelay escalation.
+    ///      Bounds the protocol-wide effective execution delay so governance cannot
+    ///      inadvertently slow every proposal type past the design ceiling. Brick
+    ///      prevention against _minDelay > p.executionDelay is enforced separately in
+    ///      queue() via runtime reconciliation; this guard is no longer load-bearing
+    ///      for that property. Malformed calldata (< 4B selector, or < 36B = selector +
+    ///      uint256) is skipped; it would revert later at the timelock anyway.
     function _validateTimelockCalldata(address[] memory targets, bytes[] memory calldatas) internal view {
         // Hoist timelock address out of the loop (audit-76).
         address tl = address(timelock);
         for (uint256 i = 0; i < targets.length; i++) {
             if (targets[i] != tl) continue;
-            if (calldatas[i].length < 36) continue;
-            if (bytes4(calldatas[i]) != UPDATE_DELAY_SELECTOR) continue;
+            bytes memory cd = calldatas[i];
+            if (cd.length < 36) continue;
+            if (bytes4(cd) != UPDATE_DELAY_SELECTOR) continue;
 
-            // Decode the uint256 argument. Skip the 4-byte selector by slicing from index 4.
-            bytes memory params = new bytes(calldatas[i].length - 4);
-            for (uint256 j = 0; j < params.length; j++) {
-                params[j] = calldatas[i][j + 4];
+            // Read the uint256 argument directly from offset 36 of the bytes memory
+            // (32 length prefix + 4 selector). Avoids the byte-by-byte copy that
+            // abi.decode would require with calldata-style slicing on a memory bytes.
+            uint256 newDelay;
+            assembly ("memory-safe") {
+                newDelay := mload(add(cd, 36))
             }
-            uint256 newDelay = abi.decode(params, (uint256));
             if (newDelay > MAX_EXECUTION_DELAY) {
                 revert Gov_UpdateDelayExceedsCap(newDelay, MAX_EXECUTION_DELAY);
             }
