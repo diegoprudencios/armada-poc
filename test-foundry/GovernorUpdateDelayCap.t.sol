@@ -259,6 +259,24 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         governor.propose(ProposalType.Extended, targets, values, calldatas, "renounce ADMIN");
     }
 
+    // WHY: OZ AccessControl exposes two paths to remove a role from an account —
+    // revokeRole(role, account) (caller has admin) and renounceRole(role, account)
+    // (caller == account). For TIMELOCK_ADMIN_ROLE, a timelock self-call satisfies
+    // BOTH gates: msg.sender == account == timelock AND timelock holds ADMIN. The
+    // renounce path is blocked above; this test pins that the revoke path with the
+    // same end state is also blocked. Without this branch, revokeRole(ADMIN, timelock)
+    // slipped through `account == address(this)`-scoped check (account is timelock,
+    // address(this) is the governor) and reached the same brick state — recovery
+    // closed because no one holds ADMIN to grantRole.
+    function test_propose_revokeTimelockAdminFromTimelock_reverts() public {
+        bytes32 role = timelock.TIMELOCK_ADMIN_ROLE();
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
+            _singleAction(address(timelock), _revokeRoleCalldata(role, address(timelock)));
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(ArmadaGovernor.Gov_CannotRenounceTimelockAdmin.selector));
+        governor.propose(ProposalType.Extended, targets, values, calldatas, "revoke ADMIN from timelock");
+    }
+
     // WHY: revokeRole on a non-governor account (e.g. revoking a future backup
     // proposer) must NOT be blocked. The guard targets the governor-cardinality
     // invariant specifically.

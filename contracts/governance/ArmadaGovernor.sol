@@ -1601,6 +1601,14 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
                 ) {
                     revert Gov_CannotRevokeGovernorRole(role);
                 }
+                // Also block the timelock self-revoking its own ADMIN role. Same
+                // end state as the renounceRole(ADMIN, timelock) shape blocked
+                // below: the timelock-self holds ADMIN as the role's admin AND
+                // satisfies its own onlyRole gate during a self-call, so revoke
+                // succeeds; downstream grantRole permanently closed.
+                if (account == tl && role == TIMELOCK_ADMIN_ROLE) {
+                    revert Gov_CannotRenounceTimelockAdmin();
+                }
             } else {
                 // Block renunciation of TIMELOCK_ADMIN_ROLE by the timelock itself.
                 // OZ AccessControl requires msg.sender == account on renounce, and
