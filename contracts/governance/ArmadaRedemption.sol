@@ -214,10 +214,8 @@ contract ArmadaRedemption is ReentrancyGuard {
             // copies that payload into memory regardless of whether we read it.
             // See audit-86.
             bool success;
-            address recipient = ethRecipient;
-            uint256 value = ethPayout;
             assembly {
-                success := call(gas(), recipient, value, 0, 0, 0, 0)
+                success := call(gas(), ethRecipient, ethPayout, 0, 0, 0, 0)
             }
             require(success, "ArmadaRedemption: ETH transfer failed");
             anyPayout = true;
