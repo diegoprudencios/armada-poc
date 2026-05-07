@@ -317,6 +317,33 @@ contract GovernorClassificationWindDownTest is Test, GovernorDeployHelper {
         assertFalse(governor.extendedSelectors(governor.setProposalTypeParams.selector));
     }
 
+    // WHY (audit-96 follow-up): removeStandardSelector must reject calls for
+    // selectors that aren't currently registered Standard, mirroring the
+    // existing Gov_SelectorNotExtended guard on removeExtendedSelector. Without
+    // this, governance can run a full Extended cycle on a removeStandardSelector
+    // proposal that turns out to be a state no-op (selector wasn't Standard
+    // anyway), with the StandardSelectorRemoved event emitted regardless —
+    // misleading reviewers into thinking a real classification change occurred.
+    function test_classify_removeStandardSelector_revertsIfNotStandard() public {
+        bytes4 unregistered = bytes4(keccak256("notRegistered()"));
+        vm.prank(address(timelock));
+        vm.expectRevert(ArmadaGovernor.Gov_SelectorNotStandard.selector);
+        governor.removeStandardSelector(unregistered);
+    }
+
+    // WHY: Positive path — removeStandardSelector clears the entry when the
+    // selector is currently registered. Pairs with the negative test above.
+    function test_classify_removeStandardSelector_clearsRegisteredEntry() public {
+        // setRevenueThreshold(uint256) is registered Standard in initialize().
+        bytes4 sel = bytes4(keccak256("setRevenueThreshold(uint256)"));
+        assertTrue(governor.standardSelectors(sel), "pre: setRevenueThreshold registered");
+
+        vm.prank(address(timelock));
+        governor.removeStandardSelector(sel);
+
+        assertFalse(governor.standardSelectors(sel), "post: cleared");
+    }
+
     function test_classify_onlyTimelockCanAddSelector() public {
         bytes4 selector = bytes4(keccak256("test()"));
         vm.prank(alice);

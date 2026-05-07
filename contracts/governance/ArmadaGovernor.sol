@@ -73,6 +73,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     error Gov_SelectorAlreadyExtended();
     error Gov_SelectorAlreadyStandard();
     error Gov_SelectorNotExtended();
+    error Gov_SelectorNotStandard();
     error Gov_SelfPaymentNotAllowed();
     error Gov_StewardCalldataClassifiedAsExtended();
     error Gov_StewardContractNotSet();
@@ -652,6 +653,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     /// @dev Only callable by the timelock. After removal, the selector defaults to Extended.
     function removeStandardSelector(bytes4 selector) external {
         if (msg.sender != address(timelock)) revert Gov_NotTimelock();
+        if (!standardSelectors[selector]) revert Gov_SelectorNotStandard();
         standardSelectors[selector] = false;
         emit StandardSelectorRemoved(selector);
     }
