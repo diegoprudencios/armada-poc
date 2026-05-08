@@ -177,7 +177,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     uint256 internal constant MAX_VOTING_DELAY = 14 days;
     uint256 internal constant MIN_VOTING_PERIOD = 1 days;
     uint256 internal constant MAX_VOTING_PERIOD = 30 days;
-    uint256 internal constant MIN_EXECUTION_DELAY = 1 days;
+    uint256 internal constant MIN_EXECUTION_DELAY = 2 days;
     uint256 internal constant MAX_EXECUTION_DELAY = 14 days;
     uint256 internal constant MIN_QUORUM_BPS = 500;   // 5%
     uint256 internal constant MAX_QUORUM_BPS = 5000;  // 50%
@@ -230,11 +230,12 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
     // Timelock-targeting calldata that the propose-time guard recognizes. The guard
     // (_validateTimelockCalldata) defends three role-cardinality / parameter-bound
     // invariants that no individual function signature exposes on its own:
-    //   1. _minDelay <= MAX_EXECUTION_DELAY — bounds the protocol-wide effective
-    //      execution delay so no proposal type is slowed past the design ceiling.
-    //      (Brick prevention against _minDelay > p.executionDelay is enforced
-    //      separately in queue() via runtime reconciliation; this guard is no
-    //      longer load-bearing for that property.)
+    //   1. _minDelay <= MIN_EXECUTION_DELAY — structurally bounds _minDelay below
+    //      every queueable proposal type's executionDelay floor, preventing the
+    //      audit-103 brick where `_minDelay > p.executionDelay` permanently reverts
+    //      every queue() path. Paired with a queue-time max(executionDelay, _minDelay)
+    //      widening in queue() as defense-in-depth — if a future feature bypasses this
+    //      propose-time guard, the runtime reconciliation still averts the brick.
     //   2. Governor retains PROPOSER / EXECUTOR / CANCELLER on the timelock — the
     //      production deploy grants these roles only to this governor, so revoking
     //      any of them permanently bricks queue / execute / veto respectively.
@@ -350,7 +351,7 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
 
         // VetoRatification: immediate voting, 7d period, no execution delay, 20% quorum.
         // These params bypass setProposalTypeParams() bounds (MIN_VOTING_DELAY=1d,
-        // MIN_EXECUTION_DELAY=1d), making VetoRatification timing effectively immutable
+        // MIN_EXECUTION_DELAY=2d), making VetoRatification timing effectively immutable
         // via governance. Only the veto mechanism can create these proposals.
         proposalTypeParams[ProposalType.VetoRatification] = ProposalParams({
             votingDelay: 0,
@@ -944,7 +945,9 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
         }
 
         // Bound timelock.updateDelay(uint256) at propose-time so a governance action
-        // cannot push _minDelay above MAX_EXECUTION_DELAY and permanently brick queue().
+        // cannot push _minDelay above MIN_EXECUTION_DELAY and permanently brick queue().
+        // The structural cap is the primary prevention; queue() also widens the delay
+        // to max(executionDelay, _minDelay) as defense-in-depth (see queue()).
         if (proposalType != ProposalType.Signaling) {
             _validateTimelockCalldata(targets, calldatas);
         }
@@ -1116,10 +1119,12 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
 
         bytes32 timelockId = tl.hashOperationBatch(tgts, vals, cdatas, 0, salt);
 
-        // Reconcile against live _minDelay: forward max(snapshot, current floor) so a
-        // post-snapshot updateDelay() raise cannot revert scheduleBatch on the OZ
-        // delay >= getMinDelay() check. The widening preserves the spec'd executionDelay
-        // as a floor while letting governance lift the floor higher if it chooses.
+        // Defense-in-depth against future-bypass scenarios. The propose-time cap in
+        // _validateTimelockCalldata structurally enforces _minDelay <= MIN_EXECUTION_DELAY,
+        // so max(executionDelay, _minDelay) == executionDelay in steady state. If a future
+        // role-management feature or upgrade ever introduces a path that bypasses the
+        // propose-time guard (see comment at UPDATE_DELAY_SELECTOR), forwarding the live
+        // _minDelay floor here prevents the audit-103 brick from materializing.
         uint256 minDelay = tl.getMinDelay();
         tl.scheduleBatch(
             tgts, vals, cdatas,
@@ -1570,8 +1575,8 @@ contract ArmadaGovernor is Initializable, ReentrancyGuardUpgradeable, UUPSUpgrad
                 assembly ("memory-safe") {
                     newDelay := mload(add(cd, 36))
                 }
-                if (newDelay > MAX_EXECUTION_DELAY) {
-                    revert Gov_UpdateDelayExceedsCap(newDelay, MAX_EXECUTION_DELAY);
+                if (newDelay > MIN_EXECUTION_DELAY) {
+                    revert Gov_UpdateDelayExceedsCap(newDelay, MIN_EXECUTION_DELAY);
                 }
                 continue;
             }

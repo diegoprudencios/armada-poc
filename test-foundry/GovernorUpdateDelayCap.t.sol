@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // ABOUTME: Foundry tests for the propose-time guard on timelock.updateDelay(uint256).
-// ABOUTME: Prevents a governance action from bricking queue() by setting _minDelay > MAX_EXECUTION_DELAY.
+// ABOUTME: Prevents a governance action from bricking queue() by setting _minDelay > MIN_EXECUTION_DELAY.
 pragma solidity ^0.8.17;
 
 import "forge-std/Test.sol";
@@ -13,9 +13,10 @@ import "./helpers/GovernorDeployHelper.sol";
 
 /// @title GovernorUpdateDelayCapTest — Propose-time cap on timelock.updateDelay(uint256).
 /// @notice OZ TimelockController._schedule requires `delay >= getMinDelay()`. If governance
-///         ever sets _minDelay above MAX_EXECUTION_DELAY (14 days), every subsequent queue()
-///         reverts permanently. The governor enforces a cap at propose() so this cannot happen
-///         via the governor's PROPOSER_ROLE path (the only path today).
+///         ever sets _minDelay above the smallest queueable executionDelay, every subsequent
+///         queue() reverts permanently. The governor caps updateDelay(X) at propose-time to
+///         X <= MIN_EXECUTION_DELAY (2 days), structurally preventing the brick — _minDelay
+///         can never exceed the floor on any queueable proposal type's executionDelay.
 contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
     ArmadaGovernor public governor;
     ArmadaToken public armToken;
@@ -86,40 +87,42 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
     // ======== Tests ========
 
     // WHY: Within-cap updateDelay must still be proposable — the guard is a ceiling,
-    // not a blanket ban. Verifies normal governance operation is unaffected.
+    // not a blanket ban. Verifies normal governance operation (lowering _minDelay
+    // below MIN_EXECUTION_DELAY) is unaffected.
     function test_propose_updateDelay_withinCap_succeeds() public {
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
-            _singleAction(address(timelock), _updateDelayCalldata(7 days));
+            _singleAction(address(timelock), _updateDelayCalldata(1 days));
 
         vm.prank(alice);
-        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay 7d");
+        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay 1d");
         assertGt(id, 0, "proposal id should be assigned");
     }
 
-    // WHY: The cap equals MAX_EXECUTION_DELAY. A value exactly at the cap is still safe
-    // because a proposal type with executionDelay == 14d can satisfy delay >= getMinDelay.
-    // Boundary test ensures the guard uses strict inequality (>), not >=.
+    // WHY: The cap equals MIN_EXECUTION_DELAY (2 days). A value exactly at the cap is
+    // still safe because every queueable proposal type has executionDelay >= 2d, so the
+    // OZ delay >= getMinDelay() check always holds. Boundary test ensures the guard uses
+    // strict inequality (>), not >=.
     function test_propose_updateDelay_atCap_succeeds() public {
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
-            _singleAction(address(timelock), _updateDelayCalldata(14 days));
+            _singleAction(address(timelock), _updateDelayCalldata(2 days));
 
         vm.prank(alice);
-        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay 14d");
+        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay 2d");
         assertGt(id, 0, "at-cap updateDelay should be proposable");
     }
 
-    // WHY: Core protection. One day over the cap is a permanent queue() brick if executed,
-    // so the governor must refuse to create the proposal. Custom error carries the
-    // requested value and the cap to aid off-chain monitoring / UI messaging.
+    // WHY: Core protection. One second over the cap is a permanent queue() brick if
+    // executed, so the governor must refuse to create the proposal. Custom error carries
+    // the requested value and the cap to aid off-chain monitoring / UI messaging.
     function test_propose_updateDelay_aboveCap_reverts() public {
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
-            _singleAction(address(timelock), _updateDelayCalldata(15 days));
+            _singleAction(address(timelock), _updateDelayCalldata(2 days + 1));
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(ArmadaGovernor.Gov_UpdateDelayExceedsCap.selector, 15 days, 14 days)
+            abi.encodeWithSelector(ArmadaGovernor.Gov_UpdateDelayExceedsCap.selector, 2 days + 1, 2 days)
         );
-        governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay 15d");
+        governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay 2d+1");
     }
 
     // WHY: Unbounded uint256 is the exact scenario in issue #231. A far-out value (e.g.
@@ -131,7 +134,7 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(ArmadaGovernor.Gov_UpdateDelayExceedsCap.selector, type(uint256).max, 14 days)
+            abi.encodeWithSelector(ArmadaGovernor.Gov_UpdateDelayExceedsCap.selector, type(uint256).max, 2 days)
         );
         governor.propose(ProposalType.Extended, targets, values, calldatas, "updateDelay max");
     }
@@ -155,7 +158,7 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(ArmadaGovernor.Gov_UpdateDelayExceedsCap.selector, 30 days, 14 days)
+            abi.encodeWithSelector(ArmadaGovernor.Gov_UpdateDelayExceedsCap.selector, 30 days, 2 days)
         );
         governor.propose(ProposalType.Extended, targets, values, calldatas, "batch brick");
     }
@@ -340,19 +343,58 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         assertEq(keccak256("TIMELOCK_ADMIN_ROLE"), timelock.TIMELOCK_ADMIN_ROLE(), "ADMIN hash drift");
     }
 
-    // ======== queue-time _minDelay reconciliation (audit-103) ========
+    // ======== structural _minDelay <= MIN_EXECUTION_DELAY invariant ========
 
-    // WHY: Pre-fix, queue() forwarded p.executionDelay verbatim to scheduleBatch. If a
-    // governance action raised _minDelay above the snapshotted delay (e.g. to 8 days,
-    // within the 14d propose-time cap), every queued proposal reverted on the OZ
-    // delay >= getMinDelay() check — a permanent governance brick with no on-chain
-    // recovery in production role layout. Post-fix, queue() widens the snapshot to
-    // max(p.executionDelay, timelock.getMinDelay()), making the brick structurally
-    // impossible.
+    // WHY: The propose-time cap is the structural prevention against the audit-103
+    // brick. Pin the converse axis too: setProposalTypeParams must reject any
+    // executionDelay below MIN_EXECUTION_DELAY, so governance cannot lower a
+    // queueable type's executionDelay below _minDelay either. Both axes that
+    // could produce `_minDelay > executionDelay` are sealed.
+    function test_setProposalTypeParams_belowMinExecutionDelay_reverts() public {
+        ProposalParams memory bad = ProposalParams({
+            votingDelay: 2 days,
+            votingPeriod: 14 days,
+            executionDelay: 1 days,
+            quorumBps: 3000
+        });
+        bytes memory data = abi.encodeWithSelector(
+            governor.setProposalTypeParams.selector, ProposalType.Extended, bad
+        );
+        (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
+            _singleAction(address(governor), data);
+
+        vm.prank(alice);
+        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "bad executionDelay 1d");
+
+        (, , uint256 voteStart, uint256 voteEnd, , , , , ) = governor.getProposal(id);
+        if (block.timestamp <= voteStart) vm.warp(voteStart + 1);
+        vm.prank(alice);
+        governor.castVote(id, 1);
+        vm.prank(bob);
+        governor.castVote(id, 1);
+        vm.warp(voteEnd + 1);
+
+        // Queue, warp past executionDelay, then execute. The setProposalTypeParams
+        // bound check fires inside execute() and reverts the timelock-driven self-call.
+        governor.queue(id);
+        vm.warp(block.timestamp + 7 days + 1);
+        vm.expectRevert();
+        governor.execute(id);
+    }
+
+    // ======== queue-time _minDelay widening (defense-in-depth) ========
+
+    // WHY: The propose-time cap at MIN_EXECUTION_DELAY (2d) makes _minDelay > executionDelay
+    // structurally unreachable under normal governance. queue() ALSO widens to
+    // max(p.executionDelay, getMinDelay()) as defense-in-depth: if a future
+    // role-management feature or upgrade ever introduces a path that bypasses
+    // _validateTimelockCalldata (see comment at UPDATE_DELAY_SELECTOR), the queue-time
+    // widening still averts the audit-103 brick. These regression tests pin the
+    // widening so a future refactor cannot silently drop it.
     //
-    // This test pins the reconciliation: a Standard proposal snapshotted at 2d still
-    // queues successfully after _minDelay is raised to 8d, and the timelock receives
-    // the widened 8d delay (not the stale 2d).
+    // Tests use vm.prank(timelock) to simulate the future-bypass scenario — the only
+    // way today to drive _minDelay above the structural cap.
+
     function test_queue_widensSnapshotToLiveMinDelay_standard() public {
         // Snapshot a Standard proposal at the default 2d execution delay.
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
@@ -360,32 +402,28 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         vm.prank(alice);
         uint256 id = governor.propose(ProposalType.Standard, targets, values, calldatas, "std snapshot 2d");
 
-        // Vote and reach Succeeded.
         (, , uint256 voteStart, uint256 voteEnd, , , , , ) = governor.getProposal(id);
         if (block.timestamp <= voteStart) vm.warp(voteStart + 1);
         vm.prank(alice);
         governor.castVote(id, 1);
         vm.warp(voteEnd + 1);
 
-        // Raise the timelock's _minDelay to 8d via a direct timelock self-call.
-        // (Real protocol path: governance proposal calling timelock.updateDelay(8 days).)
+        // Simulate a future-bypass: timelock self-calls updateDelay(8d), driving _minDelay
+        // above the cap. In production this path doesn't exist — propose-time guard rejects
+        // updateDelay(>2d). Test only.
         vm.prank(address(timelock));
         timelock.updateDelay(8 days);
-        assertEq(timelock.getMinDelay(), 8 days, "minDelay raised to 8d");
+        assertEq(timelock.getMinDelay(), 8 days, "minDelay raised to 8d (simulated bypass)");
 
-        // Pre-fix: this would revert with "TimelockController: insufficient delay".
-        // Post-fix: queue() widens the forwarded delay to 8d and scheduleBatch succeeds.
+        // Without the widening: scheduleBatch reverts with "TimelockController: insufficient delay".
+        // With the widening: queue() forwards 8d (the live floor) and scheduleBatch succeeds.
         uint256 queuedAt = block.timestamp;
         governor.queue(id);
 
-        // Verify the timelock recorded the widened delay, not the stale 2d snapshot.
         bytes32 timelockId = timelock.hashOperationBatch(targets, values, calldatas, 0, _proposalSalt(id));
-        uint256 eta = timelock.getTimestamp(timelockId);
-        assertEq(eta, queuedAt + 8 days, "timelock ETA reflects widened 8d delay");
+        assertEq(timelock.getTimestamp(timelockId), queuedAt + 8 days, "ETA reflects widened 8d delay");
     }
 
-    // WHY: Same behavior for Extended (snapshot 7d). With minDelay raised to 10d, the
-    // queue widens to 10d. Confirms the widening applies regardless of proposal type.
     function test_queue_widensSnapshotToLiveMinDelay_extended() public {
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
             _singleAction(address(governor), abi.encodeWithSignature("proposalCount()"));
@@ -407,17 +445,17 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         governor.queue(id);
 
         bytes32 timelockId = timelock.hashOperationBatch(targets, values, calldatas, 0, _proposalSalt(id));
-        assertEq(timelock.getTimestamp(timelockId), queuedAt + 10 days, "Extended also widens to 10d");
+        assertEq(timelock.getTimestamp(timelockId), queuedAt + 10 days, "Extended widens to 10d");
     }
 
-    // WHY: The widening is one-directional — it never SHORTENS the snapshot delay. If
-    // _minDelay is below the snapshot, the snapshot wins. Pins the conservative direction
-    // and prevents a future refactor from accidentally clamping in the wrong direction.
+    // WHY: The widening is one-directional — it never SHORTENS the snapshot delay. When
+    // _minDelay is below the snapshot (the normal case under cap-at-2d), the snapshot wins.
+    // Pins the conservative direction and prevents a future refactor from clamping wrong.
     function test_queue_doesNotShortenSnapshotWhenMinDelayLower() public {
         (address[] memory targets, uint256[] memory values, bytes[] memory calldatas) =
             _singleAction(address(governor), abi.encodeWithSignature("proposalCount()"));
         vm.prank(alice);
-        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "ext snapshot 7d, minDelay stays 2d");
+        uint256 id = governor.propose(ProposalType.Extended, targets, values, calldatas, "ext snapshot 7d, minDelay 2d");
 
         (, , uint256 voteStart, uint256 voteEnd, , , , , ) = governor.getProposal(id);
         if (block.timestamp <= voteStart) vm.warp(voteStart + 1);
@@ -433,10 +471,8 @@ contract GovernorUpdateDelayCapTest is Test, GovernorDeployHelper {
         governor.queue(id);
 
         bytes32 timelockId = timelock.hashOperationBatch(targets, values, calldatas, 0, _proposalSalt(id));
-        assertEq(timelock.getTimestamp(timelockId), queuedAt + 7 days, "snapshot 7d preserved when minDelay lower");
+        assertEq(timelock.getTimestamp(timelockId), queuedAt + 7 days, "snapshot 7d preserved");
     }
-
-    // ======== Helper (audit-103) ========
 
     // WHY: queue() salts the timelock operation by bytes32(proposalId). Mirror that
     // exactly so we can re-derive the timelock id to call getTimestamp().

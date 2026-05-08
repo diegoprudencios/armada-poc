@@ -238,7 +238,7 @@ describe("Governance Parameter Updates", function () {
       const minParams = {
         votingDelay: 1 * ONE_DAY,
         votingPeriod: 1 * ONE_DAY,
-        executionDelay: 1 * ONE_DAY,
+        executionDelay: 2 * ONE_DAY,
         quorumBps: 500,
       };
       await standaloneGovernor.setProposalTypeParams(ProposalType.Standard, minParams);
@@ -296,7 +296,7 @@ describe("Governance Parameter Updates", function () {
     it("rejects executionDelay below minimum", async function () {
       await expect(
         standaloneGovernor.setProposalTypeParams(ProposalType.Standard, {
-          ...validParams, executionDelay: ONE_DAY - 1,
+          ...validParams, executionDelay: 2 * ONE_DAY - 1,
         })
       ).to.be.revertedWithCustomError(governor, "Gov_ExecutionDelayOutOfBounds");
     });
