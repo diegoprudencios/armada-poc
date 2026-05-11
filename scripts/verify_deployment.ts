@@ -333,7 +333,6 @@ async function checkYieldFeeWiring(
   const GROUP = "Yield + Fee Wiring";
   const vaultAddr = yieldManifest.contracts.armadaYieldVault;
   const adapterAddr = yieldManifest.contracts.armadaYieldAdapter;
-  const treasuryAddr = yieldManifest.contracts.armadaTreasury;
 
   const vault = await ethers.getContractAt("ArmadaYieldVault", vaultAddr);
 
@@ -371,7 +370,6 @@ async function checkYieldFeeWiring(
     for (const [name, addr] of [
       ["YieldVault", vaultAddr],
       ["YieldAdapter", adapterAddr],
-      ["ArmadaTreasury", treasuryAddr],
     ]) {
       try {
         const contract = await ethers.getContractAt("Ownable", addr);

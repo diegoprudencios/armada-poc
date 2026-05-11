@@ -32,7 +32,6 @@ import {
   getCCTPDeploymentFile,
   getGovernanceDeploymentFile,
   getPrivacyPoolDeploymentFile,
-  getYieldDeploymentFile,
   isLocal,
   type ChainRole,
 } from "../config/networks";
@@ -180,10 +179,9 @@ async function deployHub(): Promise<HubDeploymentInfo> {
   console.log(`   PrivacyPool: ${privacyPoolAddress}`);
 
   // 7. Resolve treasury address and initialize PrivacyPool
-  // Priority: env var > governance manifest > yield manifest > deployer (local only)
+  // Priority: env var > governance manifest (ArmadaTreasuryGov) > deployer (local only)
   console.log("\n7. Initializing PrivacyPool...");
   const govDeployment = loadDeployment(getGovernanceDeploymentFile());
-  const yieldDeployment = loadDeployment(getYieldDeploymentFile());
   let treasuryAddress: string;
   if (config.treasuryAddress) {
     treasuryAddress = config.treasuryAddress;
@@ -191,9 +189,6 @@ async function deployHub(): Promise<HubDeploymentInfo> {
   } else if (govDeployment?.contracts?.treasury) {
     treasuryAddress = govDeployment.contracts.treasury;
     console.log("   Using ArmadaTreasuryGov from governance deployment");
-  } else if (yieldDeployment?.contracts?.armadaTreasury) {
-    treasuryAddress = yieldDeployment.contracts.armadaTreasury;
-    console.log("   Using ArmadaTreasury from yield deployment");
   } else if (isLocal()) {
     treasuryAddress = deployer.address;
     console.log("   Warning: no treasury configured, using deployer as treasury (local only)");

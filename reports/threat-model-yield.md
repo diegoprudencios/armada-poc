@@ -1,6 +1,6 @@
 # Threat Model: Yield & RelayAdapt
 
-**Domain:** ArmadaYieldVault, ArmadaYieldAdapter, ArmadaTreasury, RelayAdapt integration  
+**Domain:** ArmadaYieldVault, ArmadaYieldAdapter, ArmadaTreasuryGov, RelayAdapt integration  
 **Date:** 2025-02-13
 
 ---

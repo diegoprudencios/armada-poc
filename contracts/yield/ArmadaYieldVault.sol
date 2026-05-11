@@ -9,14 +9,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "../fees/IArmadaFeeModule.sol";
 
 /**
- * @title IArmadaTreasury
- * @notice Interface for ArmadaTreasury fee recording
- */
-interface IArmadaTreasury {
-    function recordFee(address token, address from, uint256 amount) external;
-}
-
-/**
  * @title IAaveSpoke
  * @notice Interface for Aave V4 Spoke (or MockAaveSpoke)
  * @dev Matches the ISpokeBase interface from Aave V4
@@ -309,15 +301,13 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
 
         assets = grossAssets - yieldFee;
 
-        // Transfer fee to treasury and record it
+        // Transfer fee to treasury. Treasury is ArmadaTreasuryGov, which receives
+        // tokens via plain safeTransfer (no recordFee call required).
         if (yieldFee > 0) {
             underlying.safeTransfer(treasury, yieldFee);
             if (feeModule != address(0)) {
                 // Record yield fee in centralized fee module for RevenueCounter
                 IArmadaFeeModule(feeModule).recordYieldFee(yieldFee);
-            } else {
-                // Fallback path: record fee in treasury for tracking
-                IArmadaTreasury(treasury).recordFee(address(underlying), owner_, yieldFee);
             }
         }
 

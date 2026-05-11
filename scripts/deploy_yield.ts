@@ -2,14 +2,13 @@
  * Deploy Armada Yield Contracts
  *
  * Deploys the yield infrastructure:
- * - ArmadaTreasury
- * - ArmadaYieldVault: ERC-20 wrapper around Aave Spoke
+ * - ArmadaYieldVault: ERC-20 wrapper around Aave Spoke (yield fees route to ArmadaTreasuryGov)
  * - ArmadaYieldAdapter: Lend/redeem operations for privacy pool
  *
  * Prerequisites:
  *   - CCTP infrastructure deployed/configured (for USDC address)
  *   - Mock Aave deployed (for MockAaveSpoke address)
- *   - Governance deployed (for governor address — adapter registry)
+ *   - Governance deployed (for ArmadaTreasuryGov + adapter registry addresses)
  *
  * Usage (local):
  *   npx hardhat run scripts/deploy_yield.ts --network hub
@@ -34,7 +33,6 @@ interface YieldDeployment {
   chainId: number;
   deployer: string;
   contracts: {
-    armadaTreasury: string;
     armadaYieldVault: string;
     armadaYieldAdapter: string;
   };
@@ -43,6 +41,7 @@ interface YieldDeployment {
     mockAaveSpoke: string;
     reserveId: number;
     yieldFeeBps: number;
+    treasury: string;
   };
   timestamp: string;
 }
@@ -98,21 +97,20 @@ async function main() {
   const adapterRegistryAddress = govDeployment.contracts.adapterRegistry;
   console.log(`Using AdapterRegistry at: ${adapterRegistryAddress}`);
 
-  // 1. Deploy ArmadaTreasury
-  console.log("\n1. Deploying ArmadaTreasury...");
-  const ArmadaTreasury = await ethers.getContractFactory("ArmadaTreasury");
-  const armadaTreasury = await ArmadaTreasury.deploy(nm.override());
-  await armadaTreasury.deploymentTransaction()!.wait();
-  const armadaTreasuryAddress = await armadaTreasury.getAddress();
-  console.log(`   ArmadaTreasury: ${armadaTreasuryAddress}`);
+  const treasuryAddress = govDeployment.contracts.treasury;
+  if (!treasuryAddress) {
+    console.error(`Governance deployment is missing 'treasury' (ArmadaTreasuryGov) address.`);
+    process.exit(1);
+  }
+  console.log(`Using ArmadaTreasuryGov at: ${treasuryAddress}`);
 
-  // 2. Deploy ArmadaYieldVault
-  console.log("\n2. Deploying ArmadaYieldVault...");
+  // 1. Deploy ArmadaYieldVault (yield fees route to ArmadaTreasuryGov via safeTransfer)
+  console.log("\n1. Deploying ArmadaYieldVault...");
   const ArmadaYieldVault = await ethers.getContractFactory("ArmadaYieldVault");
   const armadaYieldVault = await ArmadaYieldVault.deploy(
     mockAaveSpokeAddress,
     reserveId,
-    armadaTreasuryAddress,
+    treasuryAddress,
     "Armada Yield USDC",
     "ayUSDC",
     nm.override()
@@ -121,8 +119,8 @@ async function main() {
   const armadaYieldVaultAddress = await armadaYieldVault.getAddress();
   console.log(`   ArmadaYieldVault: ${armadaYieldVaultAddress}`);
 
-  // 3. Deploy ArmadaYieldAdapter (with adapter registry for authorization checks)
-  console.log("\n3. Deploying ArmadaYieldAdapter...");
+  // 2. Deploy ArmadaYieldAdapter (with adapter registry for authorization checks)
+  console.log("\n2. Deploying ArmadaYieldAdapter...");
   const ArmadaYieldAdapter = await ethers.getContractFactory("ArmadaYieldAdapter");
   const armadaYieldAdapter = await ArmadaYieldAdapter.deploy(
     usdcAddress,
@@ -134,8 +132,8 @@ async function main() {
   const armadaYieldAdapterAddress = await armadaYieldAdapter.getAddress();
   console.log(`   ArmadaYieldAdapter: ${armadaYieldAdapterAddress}`);
 
-  // 4. Configure ArmadaYieldVault to recognize adapter
-  console.log("\n4. Configuring ArmadaYieldVault...");
+  // 3. Configure ArmadaYieldVault to recognize adapter
+  console.log("\n3. Configuring ArmadaYieldVault...");
   await (await armadaYieldVault.setAdapter(armadaYieldAdapterAddress, nm.override())).wait();
   console.log(`   Adapter set to: ${armadaYieldAdapterAddress}`);
 
@@ -147,7 +145,6 @@ async function main() {
     chainId,
     deployer: deployer.address,
     contracts: {
-      armadaTreasury: armadaTreasuryAddress,
       armadaYieldVault: armadaYieldVaultAddress,
       armadaYieldAdapter: armadaYieldAdapterAddress,
     },
@@ -156,6 +153,7 @@ async function main() {
       mockAaveSpoke: mockAaveSpokeAddress,
       reserveId,
       yieldFeeBps: 1000, // 10%
+      treasury: treasuryAddress,
     },
     timestamp: new Date().toISOString(),
   };

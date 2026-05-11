@@ -57,9 +57,11 @@ describe("Yield Integration", function () {
       true // mintableYield
     );
 
-    // 5. Deploy ArmadaTreasury
-    const ArmadaTreasury = await ethers.getContractFactory("ArmadaTreasury");
-    armadaTreasury = await ArmadaTreasury.deploy();
+    // 5. Deploy ArmadaTreasuryGov (deployer acts as timelock-owner for this unit test).
+    //    Outflow withdrawal paths are exercised in test/treasury_outflow.ts and the
+    //    Foundry Treasury* suites — here we only need the treasury as a fee sink.
+    const ArmadaTreasuryGov = await ethers.getContractFactory("ArmadaTreasuryGov");
+    armadaTreasury = await ArmadaTreasuryGov.deploy(deployer.address);
     await armadaTreasury.waitForDeployment();
 
     // 6. Deploy ArmadaYieldVault
@@ -233,83 +235,30 @@ describe("Yield Integration", function () {
     });
   });
 
-  describe("ArmadaTreasury", function () {
-    it("should receive and track yield fees", async function () {
-      // Deposit
+  describe("ArmadaTreasuryGov (yield fee sink)", function () {
+    // WHY: After the treasury unification (#152/#154), yield fees flow into
+    // ArmadaTreasuryGov via plain safeTransfer with no recordFee() call. This
+    // test pins that the vault still transfers the expected 10% yield cut to
+    // the treasury address — the outflow / governance side of TreasuryGov is
+    // exercised in test/treasury_outflow.ts and the Foundry Treasury* suites.
+    it("should receive yield fees", async function () {
       await usdc.connect(user).approve(
         await armadaYieldVault.getAddress(),
         DEPOSIT_AMOUNT
       );
       await armadaYieldVault.connect(user).deposit(DEPOSIT_AMOUNT, user.address);
 
-      // Fast forward 1 year
       await time.increase(ONE_YEAR);
 
-      // Redeem to trigger fee
       const shares = await armadaYieldVault.balanceOf(user.address);
       await armadaYieldVault.connect(user).redeem(shares, user.address, user.address);
 
-      // Treasury should have received fees
       const treasuryBalance = await armadaTreasury.getBalance(await usdc.getAddress());
       expect(treasuryBalance).to.be.gt(0);
 
-      // Should be ~10% of yield (5 USDC from 50 USDC yield)
+      // Expect ~10% of 5% APY yield over 1 year on 1000 USDC = ~5 USDC.
       const expectedFee = (DEPOSIT_AMOUNT * BigInt(YIELD_BPS) * BigInt(YIELD_FEE_BPS)) / (10000n * 10000n);
       expect(treasuryBalance).to.be.closeTo(expectedFee, ONE_USDC);
-    });
-
-    it("should allow owner to withdraw fees", async function () {
-      // First, get some fees into treasury
-      await usdc.connect(user).approve(
-        await armadaYieldVault.getAddress(),
-        DEPOSIT_AMOUNT
-      );
-      await armadaYieldVault.connect(user).deposit(DEPOSIT_AMOUNT, user.address);
-      await time.increase(ONE_YEAR);
-      const shares = await armadaYieldVault.balanceOf(user.address);
-      await armadaYieldVault.connect(user).redeem(shares, user.address, user.address);
-
-      // Check treasury has balance
-      const treasuryBalance = await armadaTreasury.getBalance(await usdc.getAddress());
-      expect(treasuryBalance).to.be.gt(0);
-
-      // Owner withdraws fees
-      const deployerBefore = await usdc.balanceOf(deployer.address);
-      await armadaTreasury.withdraw(
-        await usdc.getAddress(),
-        deployer.address,
-        treasuryBalance
-      );
-      const deployerAfter = await usdc.balanceOf(deployer.address);
-
-      // Deployer should have received the fees
-      expect(deployerAfter - deployerBefore).to.equal(treasuryBalance);
-
-      // Treasury should be empty
-      const treasuryAfter = await armadaTreasury.getBalance(await usdc.getAddress());
-      expect(treasuryAfter).to.equal(0);
-    });
-
-    it("should reject withdrawal from non-owner", async function () {
-      // Get some fees into treasury
-      await usdc.connect(user).approve(
-        await armadaYieldVault.getAddress(),
-        DEPOSIT_AMOUNT
-      );
-      await armadaYieldVault.connect(user).deposit(DEPOSIT_AMOUNT, user.address);
-      await time.increase(ONE_YEAR);
-      const shares = await armadaYieldVault.balanceOf(user.address);
-      await armadaYieldVault.connect(user).redeem(shares, user.address, user.address);
-
-      // Non-owner tries to withdraw
-      const treasuryBalance = await armadaTreasury.getBalance(await usdc.getAddress());
-      await expect(
-        armadaTreasury.connect(user).withdraw(
-          await usdc.getAddress(),
-          user.address,
-          treasuryBalance
-        )
-      ).to.be.revertedWith("ArmadaTreasury: not owner");
     });
   });
 
