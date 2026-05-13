@@ -1,26 +1,26 @@
 {
   "chainId": 11155111,
   "deployer": "0x98b1CBa0908C98c95c9C87D94e4fCdddc87C933d",
-  "deployBlock": 10743463,
+  "deployBlock": 10846557,
   "contracts": {
-    "timelockController": "0xC69158E95410224BBe113ADeB2E4A6451309238E",
-    "armToken": "0x96efE3b9716d040D6556211eBE2cd38b4d555194",
-    "treasury": "0x2D00f1370268a4019a9E9270867D1222b6e7e914",
-    "governor": "0x89EE643CC511628C219790fC0E1260c218f6cF4c",
-    "governorImpl": "0x8f42DdcCe40404FA4a0F3394F3b82744527e7e88",
-    "steward": "0x0cEbD1d7e23264B8fE5Bcb5E49A27A44985Af3bc",
-    "adapterRegistry": "0x7926d10bCF53E81324Bc908fDc2f6132ec25d984",
-    "revenueCounter": "0xa41d09579F708EfEb8c531909061096219A2A5B6",
-    "revenueCounterImpl": "0x8237BaA4cda47Cd62c01fB0bDECF104Aa238b76D",
-    "revenueLock": "0x88C3e6E51023F7F661C0f34ff590Fe423975FCF2",
-    "shieldPauseController": "0x671292A1B205cc9E56Ac653004993182240825B5",
-    "redemption": "0x1fEfCc29957927244Dc824f884DE22CaB00f011F",
-    "windDown": "0xfEb09B6881E4d626eFE6dfA02ac8052E5b32df06"
+    "timelockController": "0xB5D1360102B4f6B4B48DDc7F41B7c612B88d624e",
+    "armToken": "0x7EB073eeF5953EDAC4554915bfdeFaA31217Fcd8",
+    "treasury": "0x2Ea83D2Fc8B8Fe7b81C5aa152f54b1Da837c3310",
+    "governor": "0xAC836855C5aCF63E5173b729D1c4746B9Ad31b3b",
+    "governorImpl": "0x0734e81c0C2583633885d3bDfD879F2D17bcEAb7",
+    "steward": "0x93CE54dF0ab4cDc8AC1Ef70eb6DbBF6e7712f155",
+    "adapterRegistry": "0xC9B00444b0781b1aD774d5d4c179Eff5f916e54a",
+    "revenueCounter": "0x9290Ad6530Af05EDc759a5961bBe1FA7181fc3CB",
+    "revenueCounterImpl": "0x9036990C2468dd9BC6A3B845805b03888dc003F1",
+    "revenueLock": "0x66B5030eB82DCDEB938446dB390cD3E128fac477",
+    "shieldPauseController": "0x2132D8727cdF6187d526ad19C5187C455af87928",
+    "redemption": "0x9b16C9401eAE84d5A54488008B8c045A5d3b1dea",
+    "windDown": "0x9CaebdC15AE17Dd01FB74DD16fce86d013b5A861"
   },
   "config": {
     "timelockMinDelay": 60,
     "totalSupply": "10000",
     "treasuryAllocation": "6500"
   },
-  "timestamp": "2026-04-27T15:39:49.200Z"
+  "timestamp": "2026-05-13T18:24:36.508Z"
 }
