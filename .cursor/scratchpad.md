@@ -32,6 +32,34 @@ The goal is a concrete, executable plan that the Executor can follow step-by-ste
 - `VotingLocker.unlock()` — CEI pattern and ReentrancyGuard coverage
 - Batched finalization — not implemented; production may need it
 
+### Crowdfund UI Sepolia Sync Architecture (2026-04-28)
+
+Planner analysis: Observer/committer Sepolia cold loads are slow because browser-side event sync currently scans from `deployBlock` through `useContractEvents` and shared `fetchLogs`, which chunks `eth_getLogs` into 10-block ranges with delay. Recommended architecture is a hosted indexer plus frontend snapshot/delta hydration, with the existing RPC scanner retained as a fallback/dev path.
+
+Resilience requirement: the indexer must be a performance accelerator, not the source of truth. Sepolia remains canonical. Campaign-ready design needs append-only raw log storage, disposable derived snapshots, independent audit checks against RPC, recent overlap rescans, backups, health/staleness metadata, and frontend degraded-mode behavior so an indexer outage or DB issue does not blank the app.
+
+No-gap ingestion rule: use separate `ingestedCursor` and `verifiedCursor`. The frontend should only trust data up to `verifiedCursor`. If block/range `x` fails, times out, or audits suspiciously while later ranges are fetched, verification must stop before `x` until a repair job re-fetches and verifies that range. On RPC downtime, failed ranges remain queued; on indexer crash, restart from durable range records and re-scan an overlap window before promoting verified snapshots.
+
+Manageable resilience additions to include in implementation: static verified snapshot fallback (`snapshot-{block}.json` plus `latest.json`), contract-read reconciliation against aggregate reads before snapshot promotion, operator CLI commands (`status`, `verify`, `repair`, `rebuild-snapshot`, `publish-snapshot`), frontend transaction receipt fast-path for confirmed user writes, snapshot schema/deployment guards, and a health endpoint with deterministic frontend policies for healthy/stale/degraded/unhealthy/unavailable states.
+
+Repo placement and branching: build the service as a new Node/TypeScript workspace package at `crowdfund-ui/packages/indexer` named `@armada/crowdfund-indexer`, so it can reuse shared crowdfund event/graph logic and fit the existing `crowdfund-ui/packages/*` workspace glob. Before implementation, create `feature/crowdfund-sync-indexer` from the current `iskay/crowdfund-ui-polish` branch, not from `main`; carry or intentionally handle current planning edits before branching.
+
+### Crowdfund Indexer Robust Polling Loop (2026-04-29)
+
+Planner analysis: the current `backfillVerifiedRanges` function is a suitable core primitive because it plans contiguous chunks from `verifiedCursor + 1`, verifies chunks sequentially, records failed/suspicious ranges, and stops before advancing across bad data. However, the API only runs a one-shot startup backfill when `CROWDFUND_BACKFILL_ON_START=true`; it does not continuously poll. Production operation needs a supervised polling worker around the existing backfill primitive.
+
+Reliability requirements for the polling loop:
+- Never skip a range after an RPC error, timeout, 429, malformed response, digest mismatch, or audit-provider mismatch.
+- Never allow one unexpected provider response to crash the API process.
+- Persist enough failure state (`lastError`, failed range records, attempts) for operators and `/health` to see what happened.
+- Use bounded timeouts and exponential backoff with jitter so non-responses and rate limits do not hang the loop.
+- Avoid overlapping poll iterations; only one backfill/publish cycle should run per process.
+- Keep API serving the last verified snapshot while the worker is degraded.
+
+Proposed implementation: add a reusable worker module, for example `src/ingest/poller.ts`, that repeatedly calls `backfillVerifiedRanges` with safe wrappers for `getBlockNumber` and `getLogs`. Add timeout/retry helpers that classify `rate_limited`, `timeout`, `network`, `malformed_response`, and `unknown` errors. The worker should catch all per-cycle errors, write them to store metadata, emit structured log lines, back off, and continue. Add API env flags such as `CROWDFUND_POLL_INTERVAL_MS`, `CROWDFUND_POLL_ERROR_BACKOFF_MS`, `CROWDFUND_RPC_TIMEOUT_MS`, `CROWDFUND_RPC_MAX_RETRIES`, `CROWDFUND_PUBLISH_ON_POLL`, and `CROWDFUND_SNAPSHOT_PUBLISH_INTERVAL_MS`.
+
+Success criteria: tests prove that timeout/non-response/429/malformed provider failures create failed range records or visible store errors without cursor advancement; digest mismatches remain suspicious and block promotion; repeated cycles do not overlap; successful later repairs resume from the same failed range; API startup with polling enabled continues serving after worker errors.
+
 ---
 
 ## High-level Task Breakdown
@@ -152,6 +180,19 @@ The goal is a concrete, executable plan that the Executor can follow step-by-ste
 
 ## Project Status Board
 
+- [x] Crowdfund UI header polish: align observer/committer header with design reference (rounded inset header, border-aligned active nav, wallet button icon, balanced typography)
+- [x] Crowdfund indexer Task 1: created `feature/crowdfund-sync-indexer`; scaffolded `@armada/crowdfund-indexer` package; added snapshot/health/range data contracts and pure no-gap ingestion helpers.
+- [x] Crowdfund indexer Task 2: added JSON persistence-backed range store and initial indexer status/repair CLI command layer.
+- [x] Crowdfund indexer Task 3: implemented RPC-backed range fetch/audit/repair pipeline against persisted store.
+- [x] Crowdfund indexer Task 4: implemented snapshot building/publication and contract-read reconciliation.
+- [x] Crowdfund indexer Task 5: exposed snapshot/health HTTP API and integrated observer/committer indexed data source.
+- [x] Crowdfund indexer Task 6: added frontend stale/degraded banners and transaction receipt fast-path.
+- [x] Crowdfund indexer Task 7: added automatic chunked backfill/scheduler entry point.
+- [x] Crowdfund indexer Task 8: added Postgres-backed durable store and runtime store backend selection.
+- [x] Crowdfund indexer Task 9: added S3-compatible object-storage snapshot publication backend.
+- [x] Crowdfund indexer Task 10: added backup/restore operator docs.
+- [x] Crowdfund indexer Task 11: implemented robust continuous polling loop with timeout/retry/backoff/error visibility.
+- [ ] Crowdfund indexer Task 12: run an end-to-end Sepolia/local smoke test with live indexer API and configured frontends.
 - [x] Task 1.1: Slither installed and run — report saved to `reports/slither-report.txt`, `reports/slither-report.json`
 - [ ] Task 1.2: Aderyn (skipped — Rust not configured)
 - [x] Task 1.3: Static analysis summary — `reports/static-analysis-summary.md`
@@ -184,6 +225,70 @@ The goal is a concrete, executable plan that the Executor can follow step-by-ste
 
 ## Executor's Feedback or Assistance Requests
 
+**Crowdfund UI header polish started (2026-04-24):** User requested Executor mode. Scope is the existing crowdfund UI header only: shared `AppShell` controls observer/committer chrome, committer `PageNav` controls the selected tab underline, and committer wallet chrome controls RainbowKit button presentation. Success criteria: header is inset with rounded border, active nav underline sits on the header border, wallet control has an icon/pill treatment, and typography spacing better matches the reference.
+
+**Crowdfund UI header polish completed (2026-04-24):** Updated `AppShell` to use an inset rounded header shell with refined brand/network typography; updated committer `PageNav` so the active tab underline sits on the header border; replaced the default RainbowKit header button with a custom icon pill. Verification: IDE lints clean; `npm --workspace @armada/crowdfund-shared run typecheck` passed; `npm --workspace @armada/crowdfund-committer run build` passed. Browser inspection confirmed the header shell and underline; app body was waiting for seeds in local data state.
+
+**Crowdfund UI header follow-up (2026-04-24):** User requested removing the inset treatment. Updated `AppShell` to a normal full-width sticky top header with a bottom border while preserving the refined brand/network typography, border-aligned active tab underline, and custom wallet pill.
+
+**Crowdfund UI header underline follow-up (2026-04-24):** User requested the active selected tab underline appear inline with the bottom border, not above it. Updated committer `PageNav` so horizontal tabs stretch to the header height and render the active indicator as an absolute overlay at the border line.
+
+**Crowdfund UI wallet chrome follow-up (2026-04-24):** User requested muting wallet chrome text and replacing the Lucide wallet glyph with `crowdfund-ui/packages/shared/src/assets/color_circle.svg`. Updated the committer custom RainbowKit header button to import and render that SVG in both disconnected and connected states, with muted foreground text and foreground hover.
+
+**Crowdfund tree campaign header follow-up (2026-04-24):** User requested removing the campaign header card background/border, adding muted vertical stat separators, and changing stat labels away from all-caps. Updated the committer live header, committer stress/mock header, and observer header definitions.
+
+**Crowdfund tree legend follow-up (2026-04-24):** User requested removing the legend title and collapsible affordance/functionality. Updated `GraphLegend` to render only the legend rows, with no local open state, button, or chevron icons.
+
+**Crowdfund tree participate CTA follow-up (2026-04-24):** User requested the bottom "Ready to join this network?" CTA be inset with rounded border, centered content, darker/desaturated white-text button, and smaller text with more vertical spacing. Updated the shared `TreeView` participate CTA wrapper plus committer live and stress/mock CTA content.
+
+**Crowdfund tree participate CTA spacing follow-up (2026-04-25):** User reported changing flex `gap` did not affect on-screen spacing. Updated both live and stress/mock CTA variants to use explicit desktop button margin (`sm:ml-16`) with `sm:gap-0`, making the text-to-button spacing deterministic.
+
+**Crowdfund committer next-steps rail (2026-04-26):** User approved moving "What happens next?" cards lower in visual hierarchy. Added a compact `rail` variant to `WhatsNextCard` and introduced `PageWithHelp` in committer so Participate/Claim main content remains centered while next steps render as a subtle right-margin rail on wide screens and below content on smaller screens.
+
+**Crowdfund checkout polish (2026-04-26):** Updated Participate checkout styling to better match the design mockup: shared `Stepper` now uses numbered progress dots with labels and top caption, shared `StepFooter` uses more polished back/primary button chrome, Participate entry cards have icon blocks/accent borders, and commit/invite/claim review/detail/status surfaces use softer accent-tinted borders/backgrounds. Verification: IDE lints clean for touched files; `npm --workspace @armada/crowdfund-shared run typecheck` passed; direct committer TypeScript project check passed via `./node_modules/.bin/tsc -b /Users/ikay/conductor/workspaces/poc/taipei/crowdfund-ui/packages/committer/tsconfig.json`. No app rebuild run per user preference.
+
+**Crowdfund checkout helper text removal (2026-04-26):** User clarified that the visible "Step X · label" copy was mockup helper text. Removed the shared `Stepper` caption from checkout forms and removed the Participate entry picker's "Step 1 · Choose entry" strip. Verification: IDE lints clean for touched files.
+
+**Crowdfund participate entry stacking (2026-04-26):** User requested the first Participate form options stack vertically instead of side by side. Removed the desktop two-column grid from the entry picker. Verification: IDE lints clean for `committer/src/App.tsx`.
+
+**Crowdfund participate entry option layout (2026-04-26):** User requested text in each option card sit to the right of the icon. Updated both entry buttons to use horizontal icon/text layout with fixed-size icon blocks and wrapped copy. Verification: IDE lints clean for `committer/src/App.tsx`.
+
+**Crowdfund participate entry accent unification (2026-04-26):** User requested both entry options use purple accents. Updated the Invite option hover, border, icon background, and icon color from primary blue to `hop-0` purple. Verification: IDE lints clean for `committer/src/App.tsx`.
+
+**Crowdfund commit context position list (2026-04-26):** User requested removing the card treatment from the Confirm context positions list. Simplified each position row to plain inline list rows without border/background/shadow. Verification: IDE lints clean for `CommitTab.tsx`.
+
+**Crowdfund participate primary button accent (2026-04-26):** User requested Continue/Confirm buttons on participate forms use purple instead of blue. Updated shared `StepFooter` default primary action styling to `hop-0` purple and switched the invite-link create action to the same purple treatment. Verification: IDE lints clean for touched files.
+
+**Crowdfund commit amount input card removal (2026-04-26):** User requested removing the card around the amount input on the Commit amount form. Removed border/background/padding/shadow from each per-hop amount input wrapper while preserving labels, demand context, and validation. Verification: IDE lints clean for `CommitTab.tsx`.
+
+**Crowdfund amount max button polish (2026-04-26):** User requested the Max button be more subtle, ghosted instead of solid blue, and vertically centered with the amount input. Updated shared `AmountInput` to use a ghost-style Max button with muted text, subtle border, purple hover tint, and `h-11` alignment. Verification: IDE lints clean for `AmountInput.tsx`.
+
+**Crowdfund invite confirm regression fix (2026-04-26):** User reported clicking "Confirm transaction" on direct invite after entering an address did nothing. Root cause: shared `StepFooter` passed the React click event into `onNext`; `InviteTab.runPipeline` has an optional override parameter, so it interpreted the event as an override and returned before sending. Fixed `StepFooter` to invoke callbacks with no event argument and added `Stepper.test.tsx` regression coverage. Verification: `npm --workspace @armada/crowdfund-shared run test -- Stepper` passed; shared typecheck passed; committer TypeScript project check passed; IDE lints clean.
+
+**Crowdfund indexer Task 1 checkpoint (2026-04-28):** User approved the indexer architecture plan and requested implementation. Created feature branch `feature/crowdfund-sync-indexer` from `iskay/crowdfund-ui-polish`. Added new workspace package `crowdfund-ui/packages/indexer` (`@armada/crowdfund-indexer`) with TypeScript/Vitest config, snapshot/health/cursor data contracts, deterministic range digest/log identity helpers, contiguous verified-cursor promotion, gap detection, repair range extraction, and health classification. Added root script `npm run crowdfund:indexer`. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (9 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; IDE lints clean.
+
+**Crowdfund indexer Task 2 checkpoint (2026-04-28):** Added `FileIndexerStore`, a JSON-file backed durable store for cursor, range records, snapshot metadata, and health timestamps using atomic write/rename. Added initial operator CLI command layer with `status` output and accepted stubs for `verify`, `repair`, `rebuild-snapshot`, and `publish-snapshot`; added root `npm run crowdfund:indexer:cli`. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (16 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; `npm run crowdfund:indexer:cli -- status` produced clean status output; IDE lints clean.
+
+**Crowdfund indexer Task 3 checkpoint (2026-04-28):** Added append-only raw log persistence to the file store. Implemented `fetchIndexedLogs`, `stageRange`, `verifyRange`, and `repairRanges` with provider/audit-provider digest comparison, failed/suspicious range recording, raw log dedupe, and contiguous verified-cursor promotion. Wired `verify` and `repair` CLI commands to the RPC pipeline via `CROWDFUND_PRIMARY_RPC_URL`, optional `CROWDFUND_AUDIT_RPC_URL`, and `CROWDFUND_CONTRACT_ADDRESS`. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (22 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; `npm run crowdfund:indexer:cli -- status` produced clean status output; IDE lints clean.
+
+**Crowdfund indexer Task 4 checkpoint (2026-04-28):** Added verified snapshot construction from persisted raw logs using shared event parsing and graph building, deterministic bigint/Map-safe JSON serialization and snapshot hashing, static `snapshot-{block}.json` plus `latest.json` publication, and contract-read reconciliation against participant count, per-hop totals, per-hop capped demand, unique committers, and whitelist counts. Wired `rebuild-snapshot` and `publish-snapshot` CLI commands; publish refuses failed reconciliation and can publish pending-reconciliation snapshots when no RPC URL is configured. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (27 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; smoke-tested `publish-snapshot` with temp store/snapshot dir; IDE lints clean.
+
+**Crowdfund indexer Task 5 checkpoint (2026-04-28):** Added Express API server for `/health`, `/snapshot`, and `/events` delta responses from the verified store. Added shared frontend indexer client helpers that revive JSON stringified bigint event fields back into `CrowdfundEvent` shapes. Updated `useContractEvents` to try an indexed snapshot first when `indexerBaseUrl` is provided, validating contract address and deploy block before falling back to the existing IndexedDB/RPC sync path. Wired observer and committer Sepolia config to `VITE_CROWDFUND_INDEXER_URL` while local mode stays RPC-only. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (28 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; `npm run test --workspace=@armada/crowdfund-shared -- indexer` passed; `npm run typecheck --workspace=@armada/crowdfund-shared` passed; direct observer/committer TypeScript project check passed; smoke-started API on temp port and stopped it; IDE lints clean.
+
+**Crowdfund indexer Task 6 checkpoint (2026-04-28):** Added indexer health fetching to shared frontend client code and surfaced non-healthy indexer states through `StaleDataBanner` (`stale`, `degraded`, `unhealthy`, `unavailable`). Extended `useContractEvents` to poll indexer health and expose it to observer/committer. Added receipt fast-path: confirmed commit, invite, and claim/refund transaction receipt logs are parsed and merged into the event query/cache immediately, so the connected user's UI updates before indexer catch-up. Verification: `npm run test --workspace=@armada/crowdfund-shared -- indexer StaleDataBanner` passed (existing `useStaleDataBanner` act warnings still present); `npm run typecheck --workspace=@armada/crowdfund-shared` passed; direct observer/committer TypeScript project check passed; `npm run test --workspace=@armada/crowdfund-indexer && npm run typecheck --workspace=@armada/crowdfund-indexer` passed; `npm run crowdfund:indexer:cli -- status` passed; IDE lints clean.
+
+**Crowdfund indexer Task 7 checkpoint (2026-04-28):** Added provider-safe chunked backfill orchestration. `planBackfillRanges` creates inclusive chunks from `verifiedCursor + 1` to confirmed head; `backfillVerifiedRanges` verifies each chunk sequentially, updates chain/confirmed head, promotes `verifiedCursor` only through verified contiguous chunks, and stops on failed/suspicious ranges by default. Added CLI `backfill` command and `CROWDFUND_BACKFILL_ON_START=true` API startup catch-up option, both using `CROWDFUND_MAX_BLOCK_RANGE` (default 500). Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (33 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; `npm run crowdfund:indexer:cli -- backfill latest` now parses correctly and fails only for missing expected RPC env; IDE lints clean.
+
+**Crowdfund indexer Task 8 checkpoint (2026-04-28):** Added `IndexerStore` interface and `PostgresIndexerStore` with migrations for cursor, range verification records, append-only raw logs, and metadata. Added runtime store selection via `CROWDFUND_INDEXER_STORE=file|postgres`; if unset, `CROWDFUND_DATABASE_URL`/`DATABASE_URL` selects Postgres and otherwise the JSON file store remains the local/dev fallback. CLI and API now use the store factory. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (38 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; IDE lints clean. `npm audit --omit=dev` was run after dependency warnings and reports existing workspace vulnerabilities, several of which require breaking or force fixes; no audit fix was applied.
+
+**Crowdfund indexer Task 9 checkpoint (2026-04-28):** Added S3-compatible object storage publication for static verified snapshots. `publish-snapshot` now supports `CROWDFUND_SNAPSHOT_PUBLISHER=file|s3`; S3 mode writes immutable `snapshot-{verifiedBlock}.json` and mutable `latest.json` to `CROWDFUND_SNAPSHOT_BUCKET` with optional `CROWDFUND_SNAPSHOT_PREFIX`, `CROWDFUND_SNAPSHOT_ENDPOINT`, `CROWDFUND_SNAPSHOT_REGION`, `CROWDFUND_SNAPSHOT_PUBLIC_BASE_URL`, and `CROWDFUND_SNAPSHOT_FORCE_PATH_STYLE`. Store metadata records the public `latest.json` URL when configured, otherwise the `s3://` URI. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (39 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; IDE lints clean.
+
+**Crowdfund indexer Task 10 checkpoint (2026-04-28):** Added `docs/CROWDFUND_INDEXER_RUNBOOK.md` covering runtime model, required env vars, Postgres and local file stores, S3-compatible static snapshot publishing, API startup, CLI operations, normal operating loop, failure recovery, backup checklist, and smoke test checklist. Accuracy checked against current CLI/API/store/publisher env handling. No code tests needed for docs-only change.
+
+**Crowdfund indexer Task 11 checkpoint (2026-04-29):** Added supervised continuous polling worker around `backfillVerifiedRanges`. `CrowdfundIndexerPoller` prevents overlapping cycles, wraps primary/audit RPC calls with bounded timeout/retry/backoff/jitter, classifies errors (`timeout`, `rate_limited`, `network`, `malformed_response`, `unknown`), persists cycle errors to store metadata, and can publish snapshots after successful poll cycles. Hardened RPC log validation so malformed log responses fail visibly instead of being treated as empty data. API startup now supports `CROWDFUND_POLL_ON_START=true` plus `CROWDFUND_POLL_INTERVAL_MS`, `CROWDFUND_POLL_ERROR_BACKOFF_MS`, `CROWDFUND_RPC_TIMEOUT_MS`, `CROWDFUND_RPC_MAX_RETRIES`, `CROWDFUND_RPC_RETRY_BASE_DELAY_MS`, `CROWDFUND_RPC_RETRY_JITTER_MS`, `CROWDFUND_PUBLISH_ON_POLL`, and `CROWDFUND_SNAPSHOT_PUBLISH_INTERVAL_MS`. Verification: `npm run test --workspace=@armada/crowdfund-indexer` passed (44 tests); `npm run typecheck --workspace=@armada/crowdfund-indexer` passed; IDE lints clean. Updated `docs/CROWDFUND_INDEXER_RUNBOOK.md` for the continuous polling operating model.
+
+**Crowdfund indexer env samples checkpoint (2026-04-29):** Added tracked root `sample.env.dev` and `sample.env.production` files covering Sepolia deployment values, indexer store selection, polling-on-start defaults, RPC retry/timeout settings, snapshot publishing, and Vite frontend variables. Expanded `docs/CROWDFUND_INDEXER_RUNBOOK.md` with sample-file usage instructions and an environment variable reference documenting defaults and behavior. Updated `.gitignore` with `*.env` so real copied env files like `dev.env`/`production.env` remain untracked while `sample.env.*` stays trackable. Verification: `git status --short` shows both sample files as unignored/untracked additions; docs-only/env-only change, no code tests needed.
+
 **Phase 1 complete (Tasks 1.1, 1.3).** Task 1.2 (Aderyn) skipped: Rust toolchain not configured (`rustup default stable` needed). User can run `cargo install aderyn && aderyn .` manually and merge results into `reports/static-analysis-summary.md`.
 
 **Slither findings:** 189 total. Key action items: ArmadaYieldAdapter.lendPrivate (use SafeERC20 for shareToken.transfer), PrivacyPool.initialize zero-checks, ArmadaTreasuryGov.constructor zero-check. See `reports/static-analysis-summary.md` for full triage.
@@ -202,6 +307,11 @@ The goal is a concrete, executable plan that the Executor can follow step-by-ste
 
 ## Lessons
 
+- **Crowdfund UI verification preference (2026-04-24):** Do not rebuild crowdfund apps after small UI changes unless the user asks. Prefer lints or targeted type checks when useful.
+- **Crowdfund indexer shared imports (2026-04-28):** Do not import from the `@armada/crowdfund-shared` barrel in Node indexer code, even for types, because the barrel pulls TSX/browser modules into indexer typecheck. Import type-only from pure shared lib files such as `../../shared/src/lib/events.js` and `../../shared/src/lib/graph.js` until shared exposes server-safe subpath exports.
+- **Crowdfund indexer CLI runner (2026-04-28):** `ts-node-esm` fails with `ERR_UNKNOWN_FILE_EXTENSION` in this NodeNext/package ESM setup. Use `node --no-warnings --loader ts-node/esm` for current indexer `dev`/`cli` scripts until the package gains a build step or a different TS runner.
+- **Crowdfund indexer CLI args (2026-04-28):** The root nested npm script can strip flags like `--to` when forwarding to the workspace script. Support `npm run crowdfund:indexer:cli -- backfill latest` as shorthand for `backfill --to latest`.
+- **Crowdfund indexer dependencies (2026-04-28):** When adding dependencies for nested `crowdfund-ui` workspaces, run workspace installs from `crowdfund-ui/` if the repo-root workspace filter warns that the package is not present. Root-level installs can still update root audit output without adding the intended package dependency.
 - **Relayer function selectors (2025-02-13):** The relayer's `ALLOWED_SELECTORS` must match the compiled contract ABI. Use `forge-out/ArmadaYieldAdapter.sol/ArmadaYieldAdapter.json` to derive selectors: `lendAndShield` = 0xf2987ad1, `redeemAndShield` = 0x0793b70e. Do not hardcode selectors from documentation or older builds.
 - **Slither fixes applied (2025-02-13):** ArmadaYieldAdapter.lendPrivate (shareToken.safeTransfer), PrivacyPool.initialize (zero-checks for all address params), PrivacyPool.setTreasury (zero-check), ArmadaTreasuryGov.constructor (zero-check). All 262 tests pass.
 - **Foundry:** Use `forge test --offline` in sandboxed environments to avoid SCDynamicStoreBuilder crash (macOS proxy lookup).

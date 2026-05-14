@@ -1,24 +1,27 @@
 // ABOUTME: Event fetching pipeline with polling and IndexedDB caching.
-// ABOUTME: Fetches historical events on mount, then polls for new events on an interval.
+// ABOUTME: Backed by react-query; IDB seeds initial data, cursor is stored in query data.
 
-import { useEffect, useRef } from 'react'
-import { atom, useAtom } from 'jotai'
+import { useCallback, useEffect, useMemo } from 'react'
+import { atom, useSetAtom } from 'jotai'
 import type { JsonRpcProvider } from 'ethers'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchLogs } from '../lib/rpc.js'
 import { parseCrowdfundEvents } from '../lib/events.js'
 import { getCachedEvents, cacheEvents } from '../lib/cache.js'
+import { fetchIndexedEventsSnapshot, fetchIndexerHealth } from '../lib/indexer.js'
 import type { CrowdfundEvent } from '../lib/events.js'
+import type { IndexerHealth } from '../lib/indexer.js'
 
-/** Atom holding all fetched events, oldest first */
+/** Atom holding all fetched events, oldest first — mirrored from query data for non-hook consumers (useGraphState). */
 export const crowdfundEventsAtom = atom<CrowdfundEvent[]>([])
 
-/** Last block number that was fetched */
+/** Last block number that was fetched. Mirrored for legacy consumers. */
 export const lastFetchedBlockAtom = atom<number>(0)
 
-/** Whether the initial event load is still in progress */
+/** Whether the initial event load is still in progress. Mirrored for legacy consumers. */
 export const eventsLoadingAtom = atom<boolean>(true)
 
-/** Error message from event fetching, if any */
+/** Error message from event fetching, if any. Mirrored for legacy consumers. */
 export const eventsErrorAtom = atom<string | null>(null)
 
 export interface UseContractEventsConfig {
@@ -27,120 +30,196 @@ export interface UseContractEventsConfig {
   pollIntervalMs: number
   /** Block number to start fetching from (e.g. contract deploy block). Defaults to 0. */
   startBlock?: number
+  /** Optional indexer API base URL. When provided, Sepolia loads use indexed snapshots before RPC fallback. */
+  indexerBaseUrl?: string | null
 }
 
 export interface UseContractEventsResult {
   events: CrowdfundEvent[]
   loading: boolean
   error: string | null
+  indexerHealth: IndexerHealth | null
+  ingestReceiptLogs: (logs: readonly ReceiptLogLike[]) => void
+}
+
+interface EventsSnapshot {
+  events: CrowdfundEvent[]
+  cursor: number
+}
+
+export interface ReceiptLogLike {
+  blockNumber?: number
+  transactionHash?: string
+  index?: number
+  logIndex?: number
+  topics: readonly string[]
+  data: string
+}
+
+const EMPTY_EVENTS: CrowdfundEvent[] = []
+
+function dedupEventKey(e: CrowdfundEvent): string {
+  return `${e.transactionHash}-${e.logIndex}`
+}
+
+function toRawReceiptLog(log: ReceiptLogLike) {
+  return {
+    blockNumber: log.blockNumber ?? 0,
+    transactionHash: log.transactionHash ?? '',
+    logIndex: log.logIndex ?? log.index ?? 0,
+    topics: [...log.topics],
+    data: log.data,
+  }
 }
 
 /**
  * Hook that fetches crowdfund events from the blockchain.
- * On mount: loads cached events from IndexedDB, then fetches new events since last block.
- * Polls for new events on the configured interval.
+ * On mount: loads cached events from IndexedDB via the query's initial fetch.
+ * Then polls for new events on the configured interval, extending the cursor.
  */
 export function useContractEvents(config: UseContractEventsConfig): UseContractEventsResult {
-  const { provider, contractAddress, pollIntervalMs, startBlock } = config
-  const [events, setEvents] = useAtom(crowdfundEventsAtom)
-  const [, setLastBlock] = useAtom(lastFetchedBlockAtom)
-  const [loading, setLoading] = useAtom(eventsLoadingAtom)
-  const [error, setError] = useAtom(eventsErrorAtom)
-  const lastBlockRef = useRef(-1)
-
-  // Default to block 0 when no deployBlock is available (e.g. older manifests)
+  const { provider, contractAddress, pollIntervalMs, startBlock, indexerBaseUrl } = config
   const effectiveStartBlock = startBlock ?? 0
 
-  useEffect(() => {
-    if (!provider || !contractAddress) return
+  const setEventsAtom = useSetAtom(crowdfundEventsAtom)
+  const setLastBlockAtom = useSetAtom(lastFetchedBlockAtom)
+  const setLoadingAtom = useSetAtom(eventsLoadingAtom)
+  const setErrorAtom = useSetAtom(eventsErrorAtom)
 
-    let cancelled = false
-    let intervalId: ReturnType<typeof setInterval> | null = null
+  const queryClient = useQueryClient()
 
-    // Initialize lastBlockRef to startBlock on first run
-    if (lastBlockRef.current < effectiveStartBlock) {
-      lastBlockRef.current = effectiveStartBlock
-    }
+  // queryKey is stable per contract address + start block. Cursor lives inside
+  // query data so it survives refetches without a parallel ref.
+  const queryKey = useMemo(
+    () => ['crowdfundEvents', contractAddress, effectiveStartBlock, indexerBaseUrl ?? null] as const,
+    [contractAddress, effectiveStartBlock, indexerBaseUrl],
+  )
 
-    async function fetchNewEvents() {
-      if (!provider || !contractAddress) return
-      try {
-        const fromBlock = lastBlockRef.current + 1
-        const rawLogs = await fetchLogs(provider, contractAddress, fromBlock, 'latest')
-        const newEvents = parseCrowdfundEvents(rawLogs)
+  const query = useQuery<EventsSnapshot, Error>({
+    queryKey,
+    queryFn: async () => {
+      if (!provider || !contractAddress) {
+        return { events: EMPTY_EVENTS, cursor: effectiveStartBlock }
+      }
 
-        if (cancelled) return
-
-        if (newEvents.length > 0) {
-          const latestBlock = Math.max(...newEvents.map((e) => e.blockNumber))
-          lastBlockRef.current = latestBlock
-          setLastBlock(latestBlock)
-
-          setEvents((prev) => {
-            // Dedup by txHash + logIndex
-            const existing = new Set(prev.map((e) => `${e.transactionHash}-${e.logIndex}`))
-            const unique = newEvents.filter(
-              (e) => !existing.has(`${e.transactionHash}-${e.logIndex}`),
-            )
-            if (unique.length === 0) return prev
-            return [...prev, ...unique]
-          })
-
-          // Persist to IndexedDB
-          await cacheEvents(newEvents, latestBlock).catch(() => {
-            // IndexedDB errors are non-fatal
-          })
-        } else {
-          // Even if no events, update lastBlock to current
-          const currentBlock = await provider.getBlockNumber()
-          if (!cancelled) {
-            lastBlockRef.current = currentBlock
-            setLastBlock(currentBlock)
+      let prior = queryClient.getQueryData<EventsSnapshot>(queryKey)
+      if (prior === undefined) {
+        if (indexerBaseUrl) {
+          try {
+            const indexed = await fetchIndexedEventsSnapshot(indexerBaseUrl)
+            if (
+              indexed.metadata.contractAddress.toLowerCase() === contractAddress.toLowerCase() &&
+              indexed.metadata.deployBlock === effectiveStartBlock
+            ) {
+              cacheEvents(indexed.events, indexed.metadata.verifiedBlock).catch(() => {})
+              return {
+                events: indexed.events,
+                cursor: indexed.metadata.verifiedBlock,
+              }
+            }
+          } catch {
+            // Fall back to the existing RPC/IndexedDB path when the indexer is unavailable.
           }
         }
 
-        if (!cancelled) setError(null)
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to fetch events')
+        // First run — seed cursor + events from IndexedDB.
+        const cached = await getCachedEvents().catch(() => ({
+          events: [] as CrowdfundEvent[],
+          lastBlock: 0,
+        }))
+        prior = {
+          events: cached.events,
+          cursor: Math.max(cached.lastBlock, effectiveStartBlock),
         }
       }
-    }
 
-    async function initialize() {
-      try {
-        // Load from IndexedDB cache first
-        const cached = await getCachedEvents()
-        if (cancelled) return
+      const rawLogs = await fetchLogs(provider, contractAddress, prior.cursor + 1, 'latest')
+      const newEvents = parseCrowdfundEvents(rawLogs)
 
-        if (cached.events.length > 0) {
-          setEvents(cached.events)
-          lastBlockRef.current = Math.max(cached.lastBlock, effectiveStartBlock)
-          setLastBlock(cached.lastBlock)
-        }
-
-        // Fetch new events since cache
-        await fetchNewEvents()
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to initialize events')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-          // Start polling only after initialization completes
-          intervalId = setInterval(fetchNewEvents, pollIntervalMs)
-        }
+      if (newEvents.length === 0) {
+        // Advance cursor to current block to avoid re-scanning — matches prior behavior.
+        const currentBlock = await provider.getBlockNumber()
+        return { events: prior.events, cursor: currentBlock }
       }
-    }
 
-    initialize()
+      // Dedup by txHash + logIndex against prior events.
+      const existing = new Set(prior.events.map(dedupEventKey))
+      const unique = newEvents.filter((e) => !existing.has(dedupEventKey(e)))
+      const merged = unique.length === 0 ? prior.events : [...prior.events, ...unique]
+      const latestBlock = Math.max(...newEvents.map((e) => e.blockNumber))
 
-    return () => {
-      cancelled = true
-      if (intervalId) clearInterval(intervalId)
-    }
-  }, [provider, contractAddress, pollIntervalMs, effectiveStartBlock, setEvents, setLastBlock, setLoading, setError])
+      // Persist to IndexedDB (non-fatal on failure).
+      cacheEvents(newEvents, latestBlock).catch(() => {})
 
-  return { events, loading, error }
+      return { events: merged, cursor: latestBlock }
+    },
+    enabled: !!provider && !!contractAddress,
+    refetchInterval: pollIntervalMs,
+    refetchIntervalInBackground: false,
+    staleTime: 0,
+    gcTime: 30 * 60 * 1000,
+    retry: false,
+  })
+
+  const healthQuery = useQuery<IndexerHealth, Error>({
+    queryKey: ['crowdfundIndexerHealth', indexerBaseUrl],
+    queryFn: () => fetchIndexerHealth(indexerBaseUrl!),
+    enabled: !!indexerBaseUrl,
+    refetchInterval: pollIntervalMs,
+    refetchIntervalInBackground: false,
+    staleTime: pollIntervalMs,
+    retry: false,
+  })
+
+  const ingestReceiptLogs = useCallback(
+    (logs: readonly ReceiptLogLike[]) => {
+      const receiptEvents = parseCrowdfundEvents(logs.map(toRawReceiptLog))
+      if (receiptEvents.length === 0) return
+
+      queryClient.setQueryData<EventsSnapshot>(queryKey, (prior) => {
+        const existing = new Set((prior?.events ?? []).map(dedupEventKey))
+        const unique = receiptEvents.filter((event) => !existing.has(dedupEventKey(event)))
+        if (unique.length === 0) return prior
+        const merged = [...(prior?.events ?? []), ...unique].sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex)
+        const latestBlock = Math.max(prior?.cursor ?? effectiveStartBlock, ...unique.map((event) => event.blockNumber))
+        cacheEvents(unique, latestBlock).catch(() => {})
+        return { events: merged, cursor: latestBlock }
+      })
+    },
+    [effectiveStartBlock, queryClient, queryKey],
+  )
+
+  const events = query.data?.events ?? EMPTY_EVENTS
+  const loading = query.isPending
+  const errorMessage = query.error
+    ? query.error instanceof Error
+      ? query.error.message
+      : 'Failed to fetch events'
+    : null
+
+  // Mirror into legacy atoms — useGraphState reads crowdfundEventsAtom, and the
+  // others are part of the shared barrel's public surface.
+  useEffect(() => {
+    setEventsAtom(events)
+  }, [events, setEventsAtom])
+
+  useEffect(() => {
+    if (query.data) setLastBlockAtom(query.data.cursor)
+  }, [query.data, setLastBlockAtom])
+
+  useEffect(() => {
+    setLoadingAtom(loading)
+  }, [loading, setLoadingAtom])
+
+  useEffect(() => {
+    setErrorAtom(errorMessage)
+  }, [errorMessage, setErrorAtom])
+
+  return {
+    events,
+    loading,
+    error: errorMessage,
+    indexerHealth: healthQuery.data ?? null,
+    ingestReceiptLogs,
+  }
 }

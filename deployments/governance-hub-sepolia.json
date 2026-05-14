@@ -1,18 +1,26 @@
 {
   "chainId": 11155111,
   "deployer": "0x98b1CBa0908C98c95c9C87D94e4fCdddc87C933d",
+  "deployBlock": 10846557,
   "contracts": {
-    "armToken": "0x65997E314Cb486c5dDed329c2974ABc20eB25942",
-    "timelockController": "0xaFBd427736Ca6b60EEeb9A032619DAC5fa86F148",
-    "treasury": "0x40f74a5c9d686B270bF11a5F283fA8f5a50Dcca4",
-    "governor": "0x7a6298e1390EC675C61135E5f3878aeD16496b67",
-    "steward": "0xf09c2b52A2Da7eF32fb8f0E2066E75d26beEE48A"
+    "timelockController": "0xB5D1360102B4f6B4B48DDc7F41B7c612B88d624e",
+    "armToken": "0x7EB073eeF5953EDAC4554915bfdeFaA31217Fcd8",
+    "treasury": "0x2Ea83D2Fc8B8Fe7b81C5aa152f54b1Da837c3310",
+    "governor": "0xAC836855C5aCF63E5173b729D1c4746B9Ad31b3b",
+    "governorImpl": "0x0734e81c0C2583633885d3bDfD879F2D17bcEAb7",
+    "steward": "0x93CE54dF0ab4cDc8AC1Ef70eb6DbBF6e7712f155",
+    "adapterRegistry": "0xC9B00444b0781b1aD774d5d4c179Eff5f916e54a",
+    "revenueCounter": "0x9290Ad6530Af05EDc759a5961bBe1FA7181fc3CB",
+    "revenueCounterImpl": "0x9036990C2468dd9BC6A3B845805b03888dc003F1",
+    "revenueLock": "0x66B5030eB82DCDEB938446dB390cD3E128fac477",
+    "shieldPauseController": "0x2132D8727cdF6187d526ad19C5187C455af87928",
+    "redemption": "0x9b16C9401eAE84d5A54488008B8c045A5d3b1dea",
+    "windDown": "0x9CaebdC15AE17Dd01FB74DD16fce86d013b5A861"
   },
   "config": {
     "timelockMinDelay": 60,
-    "stewardActionDelay": 30,
-    "totalSupply": "100000000",
-    "treasuryAllocation": "65000000"
+    "totalSupply": "10000",
+    "treasuryAllocation": "6500"
   },
-  "timestamp": "2026-02-25T16:53:25.468Z"
+  "timestamp": "2026-05-13T18:24:36.508Z"
 }

@@ -1,10 +1,31 @@
-// ABOUTME: Commit flow UI — eligibility check, per-hop amount entry, review/confirm.
-// ABOUTME: Handles USDC approval and sequential commit transactions per hop.
+// ABOUTME: Commit flow as a stepwise checkout — context → amount → review → status.
+// ABOUTME: Pipeline (one row per tx) drives the final step's status display.
 
 import { useState, useMemo, useCallback } from 'react'
 import { Contract, MaxUint256 } from 'ethers'
-import type { Signer } from 'ethers'
+import type { Signer, TransactionResponse } from 'ethers'
+import { ShieldOff } from 'lucide-react'
+import { useForm, useWatch, type Resolver } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import {
+  AmountInput,
+  EmptyState,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+  InfoTooltip,
+  StepFooter,
+  Stepper,
+  type StepperStep,
+  TOOLTIPS,
+  ToggleGroup,
+  ToggleGroupItem,
+  TxStatusPipeline,
+  type TxPipelineRow,
+  type TxPipelineStatus,
   formatUsdc,
   parseUsdcInput,
   hopLabel,
@@ -12,15 +33,15 @@ import {
   CROWDFUND_ABI_FRAGMENTS,
   ERC20_ABI_FRAGMENTS,
   CROWDFUND_CONSTANTS,
-  HOP_CONFIGS,
+  useTxToast,
   type HopStatsData,
+  type ReceiptLogLike,
 } from '@armada/crowdfund-shared'
 import type { HopPosition } from '@/hooks/useEligibility'
 import { useProRataEstimate } from '@/hooks/useProRataEstimate'
-import { useTransactionFlow } from '@/hooks/useTransactionFlow'
 import { ProRataEstimate } from './ProRataEstimate'
-import { TransactionFlow } from './TransactionFlow'
 import { getExplorerUrl } from '@/config/network'
+import { mapRevertToMessage } from '@/lib/revertMessages'
 
 export interface CommitTabProps {
   positions: HopPosition[]
@@ -36,9 +57,65 @@ export interface CommitTabProps {
   phase: number
   windowOpen: boolean
   resolveENS: (addr: string) => string | null
+  /** Optional: invoked when the user clicks Back from step 1, returning to
+   *  the Participate page's intent picker. */
+  onBackToIntent?: () => void
+  onReceiptLogs?: (logs: readonly ReceiptLogLike[]) => void
 }
 
-type Step = 'input' | 'review'
+type Step = 'context' | 'amount' | 'review' | 'status'
+
+const STEPS: ReadonlyArray<StepperStep> = [
+  { id: 'context', label: 'Confirm context' },
+  { id: 'amount', label: 'Enter commit amount' },
+  { id: 'review', label: 'Review and confirm' },
+  { id: 'status', label: 'Pending / Success' },
+]
+
+interface CommitFormValues {
+  approveUnlimited: boolean
+  amounts: Record<string, string>
+}
+
+/** Build a zod schema for per-hop commit validation. Factory because balance + positions change over time. */
+function makeCommitSchema(positions: HopPosition[], balance: bigint) {
+  return z
+    .object({
+      approveUnlimited: z.boolean(),
+      amounts: z.record(z.string(), z.string()),
+    })
+    .superRefine((data, ctx) => {
+      let total = 0n
+      for (const pos of positions) {
+        const raw = data.amounts[String(pos.hop)] ?? ''
+        if (!raw.trim()) continue
+        const parsed = parseUsdcInput(raw)
+        if (parsed === 0n) continue
+        if (parsed < CROWDFUND_CONSTANTS.MIN_COMMIT) {
+          ctx.addIssue({
+            path: ['amounts', String(pos.hop)],
+            code: 'custom',
+            message: `Minimum ${formatUsdc(CROWDFUND_CONSTANTS.MIN_COMMIT)}`,
+          })
+        }
+        if (parsed > pos.remaining) {
+          ctx.addIssue({
+            path: ['amounts', String(pos.hop)],
+            code: 'custom',
+            message: `Exceeds remaining cap of ${formatUsdc(pos.remaining)}`,
+          })
+        }
+        total += parsed
+      }
+      if (total > balance) {
+        ctx.addIssue({
+          path: ['amounts'],
+          code: 'custom',
+          message: `Total ${formatUsdc(total)} exceeds your USDC balance of ${formatUsdc(balance)}`,
+        })
+      }
+    })
+}
 
 /** Display inviter attribution for a position */
 function inviterDisplay(pos: HopPosition, resolveENS: (addr: string) => string | null): string {
@@ -66,9 +143,6 @@ function hopDemandDisplay(
   const stats = hopStats[hop]
   const demand = formatUsdc(stats.cappedCommitted)
 
-  // Use estimateAllocation to get accurate per-hop allocation ceilings,
-  // including the hop-2 floor reservation and hop-0→hop-1 rollover.
-  // Handles saleSize === 0 (Active phase) internally.
   const cappedDemand = hopStats.reduce((sum, s) => sum + s.cappedCommitted, 0n)
   const { perHopAlloc } = estimateAllocation(hopStats, cappedDemand, saleSize)
   const hopAlloc = perHopAlloc[hop] ?? 0n
@@ -83,12 +157,20 @@ function hopDemandDisplay(
     return { demand, pct, warning }
   }
 
-  // Hop-2: show against floor allocation
   const pct = hopAlloc > 0n ? Number((stats.cappedCommitted * 100n) / hopAlloc) : 0
   const warning = pct < 100
     ? 'Floor not yet filled — full allocation likely'
     : null
   return { demand, pct, warning }
+}
+
+/** Update one row in the pipeline state by id. */
+function updateRow(
+  rows: TxPipelineRow[],
+  id: string,
+  patch: Partial<TxPipelineRow>,
+): TxPipelineRow[] {
+  return rows.map((r) => (r.id === id ? { ...r, ...patch } : r))
 }
 
 export function CommitTab(props: CommitTabProps) {
@@ -106,33 +188,44 @@ export function CommitTab(props: CommitTabProps) {
     phase,
     windowOpen,
     resolveENS,
+    onBackToIntent,
+    onReceiptLogs,
   } = props
 
-  const [step, setStep] = useState<Step>('input')
-  const [amounts, setAmounts] = useState<Map<number, string>>(new Map())
-  const [approveUnlimited, setApproveUnlimited] = useState(false)
-  const [commitSuccess, setCommitSuccess] = useState(false)
-  const approvalTx = useTransactionFlow(signer)
-  const commitTx = useTransactionFlow(signer)
+  const [step, setStep] = useState<Step>('context')
+  const [pipeline, setPipeline] = useState<TxPipelineRow[]>([])
+  const [pipelineRunning, setPipelineRunning] = useState(false)
+  const [pipelineError, setPipelineError] = useState<string | null>(null)
+  const [pipelineDone, setPipelineDone] = useState(false)
+  const txToast = useTxToast({ explorerUrl: getExplorerUrl() })
 
-  // Parse amounts to bigint
+  const schema = useMemo(() => makeCommitSchema(positions, balance), [positions, balance])
+
+  const form = useForm<CommitFormValues>({
+    resolver: zodResolver(schema) as unknown as Resolver<CommitFormValues>,
+    mode: 'onChange',
+    defaultValues: { approveUnlimited: false, amounts: {} },
+  })
+
+  const amountsValues = useWatch({ control: form.control, name: 'amounts' })
+  const approveUnlimited = useWatch({ control: form.control, name: 'approveUnlimited' })
+
   const parsedAmounts = useMemo(() => {
     const m = new Map<number, bigint>()
-    for (const [hop, input] of amounts) {
-      const parsed = parseUsdcInput(input)
-      if (parsed > 0n) m.set(hop, parsed)
+    for (const pos of positions) {
+      const raw = amountsValues?.[String(pos.hop)] ?? ''
+      const parsed = parseUsdcInput(raw)
+      if (parsed > 0n) m.set(pos.hop, parsed)
     }
     return m
-  }, [amounts])
+  }, [amountsValues, positions])
 
-  // Total commit amount
   const totalAmount = useMemo(() => {
     let sum = 0n
     for (const a of parsedAmounts.values()) sum += a
     return sum
   }, [parsedAmounts])
 
-  // Active hop count
   const activeHopCount = useMemo(() => {
     let count = 0
     for (const a of parsedAmounts.values()) {
@@ -141,7 +234,6 @@ export function CommitTab(props: CommitTabProps) {
     return count
   }, [parsedAmounts])
 
-  // Existing per-hop commitments (for returning committers)
   const existingCommitments = useMemo(() => {
     const m = new Map<number, bigint>()
     for (const pos of positions) {
@@ -150,84 +242,155 @@ export function CommitTab(props: CommitTabProps) {
     return m
   }, [positions])
 
-  // Pro-rata estimate (based on total position: existing + new)
   const estimate = useProRataEstimate(parsedAmounts, existingCommitments, hopStats, saleSize)
 
-  // Balance check is a warning, not a blocking error
-  const balanceInsufficient = totalAmount > 0n && totalAmount > balance
+  // Surface the form-level "total exceeds balance" error.
+  const amountsFieldErrors = form.formState.errors.amounts as
+    | { root?: { message?: string }; message?: string }
+    | undefined
+  const totalError = amountsFieldErrors?.root?.message ?? amountsFieldErrors?.message ?? null
 
-  // Validation errors (excludes balance — that's a non-blocking warning)
-  const errors = useMemo(() => {
-    const errs: string[] = []
-    for (const pos of positions) {
-      const amt = parsedAmounts.get(pos.hop) ?? 0n
-      if (amt > 0n && amt < CROWDFUND_CONSTANTS.MIN_COMMIT) {
-        errs.push(`${hopLabel(pos.hop)}: minimum commitment is ${formatUsdc(CROWDFUND_CONSTANTS.MIN_COMMIT)}`)
-      }
-      if (amt > pos.remaining) {
-        errs.push(`${hopLabel(pos.hop)}: exceeds remaining cap of ${formatUsdc(pos.remaining)}`)
-      }
-    }
-    return errs
-  }, [positions, parsedAmounts])
+  const amountStepDisabled =
+    totalAmount === 0n ||
+    !form.formState.isValid ||
+    form.formState.isValidating
 
-  const handleAmountChange = useCallback((hop: number, value: string) => {
-    setCommitSuccess(false)
-    setAmounts((prev) => {
-      const next = new Map(prev)
-      next.set(hop, value)
-      return next
-    })
-  }, [])
+  const handleAmountContinue = useCallback(async () => {
+    const ok = await form.trigger()
+    if (ok && totalAmount > 0n) setStep('review')
+  }, [form, totalAmount])
 
-  const handleMax = useCallback((hop: number, remaining: bigint) => {
-    const maxForBalance = balance - (totalAmount - (parsedAmounts.get(hop) ?? 0n))
-    const max = remaining < maxForBalance ? remaining : maxForBalance
-    if (max > 0n) {
-      handleAmountChange(hop, (Number(max) / 1e6).toString())
-    }
-  }, [balance, totalAmount, parsedAmounts, handleAmountChange])
-
-  const handleApproveAndCommit = useCallback(async () => {
+  /** Run the multi-tx pipeline (approval + per-hop commits) sequentially.
+   *  Mirrors useTransactionFlow's behavior but tracks per-tx state in
+   *  `pipeline` so the status step can render every step's outcome. */
+  const runPipeline = useCallback(async () => {
     if (!signer || totalAmount === 0n) return
 
-    // Step 1: Approve if needed
+    setStep('status')
+    setPipelineRunning(true)
+    setPipelineError(null)
+    setPipelineDone(false)
+
+    interface PipelineOp {
+      id: string
+      label: string
+      detail?: string
+      send: (s: Signer) => Promise<TransactionResponse>
+      onConfirmed?: () => Promise<void>
+    }
+
+    const ops: PipelineOp[] = []
     if (needsApproval(totalAmount)) {
       const approveAmount = approveUnlimited ? MaxUint256 : totalAmount
-      const success = await approvalTx.execute(async (s) => {
-        const usdc = new Contract(usdcAddress, ERC20_ABI_FRAGMENTS, s)
-        return usdc.approve(crowdfundAddress, approveAmount)
+      const label = approveUnlimited
+        ? 'Approve USDC (unlimited)'
+        : `Approve ${formatUsdc(totalAmount)} USDC`
+      ops.push({
+        id: 'approve',
+        label,
+        detail: approveUnlimited ? 'unlimited' : formatUsdc(totalAmount),
+        send: async (s) => {
+          const usdc = new Contract(usdcAddress, ERC20_ABI_FRAGMENTS, s)
+          return usdc.approve(crowdfundAddress, approveAmount)
+        },
+        onConfirmed: refreshAllowance,
       })
-      if (!success) return
-      await refreshAllowance()
     }
-
-    // Step 2: Commit per hop (sequential)
     for (const [hop, amount] of parsedAmounts) {
-      const success = await commitTx.execute(async (s) => {
-        const crowdfund = new Contract(crowdfundAddress, CROWDFUND_ABI_FRAGMENTS, s)
-        return crowdfund.commit(hop, amount)
+      ops.push({
+        id: `commit-${hop}`,
+        label: `Commit at ${hopLabel(hop)}`,
+        detail: formatUsdc(amount),
+        send: async (s) => {
+          const crowdfund = new Contract(crowdfundAddress, CROWDFUND_ABI_FRAGMENTS, s)
+          return crowdfund.commit(hop, amount)
+        },
       })
-      if (!success) return
     }
 
-    // Show post-commitment summary
-    setCommitSuccess(true)
-    setAmounts(new Map())
-    setStep('input')
+    setPipeline(
+      ops.map((o) => ({
+        id: o.id,
+        label: o.label,
+        detail: o.detail,
+        status: 'idle' as TxPipelineStatus,
+        explorerUrl: explorerBuilder,
+      })),
+    )
+
+    const setStatus = (id: string, patch: Partial<TxPipelineRow>) =>
+      setPipeline((prev) => updateRow(prev, id, patch))
+
+    for (const op of ops) {
+      setStatus(op.id, { status: 'pending' })
+      const handle = txToast.notifyTxPending(op.label)
+      let txHash: string | null = null
+      try {
+        const tx = await op.send(signer)
+        txHash = tx.hash
+        setStatus(op.id, { status: 'submitted', txHash })
+        txToast.notifyTxSubmitted(handle, tx.hash)
+
+        const receipt = await tx.wait()
+        if (!receipt || receipt.status === 0) {
+          const msg = 'Transaction reverted'
+          setStatus(op.id, { status: 'error', errorMessage: msg, txHash })
+          txToast.notifyTxFailed(handle, msg)
+          setPipelineError(msg)
+          setPipelineRunning(false)
+          return
+        }
+
+        setStatus(op.id, { status: 'confirmed', txHash })
+        txToast.notifyTxConfirmed(handle)
+        onReceiptLogs?.(receipt.logs)
+        if (op.onConfirmed) await op.onConfirmed()
+      } catch (err) {
+        const msg = mapRevertToMessage(err)
+        setStatus(op.id, { status: 'error', errorMessage: msg, txHash })
+        txToast.notifyTxFailed(handle, msg)
+        setPipelineError(msg)
+        setPipelineRunning(false)
+        return
+      }
+    }
+
+    setPipelineRunning(false)
+    setPipelineDone(true)
   }, [
-    signer, totalAmount, needsApproval, approveUnlimited, approvalTx, commitTx,
-    usdcAddress, crowdfundAddress, parsedAmounts, refreshAllowance,
+    signer,
+    totalAmount,
+    needsApproval,
+    approveUnlimited,
+    parsedAmounts,
+    usdcAddress,
+    crowdfundAddress,
+    refreshAllowance,
+    txToast,
+    onReceiptLogs,
   ])
+
+  const resetFlow = useCallback(() => {
+    form.reset({ approveUnlimited: false, amounts: {} })
+    setPipeline([])
+    setPipelineError(null)
+    setPipelineDone(false)
+    setStep('context')
+  }, [form])
+
+  const explorer = getExplorerUrl()
+  const explorerBuilder = useMemo(
+    () => (explorer ? (h: string) => `${explorer}/tx/${h}` : undefined),
+    [explorer],
+  )
 
   if (!eligible) {
     return (
-      <div className="p-4 text-center space-y-2">
-        <div className="text-muted-foreground">Not Eligible</div>
-        <div className="text-xs text-muted-foreground">
-          Your address has not been invited to any hop level. You need an invite to participate.
-        </div>
-      </div>
+      <EmptyState
+        icon={ShieldOff}
+        title="Not Eligible"
+        description="Your address has not been invited to any hop level. You need an invite to participate."
+      />
     )
   }
 
@@ -247,219 +410,275 @@ export function CommitTab(props: CommitTabProps) {
     )
   }
 
+  const stepIndex = STEPS.findIndex((s) => s.id === step)
+
   return (
-    <div className="space-y-4">
-      {/* Post-commitment summary */}
-      {commitSuccess && (
-        <div className="rounded border border-success/50 bg-success/10 p-3 text-sm">
-          {positions.every((p) => p.remaining === 0n) ? (
-            <>
-              <div className="font-medium text-success">All positions filled.</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Total committed: {formatUsdc(positions.reduce((s, p) => s + p.committed, 0n))} across {positions.length} hops.
+    <Stepper steps={STEPS} current={stepIndex}>
+      <Form {...form}>
+        {step === 'context' && (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+                You're eligible to commit
               </div>
-            </>
-          ) : (
-            <>
-              <div className="font-medium text-success">Committed successfully.</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                You can add more to any hop with remaining capacity before the deadline.
+              <div className="text-sm leading-relaxed text-muted-foreground">
+                Your address has been whitelisted to participate in the crowdfund.
               </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {step === 'input' && (
-        <>
-          {/* Eligibility display with inviter attribution */}
-          <div className="space-y-1">
-            <div className="text-xs font-medium text-muted-foreground">Your positions:</div>
-            {positions.map((pos) => (
-              <div key={pos.hop} className="flex items-center justify-between text-xs">
-                <span>
-                  <span className="font-medium">{hopLabel(pos.hop)}</span>
-                  {pos.invitesReceived > 1 && (
-                    <span className="text-muted-foreground ml-1">({pos.invitesReceived} slots)</span>
-                  )}
-                  <span className="text-muted-foreground ml-1">— {inviterDisplay(pos, resolveENS)}</span>
-                </span>
-                <span className="text-muted-foreground">
-                  Cap: {formatUsdc(pos.effectiveCap)} | Committed: {formatUsdc(pos.committed)}
-                </span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <span>Your positions</span>
+                <InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
               </div>
-            ))}
-          </div>
-
-          {/* Per-hop amount inputs */}
-          {positions.map((pos) => {
-            const demand = hopDemandDisplay(pos.hop, hopStats, saleSize)
-            return (
-              <div key={pos.hop} className="rounded border border-border p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{hopLabel(pos.hop)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    Committed: {formatUsdc(pos.committed)} / {formatUsdc(pos.effectiveCap)}
+              {positions.map((pos) => (
+                <div
+                  key={pos.hop}
+                  className="flex items-center justify-between gap-3 py-2 text-xs"
+                >
+                  <span>
+                    <span className="font-medium text-foreground">{hopLabel(pos.hop)}</span>
+                    {pos.invitesReceived > 1 && (
+                      <span className="ml-1 text-muted-foreground">({pos.invitesReceived} slots)</span>
+                    )}
+                    <span className="ml-1 text-muted-foreground">— {inviterDisplay(pos, resolveENS)}</span>
+                  </span>
+                  <span className="text-muted-foreground tabular-nums">
+                    Cap: {formatUsdc(pos.effectiveCap)} · Committed: {formatUsdc(pos.committed)}
                   </span>
                 </div>
-                {/* Per-hop demand context */}
-                {demand && (
-                  <div className="text-xs text-muted-foreground">
-                    <span>Current hop demand: {demand.demand} ({demand.pct}% of {pos.hop <= 1 ? 'ceiling' : 'floor'})</span>
-                    {demand.warning && (
-                      <div className="text-amber-500 mt-0.5">{demand.warning}</div>
+              ))}
+            </div>
+            <StepFooter
+              onBack={onBackToIntent}
+              onNext={() => setStep('amount')}
+              backLabel="Back"
+              nextLabel="Continue"
+            />
+          </div>
+        )}
+
+        {step === 'amount' && (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+                Enter your commit amount
+              </div>
+              <div className="text-sm leading-relaxed text-muted-foreground">
+                You can commit at multiple hops if you have multiple positions.
+              </div>
+            </div>
+
+            {positions.map((pos) => {
+              const demand = hopDemandDisplay(pos.hop, hopStats, saleSize)
+              const currentHopAmount = parsedAmounts.get(pos.hop) ?? 0n
+              const balanceHeadroom = balance - (totalAmount - currentHopAmount)
+              const ceilings = [
+                { label: 'Remaining at this hop', value: pos.remaining },
+                { label: 'Wallet balance', value: balanceHeadroom < 0n ? 0n : balanceHeadroom },
+              ]
+              return (
+                <div key={pos.hop} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{hopLabel(pos.hop)}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      Committed: {formatUsdc(pos.committed)} / {formatUsdc(pos.effectiveCap)}
+                    </span>
+                  </div>
+                  {demand && (
+                    <div className="text-xs text-muted-foreground tabular-nums">
+                      <span>
+                        Hop demand: {demand.demand} ({demand.pct}% of{' '}
+                        {pos.hop <= 1 ? 'ceiling' : 'floor'})
+                      </span>
+                      {demand.warning && (
+                        <div className="mt-0.5 text-amber-500">{demand.warning}</div>
+                      )}
+                    </div>
+                  )}
+                  <FormField
+                    control={form.control}
+                    name={`amounts.${pos.hop}`}
+                    render={({ field, fieldState }) => (
+                      <FormItem>
+                        <FormControl>
+                          <AmountInput
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            ceilings={ceilings}
+                            error={!!fieldState.error}
+                            aria-label={`Commit amount for ${hopLabel(pos.hop)}`}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
+                  />
+                  {pos.remaining === 0n && (
+                    <div className="text-xs text-amber-500">Cap reached at this hop</div>
+                  )}
+                </div>
+              )
+            })}
+
+            {totalAmount > 0n && (
+              <ProRataEstimate
+                hopEstimates={estimate.hopEstimates}
+                totalEstimatedArm={estimate.totalEstimatedArm}
+                totalEstimatedRefund={estimate.totalEstimatedRefund}
+              />
+            )}
+
+            {totalAmount > 0n && (
+              <div className="space-y-1 rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div>
+                  Total commitment:{' '}
+                  <span className="font-medium tabular-nums">{formatUsdc(totalAmount)}</span>
+                  {activeHopCount > 1 && (
+                    <span className="text-muted-foreground"> across {activeHopCount} hops</span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground tabular-nums">
+                  Wallet balance: {formatUsdc(balance)}
+                </div>
+              </div>
+            )}
+
+            {totalError && <div className="text-xs text-destructive">{totalError}</div>}
+
+            <StepFooter
+              onBack={() => setStep('context')}
+              onNext={handleAmountContinue}
+              nextDisabled={amountStepDisabled}
+              nextLabel="Continue"
+            />
+          </div>
+        )}
+
+        {step === 'review' && (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+                Review and confirm
+              </div>
+              <div className="text-sm leading-relaxed text-muted-foreground">
+                You're committing {formatUsdc(totalAmount)} USDC
+                {activeHopCount > 1 && <> across {activeHopCount} hops</>}.
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-border/70 bg-background/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Breakdown
+              </div>
+              {[...parsedAmounts].map(([hop, amount]) => (
+                <div key={hop} className="flex items-center justify-between text-sm">
+                  <span>{hopLabel(hop)}</span>
+                  <span className="font-medium tabular-nums">{formatUsdc(amount)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm">
+                <span>Total</span>
+                <span className="font-bold tabular-nums">{formatUsdc(totalAmount)}</span>
+              </div>
+            </div>
+
+            {needsApproval(totalAmount) && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  This will run {parsedAmounts.size + 1} transactions: 1 USDC approval +{' '}
+                  {parsedAmounts.size} commit{parsedAmounts.size > 1 ? 's' : ''}.
+                </div>
+                <FormField
+                  control={form.control}
+                  name="approveUnlimited"
+                  render={({ field }) => (
+                    <ToggleGroup
+                      type="single"
+                      value={field.value ? 'unlimited' : 'exact'}
+                      onValueChange={(v) => {
+                        if (v === 'exact') field.onChange(false)
+                        else if (v === 'unlimited') field.onChange(true)
+                      }}
+                      className="gap-2"
+                    >
+                      <ToggleGroupItem
+                        value="exact"
+                        size="sm"
+                        className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      >
+                        Approve exact amount
+                      </ToggleGroupItem>
+                      <ToggleGroupItem
+                        value="unlimited"
+                        size="sm"
+                        className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      >
+                        Approve unlimited
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  )}
+                />
+                {approveUnlimited && (
+                  <div className="text-[10px] text-amber-500">
+                    Unlimited approval skips re-approval on future commits but grants the contract
+                    full spending access.
                   </div>
                 )}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={amounts.get(pos.hop) ?? ''}
-                    onChange={(e) => handleAmountChange(pos.hop, e.target.value)}
-                    className="flex-1 rounded border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <button
-                    className="px-3 py-2 text-xs rounded bg-muted text-muted-foreground hover:text-foreground"
-                    onClick={() => handleMax(pos.hop, pos.remaining)}
-                  >
-                    MAX
-                  </button>
-                </div>
-                {pos.remaining === 0n && (
-                  <div className="text-xs text-amber-500">Cap reached at this hop</div>
-                )}
               </div>
-            )
-          })}
+            )}
 
-          {/* Pro-rata estimate */}
-          {totalAmount > 0n && (
             <ProRataEstimate
               hopEstimates={estimate.hopEstimates}
               totalEstimatedArm={estimate.totalEstimatedArm}
               totalEstimatedRefund={estimate.totalEstimatedRefund}
             />
-          )}
 
-          {/* Multi-hop total summary */}
-          {totalAmount > 0n && (
-            <div className="rounded border border-border p-3 space-y-1 text-sm">
-              <div>
-                Total commitment: <span className="font-medium">{formatUsdc(totalAmount)}</span>
-                {activeHopCount > 1 && <span className="text-muted-foreground"> across {activeHopCount} hops</span>}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Your USDC balance: {formatUsdc(balance)}
-              </div>
-            </div>
-          )}
-
-          {/* Balance warning (non-blocking) */}
-          {balanceInsufficient && (
-            <div className="text-xs text-amber-500">
-              Total exceeds your USDC balance. The transaction will revert if balance is insufficient.
-            </div>
-          )}
-
-          {/* Validation errors */}
-          {errors.length > 0 && (
-            <div className="text-xs text-destructive space-y-1">
-              {errors.map((err, i) => (
-                <div key={i}>{err}</div>
-              ))}
-            </div>
-          )}
-
-          {/* Review button — balance does NOT block submission */}
-          <button
-            className="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            disabled={totalAmount === 0n || errors.length > 0}
-            onClick={() => setStep('review')}
-          >
-            Review Commitment
-          </button>
-        </>
-      )}
-
-      {step === 'review' && (
-        <div className="space-y-4">
-          <div className="rounded border border-border p-3 space-y-2">
-            <div className="text-sm font-medium">Review Your Commitment</div>
-            {[...parsedAmounts].map(([hop, amount]) => (
-              <div key={hop} className="flex items-center justify-between text-sm">
-                <span>{hopLabel(hop)}</span>
-                <span className="font-medium">{formatUsdc(amount)}</span>
-              </div>
-            ))}
-            <div className="border-t border-border pt-2 flex items-center justify-between text-sm">
-              <span>Total</span>
-              <span className="font-bold">{formatUsdc(totalAmount)}</span>
-            </div>
+            <StepFooter
+              onBack={() => setStep('amount')}
+              onNext={runPipeline}
+              nextLabel={needsApproval(totalAmount) ? 'Approve & Commit' : 'Confirm transaction'}
+            />
           </div>
+        )}
 
-          {/* Approve exact vs unlimited option */}
-          {needsApproval(totalAmount) && (
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">
-                Step 1: Approve USDC spending. Step 2: Commit{parsedAmounts.size > 1 ? ` (${parsedAmounts.size} transactions)` : ''}.
+        {step === 'status' && (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+                {pipelineRunning
+                  ? 'Submitting your commitment'
+                  : pipelineError
+                  ? 'Something went wrong'
+                  : pipelineDone
+                  ? 'Transaction submitted!'
+                  : 'Preparing transactions'}
               </div>
-              <div className="flex gap-2">
-                <button
-                  className={`px-3 py-1 rounded text-xs ${
-                    !approveUnlimited ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setApproveUnlimited(false)}
-                >
-                  Approve exact amount
-                </button>
-                <button
-                  className={`px-3 py-1 rounded text-xs ${
-                    approveUnlimited ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setApproveUnlimited(true)}
-                >
-                  Approve unlimited
-                </button>
+              <div className="text-sm leading-relaxed text-muted-foreground">
+                {pipelineRunning
+                  ? 'Confirm each request in your wallet. This page will update as transactions confirm.'
+                  : pipelineError
+                  ? 'Some transactions did not complete. You can retry from the review step.'
+                  : pipelineDone
+                  ? 'Your commitment is now on-chain.'
+                  : null}
               </div>
-              {approveUnlimited && (
-                <div className="text-[10px] text-amber-500">
-                  Unlimited approval allows future commits without re-approving, but grants the contract full spending access.
-                </div>
-              )}
             </div>
-          )}
 
-          <ProRataEstimate
-            hopEstimates={estimate.hopEstimates}
-            totalEstimatedArm={estimate.totalEstimatedArm}
-            totalEstimatedRefund={estimate.totalEstimatedRefund}
-          />
+            <TxStatusPipeline rows={pipeline} />
 
-          <div className="flex gap-2">
-            <button
-              className="flex-1 rounded border border-border px-4 py-2 text-sm hover:bg-muted"
-              onClick={() => setStep('input')}
-            >
-              Back
-            </button>
-            <button
-              className="flex-1 rounded bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              onClick={handleApproveAndCommit}
-            >
-              {needsApproval(totalAmount) ? 'Approve & Commit' : 'Commit'}
-            </button>
+            <StepFooter
+              onBack={pipelineRunning ? undefined : () => setStep('review')}
+              onNext={pipelineDone ? resetFlow : undefined}
+              backLabel="Back to review"
+              nextLabel="New commitment"
+              nextDisabled={!pipelineDone}
+              nextVariant="outline"
+              hideNext={!pipelineDone && !pipelineError}
+            />
           </div>
-
-          <TransactionFlow
-            state={approvalTx.state.status !== 'idle' ? approvalTx.state : commitTx.state}
-            onReset={() => { approvalTx.reset(); commitTx.reset() }}
-            successMessage="Commitment confirmed!"
-            explorerUrl={getExplorerUrl()}
-          />
-        </div>
-      )}
-    </div>
+        )}
+      </Form>
+    </Stepper>
   )
 }

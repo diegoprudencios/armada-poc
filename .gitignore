@@ -14,9 +14,11 @@ broadcast/
 
 # Build output
 dist/
+*.tsbuildinfo
 
 # Environment
 .env
+*.env
 .env.local
 .env.*.local
 

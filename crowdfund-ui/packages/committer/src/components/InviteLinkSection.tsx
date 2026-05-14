@@ -3,11 +3,27 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
-import { formatCountdown, hopLabel, formatUsdc, HOP_CONFIGS } from '@armada/crowdfund-shared'
+import {
+  Badge,
+  Button,
+  CopyToast,
+  ToggleGroup,
+  ToggleGroupItem,
+  formatCountdown,
+  hopLabel,
+  formatUsdc,
+  HOP_CONFIGS,
+} from '@armada/crowdfund-shared'
 import type { UseInviteLinksResult } from '@/hooks/useInviteLinks'
 import type { HopPosition } from '@/hooks/useEligibility'
-import { TransactionFlow } from './TransactionFlow'
-import { getExplorerUrl } from '@/config/network'
+
+type InviteLinkBadgeVariant = 'status-submitted' | 'status-confirmed' | 'outline'
+const statusBadgeVariant: Record<string, InviteLinkBadgeVariant> = {
+  pending: 'status-submitted',
+  redeemed: 'status-confirmed',
+  revoked: 'outline',
+  expired: 'outline',
+}
 
 export interface InviteLinkSectionProps {
   inviteLinks: UseInviteLinksResult
@@ -16,7 +32,7 @@ export interface InviteLinkSectionProps {
 }
 
 export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: InviteLinkSectionProps) {
-  const { links, createLink, revokeLink, revokeTx } = inviteLinks
+  const { links, createLink, revokeLink } = inviteLinks
   const [selectedHop, setSelectedHop] = useState<number | null>(null)
   const [creating, setCreating] = useState(false)
 
@@ -38,7 +54,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
     if (url) {
       const fullUrl = `${window.location.origin}${url}`
       await navigator.clipboard.writeText(fullUrl)
-      toast.success('Invite link copied to clipboard!')
+      toast.success(<CopyToast>Invite link copied to clipboard!</CopyToast>)
     } else {
       toast.error('Failed to create invite link')
     }
@@ -52,7 +68,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
       }
     }
     setCreating(false)
-    toast.success('All invite links created!')
+    toast.success(<CopyToast>All invite links created!</CopyToast>)
   }, [invitePositions, createLink])
 
   const handleCopy = useCallback(async (link: { inviter: string; fromHop: number; nonce: number; deadline: number; signature: string }) => {
@@ -65,7 +81,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
     })
     const url = `${window.location.origin}/invite?${params.toString()}`
     await navigator.clipboard.writeText(url)
-    toast.success('Link copied!')
+    toast.success(<CopyToast>Link copied!</CopyToast>)
   }, [])
 
   const handleRevoke = useCallback(async (nonce: number) => {
@@ -77,7 +93,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
   const totalSlots = invitePositions.reduce((sum, p) => sum + p.invitesAvailable, 0)
 
   return (
-    <div className="space-y-3 border-t border-border pt-4 mt-4">
+    <div className="mt-4 space-y-3 rounded-lg border border-border/70 bg-background/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="text-xs font-medium text-muted-foreground">Invite Links (EIP-712)</div>
 
       {invitePositions.length === 0 ? (
@@ -85,21 +101,25 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
       ) : (
         <>
           {/* Hop selector + Create button */}
-          <div className="flex gap-1">
+          <ToggleGroup
+            type="single"
+            value={selectedHop !== null ? String(selectedHop) : ''}
+            onValueChange={(v) => {
+              if (v !== '') setSelectedHop(Number(v))
+            }}
+            className="gap-1"
+          >
             {invitePositions.map((pos) => (
-              <button
+              <ToggleGroupItem
                 key={pos.hop}
-                className={`px-3 py-1 rounded text-xs ${
-                  selectedHop === pos.hop
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
-                onClick={() => setSelectedHop(pos.hop)}
+                value={String(pos.hop)}
+                size="sm"
+                className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
               >
                 {hopLabel(pos.hop)} ({pos.invitesAvailable})
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
 
           {/* Creation prompt with contextual details */}
           {selectedHop !== null && (() => {
@@ -107,7 +127,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
             const targetConfig = targetHop < HOP_CONFIGS.length ? HOP_CONFIGS[targetHop] : null
             const selectedPos = invitePositions.find((p) => p.hop === selectedHop)
             return (
-              <div className="rounded border border-border p-2 space-y-1 text-xs text-muted-foreground">
+              <div className="space-y-1 rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
                 <div>From: your {hopLabel(selectedHop)} position</div>
                 <div>
                   Inviting to: {hopLabel(targetHop)}
@@ -128,21 +148,24 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
           })()}
 
           <div className="flex gap-2">
-            <button
-              className="flex-1 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            <Button
+              size="sm"
+              className="h-9 flex-1 rounded-[4px] bg-hop-0/75 text-xs text-white shadow-[0_0_18px_rgba(132,80,210,0.14)] hover:bg-hop-0/85"
               disabled={creating || selectedHop === null}
               onClick={handleCreateLink}
             >
               {creating ? 'Creating...' : 'Create Invite Link'}
-            </button>
+            </Button>
             {totalSlots > 1 && (
-              <button
-                className="rounded border border-border px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-50"
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-[4px] border-border/70 bg-background/25 text-xs text-muted-foreground hover:text-foreground"
                 disabled={creating}
                 onClick={handleCreateAll}
               >
                 Create All ({totalSlots})
-              </button>
+              </Button>
             )}
           </div>
 
@@ -161,21 +184,15 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
           <div className="max-h-48 overflow-y-auto space-y-1">
             {links.map((link) => {
               const timeLeft = link.deadline - blockTimestamp
-              const statusColors: Record<string, string> = {
-                pending: 'bg-info/20 text-info',
-                redeemed: 'bg-success/20 text-success',
-                revoked: 'bg-muted text-muted-foreground',
-                expired: 'bg-muted text-muted-foreground',
-              }
 
               return (
                 <div
                   key={`${link.inviter}-${link.nonce}`}
-                  className="flex items-center gap-2 text-xs rounded border border-border/50 p-2"
+                  className="flex items-center gap-2 rounded-md border border-border/60 bg-card/30 p-2 text-xs"
                 >
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusColors[link.status]}`}>
+                  <Badge variant={statusBadgeVariant[link.status]} className="text-[10px] font-medium">
                     {link.status}
-                  </span>
+                  </Badge>
                   <span className="text-muted-foreground">{hopLabel(link.fromHop)}</span>
                   <span className="text-muted-foreground">
                     {link.status === 'pending' && timeLeft > 0 ? formatCountdown(timeLeft) : ''}
@@ -183,18 +200,22 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
                   <span className="flex-1" />
                   {link.status === 'pending' && (
                     <>
-                      <button
-                        className="text-primary hover:underline text-[10px]"
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-[10px]"
                         onClick={() => handleCopy(link)}
                       >
                         Copy
-                      </button>
-                      <button
-                        className="text-destructive hover:underline text-[10px]"
+                      </Button>
+                      <Button
+                        variant="linkDestructive"
+                        size="sm"
+                        className="h-auto p-0 text-[10px]"
                         onClick={() => handleRevoke(link.nonce)}
                       >
                         Revoke
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>
@@ -204,12 +225,6 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
         </div>
       )}
 
-      <TransactionFlow
-        state={revokeTx.state}
-        onReset={revokeTx.reset}
-        successMessage="Link revoked!"
-        explorerUrl={getExplorerUrl()}
-      />
     </div>
   )
 }

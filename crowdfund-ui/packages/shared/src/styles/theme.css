@@ -1,0 +1,303 @@
+/* ABOUTME: Dark-only theme tokens for the crowdfund UI. Consumed by observer, */
+/* ABOUTME: committer, and admin apps via @armada/crowdfund-shared/styles/theme.css. */
+
+/*
+ * This is a DARK-ONLY application. There is no light theme and no theme toggle.
+ * Values below are placeholders pending finalized brand identity — swap them
+ * in a single diff when design lands; the token *names* are stable.
+ *
+ * Token groups:
+ *   shadcn base   — --background, --foreground, --card, --popover, --primary,
+ *                   --secondary, --muted, --accent, --destructive, --border,
+ *                   --input, --ring, --chart-1..5, --radius, plus success/
+ *                   error/warning/info pairs for toasts and alerts.
+ *   domain: graph — --hop-0..2, --hop-root, --hop-multi, --hop-connected,
+ *                   --hop-selected, --hop-dimmed, --graph-edge,
+ *                   --graph-edge-active, --graph-edge-chain.
+ *   domain: tx    — --status-pending, --status-submitted, --status-confirmed,
+ *                   --status-failed.
+ */
+
+:root {
+  --radius: 0.625rem;
+
+  /* shadcn base — dark */
+  --background: oklch(0.18 0.008 240);
+  /* --background-deep is the outer colour of the radial body gradient. It is
+     darker than --background to give a subtle "spotlight" feel without moving
+     off our blue-grey hue. Interior UI surfaces (cards/popovers) still use
+     --background / --card, so shadcn primitives are unaffected. */
+  --background-deep: oklch(0.12 0.008 240);
+  --foreground: oklch(0.96 0.005 240);
+  --card: oklch(0.22 0.01 240);
+  --card-foreground: oklch(0.96 0.005 240);
+  --popover: oklch(0.22 0.01 240);
+  --popover-foreground: oklch(0.96 0.005 240);
+  --primary: oklch(0.70 0.15 230);
+  --primary-foreground: oklch(0.16 0.02 240);
+  --secondary: oklch(0.26 0.01 240);
+  --secondary-foreground: oklch(0.96 0.005 240);
+  --muted: oklch(0.24 0.008 240);
+  --muted-foreground: oklch(0.70 0.012 240);
+  --accent: oklch(0.70 0.15 230);
+  --accent-foreground: oklch(0.16 0.02 240);
+  --destructive: oklch(0.64 0.21 25);
+  --destructive-foreground: oklch(0.98 0.005 0);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.70 0.15 230 / 60%);
+
+  /* shadcn charts */
+  --chart-1: oklch(0.70 0.15 230);
+  --chart-2: oklch(0.68 0.18 300);
+  --chart-3: oklch(0.78 0.16 70);
+  --chart-4: oklch(0.70 0.17 150);
+  --chart-5: oklch(0.65 0.21 25);
+
+  /* Status colour pairs used by sonner toasts + alerts */
+  --success: oklch(0.72 0.19 150);
+  --success-foreground: oklch(0.15 0.02 150);
+  --error: oklch(0.64 0.21 25);
+  --error-foreground: oklch(0.98 0.005 0);
+  --warning: oklch(0.77 0.16 80);
+  --warning-foreground: oklch(0.17 0.02 80);
+  --info: oklch(0.70 0.15 230);
+  --info-foreground: oklch(0.16 0.02 240);
+
+  /* Domain: invite graph — hop colours. Four-colour scheme matching the
+     radial-view mockup: teal root / purple hop-0 / orange hop-1 / fuchsia
+     hop-2. `--hop-root` is now an active colour (previously grey). */
+  --hop-root: oklch(0.86 0.12 180);  /* teal */
+  --hop-0: oklch(0.62 0.23 295);     /* purple */
+  --hop-1: oklch(0.72 0.17 45);      /* orange, lightly desaturated */
+  --hop-2: oklch(0.68 0.20 335);     /* fuchsia, more desaturated */
+  /* Icon variants — slightly lighter than the base hop colour so icons
+     pop against a same-colour translucent fill. Used by TreeView. */
+  --hop-root-icon: oklch(0.94 0.10 180);
+  --hop-0-icon: oklch(0.76 0.20 295);
+  --hop-1-icon: oklch(0.82 0.15 45);
+  --hop-multi: oklch(0.70 0.15 230);
+
+  /* Domain: graph interaction states */
+  --hop-connected: oklch(0.82 0.14 190);
+  --hop-selected: oklch(1 0 0);
+  --hop-dimmed: oklch(0.40 0.005 240 / 40%);
+
+  /* Bright yellow used as the "this is the connected wallet" accent — node
+     outline + glow + icon in TreeView, swatch in GraphLegend, and the table
+     row's left rail. Inherits chroma + hue from --warning, lightness bumped
+     to 0.92 so it pops against the dark tree backdrop. */
+  --accent-you: oklch(from var(--warning) 0.92 c h);
+
+  /* Domain: graph edges — slate-400-ish; combined with per-hop opacity in
+     TreeView (hop-2 edges dimmer than hop-0/1) to stay subtle at scale. */
+  --graph-edge: oklch(0.68 0.02 245);
+  --graph-edge-active: oklch(0.70 0.15 230);
+  --graph-edge-chain: oklch(0.82 0.14 190);
+
+  /* Domain: tx lifecycle */
+  --status-pending: oklch(0.77 0.16 80);
+  --status-submitted: oklch(0.70 0.15 230);
+  --status-confirmed: oklch(0.72 0.19 150);
+  --status-failed: oklch(0.64 0.21 25);
+}
+
+/* Paint the root element so WebKit/Chromium overscroll (rubber-band on macOS)
+   reveals our palette rather than the browser default white. Body's radial
+   gradient sits on top of this for the in-viewport look. */
+html {
+  background-color: var(--background-deep);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* Radial "spotlight" gradient: centre-lighter, edges-deeper. Attachment
+     fixed so the gradient stays put while scrolling instead of tiling. */
+  background:
+    radial-gradient(circle at 50% 20%, var(--background) 0%, var(--background-deep) 70%);
+  background-attachment: fixed;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-family-heading: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Composite drop-shadow for top-level surfaces. Pairs an ambient shadow
+     with a 1px inset highlight to simulate a light-from-above bevel. Used
+     via the `shadow-elevated` utility; apply only to outermost panels. */
+  --shadow-elevated: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  /* Animation registrations — Tailwind v4 generates `animate-{name}`
+     utilities from these. Registering here means our keyframes don't get
+     shadowed by Tailwind's empty fallback rule that resolves the utility
+     to `animation: var(--animate-X)` where var is undefined. */
+  --animate-page-enter: page-enter 0.28s ease-out;
+  --animate-row-enter: row-enter 0.25s ease-out;
+  --animate-glow-pulse: glow-pulse 3.5s ease-in-out infinite;
+
+  /* shadcn base */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* Domain */
+  --color-hop-0: var(--hop-0);
+  --color-hop-1: var(--hop-1);
+  --color-hop-2: var(--hop-2);
+  --color-hop-root: var(--hop-root);
+  --color-hop-multi: var(--hop-multi);
+  --color-hop-connected: var(--hop-connected);
+  --color-accent-you: var(--accent-you);
+  --color-hop-selected: var(--hop-selected);
+  --color-hop-dimmed: var(--hop-dimmed);
+
+  --color-graph-edge: var(--graph-edge);
+  --color-graph-edge-active: var(--graph-edge-active);
+  --color-graph-edge-chain: var(--graph-edge-chain);
+
+  --color-status-pending: var(--status-pending);
+  --color-status-submitted: var(--status-submitted);
+  --color-status-confirmed: var(--status-confirmed);
+  --color-status-failed: var(--status-failed);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    /* Base background colour is set via the radial gradient above; only the
+       text colour is applied here so the gradient is not overridden. */
+    @apply text-foreground;
+  }
+
+  /* Custom scrollbar — WebKit/Chromium and Firefox. Matches the dark
+     palette so scrollbars read as part of the UI rather than OS chrome. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+}
+
+/* Page-enter animation — subtle fade-and-rise for page-level content blocks.
+   Used on committer pages when switching between Network / Participate /
+   My Position. Disabled when the user prefers reduced motion. */
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: page-enter 0.28s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-enter {
+    animation: none;
+  }
+}
+
+/* Row-enter animation — applied to data rows on mount so paginated /
+   filtered data feels alive. Smaller offset than page-enter (4px vs 6px)
+   so a stack of rows doesn't read as a flock of moving elements. */
+@keyframes row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-row-enter {
+  animation: row-enter 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-row-enter {
+    animation: none;
+  }
+}
+
+/* Glow-pulse — a soft outer halo that gently pulses brightness, used as a
+   "click here" cue on primary CTAs. Animates `box-shadow` directly on the
+   element so there's no pseudo-element / child-stacking risk inside
+   complex components like shadcn Button. Tinted with the --primary token
+   so it integrates with our blue→purple CTA palette. */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 10px color-mix(in oklch, var(--primary) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 22px color-mix(in oklch, var(--primary) 55%, transparent);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 3.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-glow-pulse {
+    animation: none;
+  }
+}

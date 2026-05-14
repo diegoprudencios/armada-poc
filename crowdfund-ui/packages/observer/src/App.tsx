@@ -1,8 +1,9 @@
 // ABOUTME: Root component for the crowdfund observer app.
 // ABOUTME: Read-only visualization of on-chain invite graph and commitment data.
 
-import { useState, useEffect, useMemo } from 'react'
+import { useCallback, useState, useEffect, useMemo } from 'react'
 import { type JsonRpcProvider } from 'ethers'
+import { ArrowRight, ArrowUpRight } from 'lucide-react'
 import {
   createProvider,
   useContractEvents,
@@ -14,19 +15,136 @@ import {
   TableView,
   SearchBar,
   TreeView,
+  AppShell,
+  Button,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  ErrorAlert,
+  ErrorBoundary,
+  StaleDataBanner,
+  formatUsdc,
+  generateMockGraph,
+  useContractState,
 } from '@armada/crowdfund-shared'
-import { getHubRpcUrls, getPollIntervalMs, getNetworkMode } from '@/config/network'
+import { getHubRpcUrls, getPollIntervalMs, getNetworkMode, getIndexerUrl } from '@/config/network'
 import { loadDeployment } from '@/config/deployments'
 import type { CrowdfundDeployment } from '@/config/deployments'
-import { useContractState } from '@/hooks/useContractState'
+
+const COMMITTER_URL =
+  (import.meta.env.VITE_COMMITTER_URL as string | undefined) ?? 'http://localhost:5174'
+
+function ParticipateLink() {
+  return (
+    <Button asChild size="sm" variant="default">
+      <a href={COMMITTER_URL} target="_blank" rel="noopener noreferrer">
+        Participate
+        <ArrowUpRight className="size-4" />
+      </a>
+    </Button>
+  )
+}
+
+function ObserverMobileMenu() {
+  return (
+    <Button asChild variant="default" className="w-full justify-center">
+      <a href={COMMITTER_URL} target="_blank" rel="noopener noreferrer">
+        Participate
+        <ArrowUpRight className="size-4" />
+      </a>
+    </Button>
+  )
+}
+
+/**
+ * Dev-only stress-test mode — renders TreeView + TableView against a
+ * synthetic CrowdfundGraph bypassing all contract machinery. Enabled via
+ * `?mock=stressN` (e.g. `?mock=stress500`). StatsBar is skipped because it
+ * genuinely needs contract state (phase, sale size, window times); the tree
+ * and table only need the graph's summaries/nodes and work fine.
+ */
+function MockObserverApp({ size }: { size: number }) {
+  const graph = useMemo(() => generateMockGraph(size), [size])
+  const summaryArray = useMemo(() => [...graph.summaries.values()], [graph])
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
+  const [hoveredAddress, setHoveredAddress] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [focusRequest, setFocusRequest] = useState<{
+    address: string
+    tick: number
+  } | null>(null)
+  const resolveENS = useCallback(() => null, [])
+
+  const handleViewInTable = useCallback((addr: string) => {
+    setSelectedAddress(addr)
+    setFocusRequest((prev) => ({ address: addr, tick: (prev?.tick ?? 0) + 1 }))
+  }, [])
+
+  return (
+    <AppShell appName={`Observer · stress ?mock=stress${size}`} network="local">
+      <div className="container mx-auto p-4 space-y-4">
+        <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
+          <strong>STRESS MODE</strong> — {graph.summaries.size} synthetic addresses rendered.
+          Contract machinery bypassed. Remove <code>?mock=…</code> from the URL to exit.
+        </div>
+        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        {/* items-start keeps each column at its own natural height. Without
+            it the grid stretches both cells to match the tallest (usually
+            TableView with 300 rows at stress300), pulling TreeView's
+            container to a many-thousand-px height and producing a very
+            tall, narrow ellipse plus a sim-restart feedback loop. */}
+        <div className="grid lg:grid-cols-2 gap-4 items-start">
+          <ErrorBoundary>
+            <TreeView
+              graph={graph}
+              selectedAddress={selectedAddress}
+              onSelectAddress={setSelectedAddress}
+              onHoverAddress={setHoveredAddress}
+              onViewInTable={handleViewInTable}
+              searchQuery={searchQuery}
+              phase={0}
+              resolveENS={resolveENS}
+            />
+          </ErrorBoundary>
+          <ErrorBoundary>
+            <TableView
+              summaries={summaryArray}
+              nodes={graph.nodes}
+              selectedAddress={selectedAddress}
+              onSelectAddress={setSelectedAddress}
+              focusRequest={focusRequest}
+              searchQuery={searchQuery}
+              phase={0}
+              resolveENS={resolveENS}
+              hoveredAddress={hoveredAddress}
+            />
+          </ErrorBoundary>
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+function getMockSizeFromUrl(): number {
+  if (typeof window === 'undefined') return 0
+  const p = new URLSearchParams(window.location.search).get('mock')
+  if (!p) return 0
+  const n = parseInt(p.replace(/^stress/, ''), 10)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
 
 export function App() {
+  const [mockSize] = useState(getMockSizeFromUrl)
+  if (mockSize > 0) return <MockObserverApp size={mockSize} />
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const [deployment, setDeployment] = useState<CrowdfundDeployment | null>(null)
   const [deployError, setDeployError] = useState<string | null>(null)
   const [provider, setProvider] = useState<JsonRpcProvider | null>(null)
   const [activeTab, setActiveTab] = useState<'tree' | 'table'>('tree')
 
   const pollInterval = getPollIntervalMs()
+  const indexerUrl = getIndexerUrl()
 
   // Load deployment manifest on mount
   useEffect(() => {
@@ -43,11 +161,12 @@ export function App() {
   const contractAddress = deployment?.contracts.crowdfund ?? null
 
   // Event fetching + graph construction
-  const { events, loading: eventsLoading, error: eventsError } = useContractEvents({
+  const { events, loading: eventsLoading, error: eventsError, indexerHealth } = useContractEvents({
     provider,
     contractAddress,
     pollIntervalMs: pollInterval,
     startBlock: deployment?.deployBlock,
+    indexerBaseUrl: indexerUrl,
   })
 
   const { graph, summaries, nodes } = useGraphState()
@@ -63,7 +182,15 @@ export function App() {
     setSearchQuery,
     hoveredAddress,
     setHoveredAddress,
+    focusRequest,
+    requestFocus,
   } = useSelection()
+
+  // "View in table" selects the address AND scrolls the table. Plain tree clicks select only.
+  const handleViewInTable = (addr: string) => {
+    selectAddress(addr)
+    requestFocus(addr)
+  }
 
   // ENS resolution
   const addresses = useMemo(
@@ -126,9 +253,13 @@ export function App() {
   // Pre-open state: ARM not loaded
   if (!contractState.armLoaded && contractState.phase === 0) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
+      <AppShell
+        appName="Observer"
+        network={getNetworkMode()}
+        headerRight={<ParticipateLink />}
+        mobileMenu={<ObserverMobileMenu />}
+      >
         <div className="container mx-auto p-4 space-y-4">
-          <Header />
           <div className="rounded-lg border border-border bg-card p-8 text-center">
             <h2 className="text-lg font-medium mb-2">Crowdfund Not Yet Open</h2>
             <p className="text-sm text-muted-foreground">
@@ -141,27 +272,31 @@ export function App() {
             )}
           </div>
         </div>
-      </div>
+      </AppShell>
     )
   }
 
   // Empty state: ARM loaded but no seeds yet
   if (contractState.armLoaded && contractState.seedCount === 0 && contractState.phase === 0) {
     return (
-      <div className="min-h-screen bg-background text-foreground">
+      <AppShell
+        appName="Observer"
+        network={getNetworkMode()}
+        headerRight={<ParticipateLink />}
+        mobileMenu={<ObserverMobileMenu />}
+      >
         <div className="container mx-auto p-4 space-y-4">
-          <Header />
           <StatsBar
             hopStats={contractState.hopStats}
             totalCommitted={contractState.totalCommitted}
             cappedDemand={contractState.cappedDemand}
             saleSize={contractState.saleSize}
+            participantCount={contractState.participantCount}
             phase={contractState.phase}
             armLoaded={contractState.armLoaded}
-            seedCount={contractState.seedCount}
-            participantCount={contractState.participantCount}
             windowEnd={contractState.windowEnd}
             blockTimestamp={contractState.blockTimestamp}
+            isLoading={eventsLoading}
           />
           <div className="rounded-lg border border-border bg-card p-8 text-center">
             <TreeView
@@ -171,118 +306,172 @@ export function App() {
               searchQuery=""
               phase={contractState.phase}
               resolveENS={resolveENS}
+              isLoading={eventsLoading}
             />
             <p className="text-sm text-muted-foreground mt-4">
               Waiting for seeds to be added...
             </p>
           </div>
         </div>
-      </div>
+      </AppShell>
     )
   }
 
+  const daysLeft =
+    contractState.armLoaded && contractState.windowEnd > 0 && contractState.blockTimestamp > 0
+      ? Math.max(0, Math.floor((contractState.windowEnd - contractState.blockTimestamp) / 86400))
+      : 0
+
+  const treeCampaignHeader = (
+    <div className="px-1 py-1">
+      <div className="font-heading text-sm font-semibold tracking-tight">
+        Armada Crowdfund
+      </div>
+      <div className="mt-2 flex items-start gap-4 tabular-nums">
+        <div>
+          <div className="text-sm font-semibold text-foreground">
+            {formatUsdc(contractState.totalCommitted)}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Committed
+          </div>
+        </div>
+        <div className="h-8 w-px bg-border/60" aria-hidden="true" />
+        <div>
+          <div className="text-sm font-semibold text-foreground">
+            {contractState.participantCount}
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Participants
+          </div>
+        </div>
+        <div className="h-8 w-px bg-border/60" aria-hidden="true" />
+        <div>
+          <div className="text-sm font-semibold text-foreground">{daysLeft}</div>
+          <div className="text-[11px] text-muted-foreground">
+            Days left
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  const treeCampaignDetailsLink = (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
+      onClick={() => {
+        /* TODO: open campaign details */
+      }}
+    >
+      View campaign details
+      <ArrowRight className="size-3" />
+    </button>
+  )
+
   const treeView = (
-    <TreeView
-      graph={graph}
-      selectedAddress={selectedAddress}
-      onSelectAddress={selectAddress}
-      onHoverAddress={setHoveredAddress}
-      searchQuery={searchQuery}
-      phase={contractState.phase}
-      resolveENS={resolveENS}
-    />
+    <ErrorBoundary>
+      <TreeView
+        graph={graph}
+        selectedAddress={selectedAddress}
+        onSelectAddress={selectAddress}
+        onViewInTable={handleViewInTable}
+        onHoverAddress={setHoveredAddress}
+        searchQuery={searchQuery}
+        phase={contractState.phase}
+        resolveENS={resolveENS}
+        isLoading={eventsLoading}
+        campaignHeader={treeCampaignHeader}
+        campaignDetailsLink={treeCampaignDetailsLink}
+      />
+    </ErrorBoundary>
   )
 
   const tableView = (
-    <TableView
-      summaries={summaryArray}
-      nodes={nodes}
-      selectedAddress={selectedAddress}
-      onSelectAddress={selectAddress}
-      searchQuery={searchQuery}
-      phase={contractState.phase}
-      resolveENS={resolveENS}
-      hoveredAddress={hoveredAddress}
-      hopStats={contractState.hopStats}
-      saleSize={contractState.saleSize}
-    />
+    <ErrorBoundary>
+      <TableView
+        summaries={summaryArray}
+        nodes={nodes}
+        selectedAddress={selectedAddress}
+        onSelectAddress={selectAddress}
+        focusRequest={focusRequest}
+        searchQuery={searchQuery}
+        phase={contractState.phase}
+        resolveENS={resolveENS}
+        hoveredAddress={hoveredAddress}
+        hopStats={contractState.hopStats}
+        saleSize={contractState.saleSize}
+        isLoading={eventsLoading}
+      />
+    </ErrorBoundary>
   )
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <AppShell
+      appName="Observer"
+      network={getNetworkMode()}
+      headerRight={<ParticipateLink />}
+      mobileMenu={<ObserverMobileMenu />}
+    >
+     <ErrorBoundary>
       <div className="container mx-auto p-4 space-y-4">
-        <Header />
-
+        <StaleDataBanner indexerHealth={indexerHealth} />
         {/* Error banner */}
         {(eventsError || contractState.error) && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            {eventsError || contractState.error}
-          </div>
+          <ErrorAlert>{eventsError || contractState.error}</ErrorAlert>
         )}
 
         {/* Cancellation banner */}
         {contractState.phase === 2 && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center">
-            <h2 className="text-lg font-medium text-destructive mb-1">Crowdfund Cancelled</h2>
-            <p className="text-sm text-muted-foreground">
-              All participants can claim a full USDC refund.
-            </p>
-          </div>
+          <ErrorAlert title="Crowdfund Cancelled">
+            All participants can claim a full USDC refund.
+          </ErrorAlert>
         )}
 
         {/* Refund mode banner */}
         {contractState.phase === 1 && contractState.refundMode && (
-          <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-center">
-            <h2 className="text-lg font-medium text-amber-500 mb-1">Refund Mode</h2>
-            <p className="text-sm text-muted-foreground">
-              Total allocation after hop ceilings did not meet the minimum raise. All participants can claim a full USDC refund.
-            </p>
-          </div>
+          <ErrorAlert variant="warning" title="Refund Mode">
+            Total allocation after hop ceilings did not meet the minimum raise. All participants can claim a full USDC refund.
+          </ErrorAlert>
         )}
 
         {/* Stats bar */}
-        <StatsBar
-          hopStats={contractState.hopStats}
-          totalCommitted={contractState.totalCommitted}
-          cappedDemand={contractState.cappedDemand}
-          saleSize={contractState.saleSize}
-          phase={contractState.phase}
-          armLoaded={contractState.armLoaded}
-          seedCount={contractState.seedCount}
-          participantCount={contractState.participantCount}
-          windowEnd={contractState.windowEnd}
-          blockTimestamp={contractState.blockTimestamp}
-        />
+        <ErrorBoundary>
+          <StatsBar
+            hopStats={contractState.hopStats}
+            totalCommitted={contractState.totalCommitted}
+            cappedDemand={contractState.cappedDemand}
+            saleSize={contractState.saleSize}
+            participantCount={contractState.participantCount}
+            phase={contractState.phase}
+            armLoaded={contractState.armLoaded}
+            windowEnd={contractState.windowEnd}
+            blockTimestamp={contractState.blockTimestamp}
+            isLoading={eventsLoading}
+          />
+        </ErrorBoundary>
 
         {/* Search */}
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
 
         {/* Mobile tab bar — visible below lg breakpoint */}
-        <div className="flex gap-1 lg:hidden">
-          <button
-            className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
-              activeTab === 'tree'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-            onClick={() => setActiveTab('tree')}
-          >
-            Tree
-          </button>
-          <button
-            className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
-              activeTab === 'table'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:text-foreground'
-            }`}
-            onClick={() => setActiveTab('table')}
-          >
-            Table
-          </button>
-        </div>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as 'tree' | 'table')}
+          className="lg:hidden"
+        >
+          <TabsList variant="line" className="w-full justify-start border-b border-border">
+            <TabsTrigger value="tree" className="flex-1">
+              Tree
+            </TabsTrigger>
+            <TabsTrigger value="table" className="flex-1">
+              Table
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Desktop: side by side */}
-        <div className="hidden lg:grid lg:grid-cols-2 gap-4">
+        <div className="hidden lg:grid lg:grid-cols-2 gap-4 items-start">
           {treeView}
           {tableView}
         </div>
@@ -298,19 +487,7 @@ export function App() {
           {eventsLoading && ' (syncing...)'}
         </div>
       </div>
-    </div>
-  )
-}
-
-function Header() {
-  return (
-    <div className="flex items-center justify-between">
-      <h1 className="text-2xl font-bold tracking-tight">
-        Armada Crowdfund Observer
-      </h1>
-      <span className="text-xs text-muted-foreground">
-        {getNetworkMode().toUpperCase()}
-      </span>
-    </div>
+     </ErrorBoundary>
+    </AppShell>
   )
 }

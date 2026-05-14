@@ -6,8 +6,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { Provider as JotaiProvider } from 'jotai'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from './App'
-import type { ContractState } from '@/hooks/useContractState'
+import type { ContractState } from '@armada/crowdfund-shared'
 
 // Default contract state for mocking
 const defaultContractState: ContractState = {
@@ -49,6 +50,7 @@ vi.mock('@/config/network', () => ({
   getHubRpcUrls: () => ['http://localhost:8545'],
   getPollIntervalMs: () => 30000,
   getNetworkMode: () => 'local',
+  getIndexerUrl: () => null,
 }))
 
 vi.mock('@/config/deployments', () => ({
@@ -58,10 +60,6 @@ vi.mock('@/config/deployments', () => ({
       contracts: { crowdfund: '0xCrowdfund' },
     })
   },
-}))
-
-vi.mock('@/hooks/useContractState', () => ({
-  useContractState: () => mockContractState,
 }))
 
 vi.mock('ethers', async () => {
@@ -93,15 +91,21 @@ vi.mock('@armada/crowdfund-shared', async () => {
     }),
     useENS: () => ({ resolve: () => null }),
     useAllocations: () => new Map(),
+    useContractState: () => mockContractState,
     createProvider: () => ({}),
   }
 })
 
 function renderApp() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
-    <JotaiProvider>
-      <App />
-    </JotaiProvider>,
+    <QueryClientProvider client={client}>
+      <JotaiProvider>
+        <App />
+      </JotaiProvider>
+    </QueryClientProvider>,
   )
 }
 
@@ -153,7 +157,7 @@ describe('App', () => {
   it('renders active state with header and event footer', async () => {
     renderApp()
     await waitFor(() => {
-      expect(screen.getByText('Armada Crowdfund Observer')).toBeDefined()
+      expect(screen.getAllByText('ARMADA').length).toBeGreaterThan(0)
     })
     // Event footer text may be split across elements; search by regex
     expect(screen.getByText(/events loaded/)).toBeDefined()
@@ -179,12 +183,13 @@ describe('App', () => {
   it('renders mobile tab buttons', async () => {
     renderApp()
     await waitFor(() => {
-      expect(screen.getByText('Armada Crowdfund Observer')).toBeDefined()
+      expect(screen.getAllByText('ARMADA').length).toBeGreaterThan(0)
     })
-    // Mobile tabs are rendered (may be hidden via CSS on desktop, but in DOM)
-    const treeButtons = screen.getAllByRole('button', { name: /Tree/i })
-    const tableButtons = screen.getAllByRole('button', { name: /Table/i })
-    expect(treeButtons.length).toBeGreaterThan(0)
-    expect(tableButtons.length).toBeGreaterThan(0)
+    // Mobile tabs use shadcn Tabs (role=tab, not role=button); rendered in DOM
+    // even when CSS-hidden at desktop breakpoints.
+    const treeTabs = screen.getAllByRole('tab', { name: /Tree/i })
+    const tableTabs = screen.getAllByRole('tab', { name: /Table/i })
+    expect(treeTabs.length).toBeGreaterThan(0)
+    expect(tableTabs.length).toBeGreaterThan(0)
   })
 })

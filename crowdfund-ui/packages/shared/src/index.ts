@@ -24,10 +24,18 @@ export {
   phaseColor,
 } from './lib/format.js'
 
-export { estimateAllocation } from './lib/allocation.js'
-export type { AllocationEstimate } from './lib/allocation.js'
+export { estimateAllocation, estimateUserArmAllocation } from './lib/allocation.js'
+export type { AllocationEstimate, UserHopPosition } from './lib/allocation.js'
 
 export { createProvider, fetchLogs, getBlockTimestamp } from './lib/rpc.js'
+
+export { fetchIndexedEventsSnapshot, fetchIndexerHealth, reviveIndexedEvent } from './lib/indexer.js'
+export type {
+  IndexedEventsSnapshot,
+  IndexedSnapshotMetadata,
+  IndexerHealth,
+  IndexerHealthStatus,
+} from './lib/indexer.js'
 
 export type {
   GraphNode,
@@ -36,6 +44,21 @@ export type {
   CrowdfundGraph,
 } from './lib/graph.js'
 export { buildGraph, mergeEvents } from './lib/graph.js'
+
+export { generateMockGraph } from './lib/mockGraph.js'
+export type { MockGraphOptions } from './lib/mockGraph.js'
+
+export { IdenticonSvg } from './components/IdenticonSvg.js'
+export type { IdenticonSvgProps } from './components/IdenticonSvg.js'
+
+export { GraphLegend } from './components/GraphLegend.js'
+export type { GraphLegendProps } from './components/GraphLegend.js'
+
+export {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from './components/ui/hover-card.js'
 
 export {
   getCachedEvents,
@@ -55,6 +78,7 @@ export {
   useContractEvents,
 } from './hooks/useContractEvents.js'
 export type { UseContractEventsConfig, UseContractEventsResult } from './hooks/useContractEvents.js'
+export type { ReceiptLogLike } from './hooks/useContractEvents.js'
 
 export { crowdfundGraphAtom, useGraphState } from './hooks/useGraphState.js'
 export type { UseGraphStateResult } from './hooks/useGraphState.js'
@@ -73,9 +97,12 @@ export type { UseENSConfig, UseENSResult } from './hooks/useENS.js'
 export { useAllocations } from './hooks/useAllocations.js'
 export type { PrefetchedAllocation, UseAllocationsConfig } from './hooks/useAllocations.js'
 
+export { useContractState } from './hooks/useContractState.js'
+export type { ContractState } from './hooks/useContractState.js'
+
 // Components
 export { StatsBar } from './components/StatsBar.js'
-export type { StatsBarProps, HopStatsData, ConnectedSummary } from './components/StatsBar.js'
+export type { StatsBarProps, HopStatsData, UserAllocation } from './components/StatsBar.js'
 
 export { TableView } from './components/TableView.js'
 export type { TableViewProps } from './components/TableView.js'
@@ -89,5 +116,171 @@ export type { NodeDetailProps } from './components/NodeDetail.js'
 export { TreeView } from './components/TreeView.js'
 export type { TreeViewProps } from './components/TreeView.js'
 
+export type { RadialNode, RadialEdge, RadialGraph, AngleInfo } from './lib/radialLayout.js'
+export { buildRadialGraph, computeAngleMap } from './lib/radialLayout.js'
+
+export { AppShell, NetworkBadge } from './components/AppShell.js'
+export type { AppShellProps, AppShellNetwork } from './components/AppShell.js'
+
+export { CrowdfundToaster } from './components/CrowdfundToaster.js'
+
+export { CopyToast } from './components/CopyToast.js'
+
+export { LastTxChip } from './components/LastTxChip.js'
+
+export { InfoTooltip } from './components/InfoTooltip.js'
+export type { InfoTooltipProps } from './components/InfoTooltip.js'
+
+export { ErrorAlert } from './components/ErrorAlert.js'
+export type { ErrorAlertProps } from './components/ErrorAlert.js'
+
+export { EmptyState } from './components/EmptyState.js'
+export type { EmptyStateProps } from './components/EmptyState.js'
+
+export { AmountInput } from './components/AmountInput.js'
+export type { AmountInputProps, AmountCeiling } from './components/AmountInput.js'
+
+export { Stepper, StepFooter } from './components/Stepper.js'
+export type {
+  StepperProps,
+  StepperStep,
+  StepFooterProps,
+} from './components/Stepper.js'
+
+export { TxStatusPipeline } from './components/TxStatusPipeline.js'
+export type {
+  TxStatusPipelineProps,
+  TxPipelineRow,
+  TxPipelineStatus,
+} from './components/TxStatusPipeline.js'
+
+export { LifecycleBanner } from './components/LifecycleBanner.js'
+export type {
+  LifecycleBannerProps,
+  LifecycleStage,
+} from './components/LifecycleBanner.js'
+
+export { WhatsNextCard } from './components/WhatsNextCard.js'
+export type {
+  WhatsNextCardProps,
+  WhatsNextStep,
+  WhatsNextStepStatus,
+} from './components/WhatsNextCard.js'
+
+export { StaleDataBanner } from './components/StaleDataBanner.js'
+export { useStaleDataBanner } from './hooks/useStaleDataBanner.js'
+export type { StaleDataSignal, StaleReason } from './hooks/useStaleDataBanner.js'
+
+export { ErrorBoundary, DefaultErrorFallback } from './components/ErrorBoundary.js'
+export type {
+  ErrorBoundaryProps,
+  DefaultErrorFallbackProps,
+} from './components/ErrorBoundary.js'
+
+export { TOOLTIPS } from './lib/tooltips.js'
+export type { TooltipKey } from './lib/tooltips.js'
+
+export {
+  lastTxAtom,
+  useTxToast,
+} from './hooks/useTxToast.js'
+export type {
+  LastTx,
+  LastTxStatus,
+  UseTxToastOptions,
+  UseTxToastResult,
+  TxToastHandle,
+} from './hooks/useTxToast.js'
+
 export type { TreeNode } from './lib/treeLayout.js'
 export { graphToTree, filterTree } from './lib/treeLayout.js'
+
+// Shared class-name helper
+export { cn } from './lib/utils.js'
+
+// shadcn/ui primitives — generated files under components/ui, edited in place
+export { Alert, AlertTitle, AlertDescription } from './components/ui/alert.js'
+export { Badge, badgeVariants } from './components/ui/badge.js'
+export { Button, buttonVariants } from './components/ui/button.js'
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardAction,
+  CardDescription,
+  CardContent,
+} from './components/ui/card.js'
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+} from './components/ui/dialog.js'
+export {
+  Form,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormDescription,
+  FormMessage,
+  FormField,
+  useFormField,
+} from './components/ui/form.js'
+export { Input } from './components/ui/input.js'
+export { Label } from './components/ui/label.js'
+export {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverAnchor,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverDescription,
+} from './components/ui/popover.js'
+export { ScrollArea, ScrollBar } from './components/ui/scroll-area.js'
+export {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select.js'
+export { Separator } from './components/ui/separator.js'
+export {
+  Sheet,
+  SheetTrigger,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+  SheetDescription,
+} from './components/ui/sheet.js'
+export { Skeleton } from './components/ui/skeleton.js'
+export {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  tabsListVariants,
+} from './components/ui/tabs.js'
+export { Toggle, toggleVariants } from './components/ui/toggle.js'
+export { ToggleGroup, ToggleGroupItem } from './components/ui/toggle-group.js'
+export {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from './components/ui/tooltip.js'
