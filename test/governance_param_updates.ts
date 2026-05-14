@@ -238,7 +238,7 @@ describe("Governance Parameter Updates", function () {
       const minParams = {
         votingDelay: 1 * ONE_DAY,
         votingPeriod: 1 * ONE_DAY,
-        executionDelay: 1 * ONE_DAY,
+        executionDelay: 2 * ONE_DAY,
         quorumBps: 500,
       };
       await standaloneGovernor.setProposalTypeParams(ProposalType.Standard, minParams);
@@ -296,7 +296,7 @@ describe("Governance Parameter Updates", function () {
     it("rejects executionDelay below minimum", async function () {
       await expect(
         standaloneGovernor.setProposalTypeParams(ProposalType.Standard, {
-          ...validParams, executionDelay: ONE_DAY - 1,
+          ...validParams, executionDelay: 2 * ONE_DAY - 1,
         })
       ).to.be.revertedWithCustomError(governor, "Gov_ExecutionDelayOutOfBounds");
     });
@@ -630,7 +630,12 @@ describe("Governance Parameter Updates", function () {
       expect(proposalType).to.equal(ProposalType.Extended);
     });
 
-    it("removeStewardBudgetToken is auto-classified as Extended", async function () {
+    // WHY: removeStewardBudgetToken is unconditionally tightening — it revokes a
+    // spending authority with no parameter to interpret either way. Per the spec's
+    // "tightening is easy, loosening is hard" directional principle, it belongs at
+    // the Standard bar. Pinning Standard here also closes the frontrun window where
+    // an Extended-classified cut (23 days) lagged the steward's 9-day proposal cycle.
+    it("removeStewardBudgetToken stays Standard (always tightening)", async function () {
       const calldata = treasury.interface.encodeFunctionData(
         "removeStewardBudgetToken",
         [carol.address]
@@ -645,7 +650,7 @@ describe("Governance Parameter Updates", function () {
       );
       const proposalId = await governor.proposalCount();
       const [, proposalType] = await governor.getProposal(proposalId);
-      expect(proposalType).to.equal(ProposalType.Extended);
+      expect(proposalType).to.equal(ProposalType.Standard);
     });
 
     it("setProposalTypeParams rejects Steward type", async function () {

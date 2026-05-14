@@ -72,10 +72,15 @@ Single source of truth for every concrete value that enters the deployed contrac
 | HOP_CAP (per slot) | $15,000 (`15_000_000_000` USDC) | $4,000 (`4_000_000_000` USDC) | $1,000 (`1_000_000_000` USDC) | Immutable (constant) |
 | HOP_CEILING_BPS | 7000 (70% of available) | 4500 (45% of available) | — (no enforced ceiling) | Immutable (constant) |
 | HOP2_FLOOR_BPS | — | — | 500 (5% of sale_size) | Immutable (constant) |
-| Outgoing invite slots per slot | 3 | 2 | 0 | Immutable (constant) |
+| Outgoing invite slots per slot (`maxInvites`) | 3 | 2 | 0 | Immutable (constant) |
+| Incoming invite stacking cap (`maxInvitesReceived`) | 1 | 10 | 20 | Immutable (constant) |
 | Slot source | `SeedAdded` | `Invited` | `Invited` | — |
 
 **Cap formula:** Per-address cap at hop = `participation_slots[(address, hop)] × HOP_CAP[hop]`
+
+**Stacking cap semantics:** `maxInvitesReceived` bounds how many inbound invite edges a single (address, hop) node can accept. Hop-0 cannot stack at all — its only inviter is the launchTeam sentinel via `addSeed`. Hop-1 nodes can stack up to 10× (each accepted invite increments `invitesReceived`, scaling both their effective USDC cap and their outgoing invite budget). Hop-2 nodes can stack up to 20×. The cap is enforced inside `invite()` / `commitWithInvite()` — re-inviting a node already at its stacking cap reverts.
+
+**Commitment floor (`MIN_COMMIT`):** `10 USDC` (`10_000_000` USDC, 6 decimals). Both `commit()` and `commitWithInvite()` revert with `amount < MIN_COMMIT`. Immutable (constant). Sized to keep dust commits out of the participant graph — every commit registers a `participantNode`, and the rounding buffer at finalization is bounded by `participantNodes.length`. Not enforced as a percentage of cap.
 
 **Ceiling amounts at base ($1.2M):** hop-2 floor = $60k; available = $1.14M; hop-0 ceiling = $798k; hop-1 ceiling = $513k
 **Ceiling amounts at expanded ($1.8M):** hop-2 floor = $90k; available = $1.71M; hop-0 ceiling = $1,197k; hop-1 ceiling = $769.5k

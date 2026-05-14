@@ -438,6 +438,120 @@ contract GovernorVetoTest is Test, GovernorDeployHelper {
         assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Queued));
     }
 
+    /// @dev WHY (audit-104): the eject path must target the SC that ISSUED the veto,
+    ///      not whatever address holds the live `securityCouncil` slot at resolve
+    ///      time. Pre-fix, an honest `setSecurityCouncil` rotation during the 7-day
+    ///      ratification window punished the new SC for the prior SC's veto. The
+    ///      vetoing SC is recoverable from `_proposals[ratId].proposer` (set in
+    ///      `_initProposal` during `veto()`); the eject branch now reads that
+    ///      field and only zeros the slot when it still holds the vetoer.
+    ///
+    ///      Scenario: SC_A vetoes a Standard proposal P. Mid-ratification, governance
+    ///      legitimately rotates the SC to SC_B (e.g. term expiry, multisig key
+    ///      rotation). Community votes AGAINST on the ratification. Resolve must:
+    ///      (a) restore P, (b) NOT zero the slot (vetoer SC_A is no longer in role,
+    ///      and SC_B did nothing wrong), (c) NOT emit `SecurityCouncilEjected` /
+    ///      `SecurityCouncilUpdated`. Off-chain accountability for SC_A remains
+    ///      discoverable via `getProposal(ratId).proposer == SC_A`.
+    function test_resolve_skipsEjectWhenSCRotatedDuringRatification() public {
+        address sc_b = address(0xBEEFB0B);
+
+        uint256 proposalId = _createAndQueueProposal(alice);
+
+        // SC_A (the test fixture's `sc`) vetoes. Records sc as ratification.proposer.
+        vm.prank(sc);
+        governor.veto(proposalId, keccak256("rationale"));
+        uint256 ratId = governor.proposalCount();
+
+        // Honest rotation mid-window: SC_A → SC_B via timelock (the production path).
+        // Modeled here as a direct timelock self-call; the rotation path itself is
+        // not under test.
+        vm.prank(address(timelock));
+        governor.setSecurityCouncil(sc_b);
+        assertEq(governor.securityCouncil(), sc_b, "post-rotation slot holds sc_b");
+
+        // Community denies the veto.
+        vm.prank(alice);
+        governor.castVote(ratId, 0); // AGAINST
+        vm.prank(bob);
+        governor.castVote(ratId, 0); // AGAINST
+        vm.warp(block.timestamp + SEVEN_DAYS + 1);
+
+        // Capture logs to verify SecurityCouncilEjected and SecurityCouncilUpdated do
+        // NOT fire. ProposalRestored and RatificationResolved still must fire.
+        vm.recordLogs();
+        governor.resolveRatification(ratId);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 ejectedTopic = keccak256("SecurityCouncilEjected(uint256)");
+        bytes32 updatedTopic = keccak256("SecurityCouncilUpdated(address,address)");
+        bytes32 restoredTopic = keccak256("ProposalRestored(uint256)");
+        bytes32 resolvedTopic = keccak256("RatificationResolved(uint256,bool)");
+        uint256 ejectedCount;
+        uint256 updatedCount;
+        uint256 restoredCount;
+        uint256 resolvedCount;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length == 0) continue;
+            if (logs[i].topics[0] == ejectedTopic) ejectedCount++;
+            else if (logs[i].topics[0] == updatedTopic) updatedCount++;
+            else if (logs[i].topics[0] == restoredTopic) restoredCount++;
+            else if (logs[i].topics[0] == resolvedTopic) resolvedCount++;
+        }
+        assertEq(ejectedCount, 0, "SC_B not ejected for SC_A's veto");
+        assertEq(updatedCount, 0, "no SC slot mutation");
+        assertEq(restoredCount, 1, "proposal still restored");
+        assertEq(resolvedCount, 1, "ratification resolved");
+
+        // Slot must still hold SC_B — they didn't issue the veto.
+        assertEq(governor.securityCouncil(), sc_b, "sc_b retains seat");
+        // Vetoer's identity preserved on-chain for off-chain accountability.
+        (address recordedVetoer, , , , , , , , ) = governor.getProposal(ratId);
+        assertEq(recordedVetoer, sc, "vetoer recoverable from ratification proposer");
+        // Proposal restored to Queued.
+        assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Queued));
+    }
+
+    /// @dev WHY (audit-104, edge): if `setSecurityCouncil(address(0))` ran during the
+    ///      ratification window (zeroed the slot before the resolve), the resolve must
+    ///      NOT emit a misleading `SecurityCouncilUpdated(address(0), address(0))`.
+    ///      The vetoer was no longer in the slot at resolve time; the eject is a no-op.
+    function test_resolve_skipsEjectWhenSCAlreadyZeroed() public {
+        uint256 proposalId = _createAndQueueProposal(alice);
+
+        vm.prank(sc);
+        governor.veto(proposalId, keccak256("rationale"));
+        uint256 ratId = governor.proposalCount();
+
+        // Slot zeroed mid-window (deployer-bootstrap or governance setSecurityCouncil(0)).
+        // Use deployer path: deployer is allowed pre-clearDeployer per setSecurityCouncil.
+        // But setSecurityCouncil now reverts on same-value; zeroing from non-zero is a real
+        // change. Use timelock prank for parity with the prior test.
+        vm.prank(address(timelock));
+        governor.setSecurityCouncil(address(0));
+        assertEq(governor.securityCouncil(), address(0));
+
+        vm.prank(alice);
+        governor.castVote(ratId, 0);
+        vm.prank(bob);
+        governor.castVote(ratId, 0);
+        vm.warp(block.timestamp + SEVEN_DAYS + 1);
+
+        vm.recordLogs();
+        governor.resolveRatification(ratId);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 ejectedTopic = keccak256("SecurityCouncilEjected(uint256)");
+        bytes32 updatedTopic = keccak256("SecurityCouncilUpdated(address,address)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length == 0) continue;
+            assertTrue(logs[i].topics[0] != ejectedTopic, "no eject event");
+            assertTrue(logs[i].topics[0] != updatedTopic, "no SC update event");
+        }
+        assertEq(governor.securityCouncil(), address(0));
+        assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Queued));
+    }
+
     /// @dev WHY: When the community denies a veto (votes AGAINST), the original proposal
     ///      must be restored to Queued state so it can proceed to execution without
     ///      re-submission through the full governance lifecycle.

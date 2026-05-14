@@ -44,7 +44,7 @@ The protocol is not considered live until deployment verification confirms all f
 1. **Exact recipient balances.** RevenueLock holds 2,400,000 ARM, Crowdfund holds 1,800,000 ARM, Treasury holds 7,800,000 ARM.
 2. **Supply conservation.** `ARM.totalSupply()` = 12,000,000 × 10^18. The sum of the three recipient balances equals `totalSupply()`.
 3. **Zero residual bootstrap-holder balance.** The bootstrap holder must end with exactly zero ARM after distribution completes. Any residual balance is a deployment failure.
-4. **No residual bootstrap-holder allowances.** The bootstrap holder must have no remaining ERC-20 allowances in any protocol contract after distribution. Note: the bootstrap holder's whitelist entry in the ARM token persists permanently (the whitelist is add-only — there is no removal path). The security property post-distribution is that the entry is *inert while the balance is zero*: a zero-balance whitelisted address cannot transfer tokens it doesn't hold. Do not send ARM to the bootstrap holder address after distribution completes.
+4. **No residual bootstrap-holder allowances.** The bootstrap holder must have no remaining ERC-20 allowances in any protocol contract after distribution. The whitelist is **add-only with one narrow exception**: `removeDeployerFromWhitelist()` is a deployer-only, one-shot function that removes solely the deployer's own entry, intended to be called after distribution completes to eliminate the deployer as a transfer-capable address. No other removal path exists for any other whitelist entry. If the deployer skips this cleanup step, the residual entry is *inert while the balance is zero*: a zero-balance whitelisted address cannot transfer tokens it doesn't hold. Do not send ARM to the bootstrap holder address after distribution completes.
 
 See REVENUE_LOCK.md §12 (Deployment Checklist) for the specific verification steps.
 
@@ -64,7 +64,7 @@ The bootstrap holder is whitelisted in the `ArmadaToken` constructor to permit t
 
 The whitelist entry persists permanently (the whitelist is add-only). The security claim is therefore narrower than "no residual privilege" — it is: **the bootstrap holder's whitelist entry is inert once its balance is zero, because privilege requires both whitelist status and token balance to be exercised.** If the bootstrap holder were to receive ARM again (e.g. via an erroneous transfer), it could send those tokens while transfers are restricted. This is an operational risk, not a structural one: after distribution completes, do not send ARM to the bootstrap holder address.
 
-The constructor also sets name, symbol, and stores the immutable configuration: whitelist addresses (crowdfund, treasury, revenue-lock), treasury address (for delegation revert), `delegateOnBehalf` caller addresses (crowdfund, revenue-lock), and `setTransferable` caller addresses (governor executor, wind-down contract).
+The constructor sets name, symbol, and the timelock address. All other immutable-flavored configuration is seeded post-deploy by the `tokenDeployer` (the deployer EOA recorded in the constructor) via one-shot setters that lock permanently after their first call: `initWhitelist`, `initAuthorizedDelegators`, `initNoDelegation`, and `setWindDownContract`. The deployer is responsible for seeding each set correctly before renouncing — most notably `initNoDelegation([treasury])` for the treasury non-voting invariant and `initAuthorizedDelegators([crowdfund, revenueLock])` for the delegateOnBehalf caller set. Verification of all four post-deploy setters is part of the deployment checklist (see `scripts/verify_deployment.ts`).
 
 ### Revenue-lock contract architecture
 
@@ -162,15 +162,15 @@ These addresses can send ARM even while transfers are globally restricted. **The
 Two paths, both irreversible:
 
 1. **Governance proposal.** ARM holders vote to enable transfers. There are no predeclared conditions — holders decide when.
-2. **Wind-down trigger.** `triggerWindDown()` automatically calls `setTransferable(true)` as a side effect. Holders must be able to move ARM to claim their pro-rata share of treasury assets — they may hold ARM on an exchange, in a multisig, or in a contract that isn't their claim address.
+2. **Wind-down trigger.** `triggerWindDown()` ensures transfers are enabled as a side effect. Holders must be able to move ARM to claim their pro-rata share of treasury assets — they may hold ARM on an exchange, in a multisig, or in a contract that isn't their claim address.
 
-Both paths call the same `setTransferable(true)`. Once called, it cannot be reversed.
+Both paths converge on the same `transferable = true` end-state. The two paths are independent — neither requires the other to fire first, and either can fire first. **The wind-down trigger treats "transfers enabled" as a post-condition, not a precondition:** if governance has already enabled transfers, wind-down skips the redundant `setTransferable(true)` call (the token's setter reverts on already-enabled, so wind-down checks first). Once `transferable` is `true`, it cannot be reversed regardless of which path set it.
 
-**Authorization:** `setTransferable(true)` is callable only by two addresses, both set immutably in the constructor:
-- **Governor executor** (the timelock contract that executes passed governance proposals)
-- **Wind-down contract** (calls `setTransferable(true)` as part of `triggerWindDown()`)
+**Authorization:** `setTransferable(true)` is callable only by two addresses:
+- **Governor executor** (the timelock contract that executes passed governance proposals) — set in the constructor.
+- **Wind-down contract** (calls `setTransferable(true)` as part of `triggerWindDown()`) — set post-deploy via the deployer-only `setWindDownContract` one-shot setter (locks permanently after its first call).
 
-No other address can call this function. These addresses are constructor parameters alongside the whitelist, treasury, and `delegateOnBehalf` callers.
+No other address can call this function. The post-deploy wind-down setter exists because `ArmadaWindDown` is deployed *after* the token (the wind-down contract takes the token address as a constructor parameter), so the token cannot reference it at construction. **Trust assumption:** the deployer correctly seeds `setWindDownContract([deployedArmadaWindDown])` before renouncing; verification is part of the deployment checklist.
 
 ### What RESTRICTED means for holders
 
@@ -273,7 +273,7 @@ The following ARM has zero voting power under all circumstances:
 
 Standard OZ `ERC20Votes` is sufficient for the core checkpointing. The voting restrictions do not require custom voting-unit math. They are enforced by **who holds the tokens and who can call `delegate()`**:
 
-**Treasury non-voting:** The ARM token contract hardcodes the treasury address (constructor parameter). Any call to `delegate()` from the treasury address reverts. This is a single-line check in the `delegate()` override, not a custom voting-unit calculation. The treasury can still transfer ARM (it's whitelisted) — it just cannot convert its balance into voting power.
+**Treasury non-voting:** The token reverts on any `delegate()` call from addresses in the `noDelegation` set. This set is seeded post-deploy by the deployer via the one-shot `initNoDelegation` setter — the launch-config invariant is that the treasury address is included in this set. After `initNoDelegation` is called (one-shot, locks permanently), the set is frozen. The check in `_delegate` is a single mapping read, not a custom voting-unit calculation. The treasury can still transfer ARM (it's whitelisted) — it just cannot convert its balance into voting power. **Trust assumption:** the deployer correctly seeds `initNoDelegation([treasury])` before renouncing; if skipped or seeded incorrectly, the spec's "token physically prevents the treasury from delegating" guarantee does not hold. Verification is part of the deployment checklist.
 
 **Revenue-gated early network voting:** A single shared revenue-lock contract holds all early network ARM. As revenue milestones are reached, beneficiaries call `release(delegatee)` to withdraw their unlocked percentage to their personal wallet. The lock contract atomically transfers ARM and calls `delegateOnBehalf(beneficiary, delegatee)` — mirroring the crowdfund `claim(delegate)` pattern. All released ARM enters circulation delegated. The lock contract itself has no standalone `delegate()` call path — unreleased ARM remains structurally vote-inert.
 
@@ -311,7 +311,7 @@ The crowdfund contract relies on pre-minted ARM only. `loadArm()` verifies `bala
 
 | Role | Power | Exists at deploy? | Can be renounced? | Time-limited? | Intended disposition |
 |---|---|---|---|---|---|
-| Transfer gate controller | `setTransferable(true)` | Yes (governor executor + wind-down contract, both set immutably in constructor) | N/A — one-shot | No | Called once — either by governor executor (governance proposal) or by wind-down contract (side effect of triggerWindDown). Function becomes no-op after first call. |
+| Transfer gate controller | `setTransferable(true)` | Yes (governor executor: constructor-set; wind-down contract: post-deploy one-shot setter, locks after first call) | N/A — one-shot | No | Called once — either by governor executor (governance proposal) or by wind-down contract (side effect of triggerWindDown). Function becomes no-op after first call. |
 | Revenue counter updater | Credits cumulative revenue to the milestone counter. Stablecoin fees are directly countable; non-stablecoin fees require governance attestation. | Yes (governance) | No — ongoing | No | Governance-controlled; no external oracle dependency |
 | Claim/release delegation caller | `delegateOnBehalf(account, delegatee)` | Yes (crowdfund contract + revenue-lock contract) | N/A — immutable | Naturally expires when crowdfund claims and lock releases complete | Set in constructor; only these two contracts can call |
 | Whitelist adder | `addToWhitelist(address)` — add-only, no removal | Yes (governance via extended proposal) | No — ongoing | No | Allows governance to whitelist new infrastructure contracts, recover from deployment address errors, or enable pre-unlock distribution channels. Cannot remove existing whitelisted addresses. |
@@ -380,7 +380,7 @@ These are the exact properties the crowdfund contract depends on. Test compatibi
 
 | Event | Fields | Notes |
 |---|---|---|
-| `TransferabilityEnabled` | — | Emitted once when governance unlocks transfers. Irreversible. |
+| `TransferableSet(bool transferable)` | `bool transferable` | Emitted once when transfers are unlocked (by governor executor or wind-down contract). The `bool` is always `true` in current usage — `setTransferable(false)` is not exposed. Irreversible. |
 
 ### Revenue events
 
@@ -402,7 +402,7 @@ These must hold at all times. Auditors should verify each.
 | **No pause** | No function can halt all token operations. |
 | **Transfer gate is one-way** | Once `setTransferable(true)` is called, it cannot be reversed. |
 | **Whitelist is add-only** | Initial whitelist is constructor-set. Governance can add addresses (extended proposal) but can never remove. Once whitelisted, always whitelisted. |
-| **`delegateOnBehalf` access is immutable** | Only the crowdfund contract and the revenue-lock contract (both set immutably in constructor) can call `delegateOnBehalf()`. No function can change this. |
+| **`delegateOnBehalf` access is governance-add-only** | The initial set (crowdfund contract + revenue-lock contract) is seeded post-deploy via `initAuthorizedDelegators` (deployer-only, one-shot). Governance can add new authorized delegators via `addAuthorizedDelegator(address)` (timelock-only) for follow-on RevenueLock cohorts or replacement crowdfund instances. The set is **add-only** — no removal path exists. |
 | **Proposal bonds inactive pre-transfer-unlock** | Governance operates on proposal threshold only (5,000 delegated ARM) while transfers are restricted. Bond mechanism activates post-transfer-unlock. |
 | **Revenue schedule is immutable** | The revenue milestone table cannot be changed by governance or any admin. |
 | **Revenue-lock contracts cannot delegate** | Lock contracts have no code path that calls `delegate()` on the ARM token. Unreleased early network ARM is structurally vote-inert. |
@@ -460,5 +460,5 @@ ARM Token Contract
   │     ├── release(delegatee) calls transfer + delegateOnBehalf
   │     └── releases proportional to governance-attested revenue counter
   └── consumed by: Monitoring
-        └── reads Transfer, DelegateChanged, TransferabilityEnabled events
+        └── reads Transfer, DelegateChanged, TransferableSet events
 ```
