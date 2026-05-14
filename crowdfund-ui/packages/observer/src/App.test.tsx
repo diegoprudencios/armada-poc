@@ -50,6 +50,7 @@ vi.mock('@/config/network', () => ({
   getHubRpcUrls: () => ['http://localhost:8545'],
   getPollIntervalMs: () => 30000,
   getNetworkMode: () => 'local',
+  getIndexerUrl: () => null,
 }))
 
 vi.mock('@/config/deployments', () => ({
@@ -156,7 +157,7 @@ describe('App', () => {
   it('renders active state with header and event footer', async () => {
     renderApp()
     await waitFor(() => {
-      expect(screen.getByText('Armada Crowdfund')).toBeDefined()
+      expect(screen.getAllByText('ARMADA').length).toBeGreaterThan(0)
     })
     // Event footer text may be split across elements; search by regex
     expect(screen.getByText(/events loaded/)).toBeDefined()
@@ -182,7 +183,7 @@ describe('App', () => {
   it('renders mobile tab buttons', async () => {
     renderApp()
     await waitFor(() => {
-      expect(screen.getByText('Armada Crowdfund')).toBeDefined()
+      expect(screen.getAllByText('ARMADA').length).toBeGreaterThan(0)
     })
     // Mobile tabs use shadcn Tabs (role=tab, not role=button); rendered in DOM
     // even when CSS-hidden at desktop breakpoints.
