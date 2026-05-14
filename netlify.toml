@@ -1,5 +1,7 @@
-# Netlify build config — committer app for medi-Sepolia public test.
-# Branch: iskay/crowdfund-ui-polish (configured in the Netlify UI).
+# Netlify build config — committer app deploy.
+# Branch + VITE_WALLETCONNECT_PROJECT_ID are configured in the Netlify UI.
+# The build copies deployments/crowdfund-hub-sepolia.json into the committer's
+# public dir, so the deployed app targets whichever instance is recorded there.
 
 [build]
   base    = "."
