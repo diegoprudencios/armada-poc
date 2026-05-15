@@ -71,7 +71,7 @@ export function AppHeader({
       )}
     >
       {/* Left: hamburger (mobile) + Armada wordmark */}
-      <div className="flex shrink-0 items-center gap-2.5 pl-4">
+      <div className="flex shrink-0 items-center gap-2.5">
         {mobileMenu !== undefined && (
           <Sheet>
             <SheetTrigger asChild>
@@ -120,7 +120,7 @@ export function AppHeader({
       )}
 
       {/* Right: network badge + app-specific actions (desktop only) */}
-      <div className="hidden shrink-0 items-center gap-3 pr-4 sm:flex">
+      <div className="hidden shrink-0 items-center gap-3 sm:flex">
         <Tag label={network} />
         {headerRight}
       </div>
