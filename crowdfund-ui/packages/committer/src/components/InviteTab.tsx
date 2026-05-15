@@ -325,20 +325,20 @@ export function InviteTab(props: InviteTabProps) {
           positions.length === 0
             ? 'You must be invited to the crowdfund before you can invite others.'
             : 'All your invite slots have been used.'
-        }
-      />
-    )
-  }
+}
+/>
+)
+}
 
-  if (phase !== 0 || !windowOpen) {
-    return (
-      <div className="p-4 text-center text-muted-foreground">
-        Invites can only be sent during the active sale window.
-      </div>
-    )
-  }
+if (phase !== 0 || !windowOpen) {
+return (
+<div className="p-4 text-center text-muted-foreground">
+Invites can only be sent during the active sale window.
+</div>
+)
+}
 
-  const steps = mode === 'direct' ? DIRECT_STEPS : LINK_STEPS
+const steps = mode ==='direct' ? DIRECT_STEPS : LINK_STEPS
   const stepIndex = Math.max(
     0,
     steps.findIndex((s) => s.id === step),
@@ -347,179 +347,179 @@ export function InviteTab(props: InviteTabProps) {
   return (
     <Stepper steps={steps} current={stepIndex}>
       <Form {...form}>
-        {step === 'mode' && (
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
-                How do you want to invite?
-              </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
-                Send an invite directly to a wallet address, or generate a shareable link the
-                invitee redeems on their own.
-              </div>
-            </div>
+        {step === 'mode'&& (
+<div className="space-y-4">
+<div>
+<div className="mb-2 text-foreground">
+How do you want to invite?
+</div>
+<div className="text-muted-foreground">
+Send an invite directly to a wallet address, or generate a shareable link the
+invitee redeems on their own.
+</div>
+</div>
 
-            <div className="space-y-2">
-              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <span>Your invite slots</span>
-                <InfoTooltip text={TOOLTIPS.slot} label="What is an invite slot?" />
-                <InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
-              </div>
-              {invitePositions.map((pos) => (
-                <div
-                  key={pos.hop}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/25 px-3.5 py-3 text-xs shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
-                >
-                  <div className="min-w-0">
-                    <span className="font-medium text-foreground">{hopLabel(pos.hop)}</span>
-                    <span className="ml-2 text-muted-foreground">
-                      {pos.invitesUsed} used / {pos.invitesUsed + pos.invitesAvailable} total
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground tabular-nums">
-                      {pos.invitesAvailable} remaining
-                    </span>
-                    {/* Self-invite shortcut — bypasses the details + review
-                        steps and goes straight to the status step, since
-                        the recipient (you) and hop are already known. */}
-                    {address && (
-                      <Button
-                        variant="secondary"
-                        size="xs"
-                        onClick={() => handleSelfInvite(pos.hop)}
-                        title={`Invite yourself at ${hopLabel(pos.hop + 1)}`}
-                      >
-                        Self
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+<div className="space-y-2">
+<div className="flex items-center gap-1 text-muted-foreground">
+<span>Your invite slots</span>
+<InfoTooltip text={TOOLTIPS.slot} label="What is an invite slot?" />
+<InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
+</div>
+{invitePositions.map((pos) => (
+<div
+key={pos.hop}
+className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/25 px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+>
+<div className="min-w-0">
+<span className="text-foreground">{hopLabel(pos.hop)}</span>
+<span className="ml-2 text-muted-foreground">
+{pos.invitesUsed} used / {pos.invitesUsed + pos.invitesAvailable} total
+</span>
+</div>
+<div className="flex items-center gap-2">
+<span className="text-muted-foreground">
+{pos.invitesAvailable} remaining
+</span>
+{/* Self-invite shortcut — bypasses the details + review
+steps and goes straight to the status step, since
+the recipient (you) and hop are already known. */}
+{address && (
+<Button
+variant="secondary"
+size="xs"
+onClick={() => handleSelfInvite(pos.hop)}
+title={`Invite yourself at ${hopLabel(pos.hop + 1)}`}
+>
+Self
+</Button>
+)}
+</div>
+</div>
+))}
+</div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setMode('direct')}
-                className={`rounded-lg border bg-background/25 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all hover:border-primary/60 hover:bg-primary/5 ${
-                  mode === 'direct' ? 'border-primary/70 bg-primary/10' : 'border-border/70'
-                }`}
-              >
-                <Send className="mb-2 size-4 text-primary" aria-hidden="true" />
-                <div className="text-sm font-medium text-foreground">Direct on-chain invite</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  You pay gas. The invitee appears in the graph immediately.
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('link')}
-                className={`rounded-lg border bg-background/25 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all hover:border-primary/60 hover:bg-primary/5 ${
-                  mode === 'link' ? 'border-primary/70 bg-primary/10' : 'border-border/70'
-                }`}
-              >
-                <Link2 className="mb-2 size-4 text-primary" aria-hidden="true" />
-                <div className="text-sm font-medium text-foreground">Shareable link</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Sign once and share — the invitee pays gas when they redeem.
-                </div>
-              </button>
-            </div>
+<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+<button
+type="button"
+onClick={() => setMode('direct')}
+className={`rounded-lg border bg-background/25 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all hover:border-primary/60 hover:bg-primary/5 ${
+mode ==='direct' ? 'border-primary/70 bg-primary/10' : 'border-border/70'
+}`}
+>
+<Send className="mb-2 size-4 text-primary" aria-hidden="true" />
+<div className="text-foreground">Direct on-chain invite</div>
+<div className="mt-1 text-muted-foreground">
+You pay gas. The invitee appears in the graph immediately.
+</div>
+</button>
+<button
+type="button"
+onClick={() => setMode('link')}
+className={`rounded-lg border bg-background/25 p-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all hover:border-primary/60 hover:bg-primary/5 ${
+mode ==='link' ? 'border-primary/70 bg-primary/10' : 'border-border/70'
+}`}
+>
+<Link2 className="mb-2 size-4 text-primary" aria-hidden="true" />
+<div className="text-foreground">Shareable link</div>
+<div className="mt-1 text-muted-foreground">
+Sign once and share — the invitee pays gas when they redeem.
+</div>
+</button>
+</div>
 
-            <StepFooter
-              onBack={onBackToIntent}
-              onNext={() => setStep(mode === 'direct' ? 'details' : 'link')}
+<StepFooter
+onBack={onBackToIntent}
+onNext={() => setStep(mode ==='direct' ? 'details' : 'link')}
               backLabel="Back"
               nextLabel="Continue"
             />
           </div>
         )}
 
-        {step === 'details' && mode === 'direct' && (
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
-                Who are you inviting?
-              </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
-                Pick a slot and the recipient address (or ENS name).
-              </div>
-            </div>
+        {step === 'details' && mode === 'direct'&& (
+<div className="space-y-4">
+<div>
+<div className="mb-2 text-foreground">
+Who are you inviting?
+</div>
+<div className="text-muted-foreground">
+Pick a slot and the recipient address (or ENS name).
+</div>
+</div>
 
-            <div className="space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Slot
-              </div>
-              <ToggleGroup
-                type="single"
-                value={selectedHop !== null ? String(selectedHop) : ''}
+<div className="space-y-2">
+<div className="text-muted-foreground">
+Slot
+</div>
+<ToggleGroup
+type="single"
+value={selectedHop !== null ? String(selectedHop) :''}
                 onValueChange={(v) => {
                   if (v !== '') setSelectedHop(Number(v))
-                }}
-                className="flex flex-wrap gap-1"
-              >
-                {invitePositions.map((pos) => (
-                  <ToggleGroupItem
-                    key={pos.hop}
-                    value={String(pos.hop)}
-                    size="sm"
-                    className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                  >
-                    From {hopLabel(pos.hop)} → {hopLabel(pos.hop + 1)}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </div>
+}}
+className="flex flex-wrap gap-1"
+>
+{invitePositions.map((pos) => (
+<ToggleGroupItem
+key={pos.hop}
+value={String(pos.hop)}
+size="sm"
+className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+>
+From {hopLabel(pos.hop)} → {hopLabel(pos.hop + 1)}
+</ToggleGroupItem>
+))}
+</ToggleGroup>
+</div>
 
-            <FormField
-              control={form.control}
-              name="inviteeAddress"
-              render={({ field, fieldState }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="text"
-                      placeholder="0x… or ENS name"
-                      className="h-11 rounded-md border-border/70 bg-background/35 text-sm font-mono shadow-inner focus-visible:border-primary/70 focus-visible:ring-primary/20"
-                      aria-invalid={!!fieldState.error || undefined}
-                    />
-                  </FormControl>
-                  {resolving && (
-                    <div className="text-xs text-muted-foreground">Resolving ENS name…</div>
-                  )}
-                  {resolvedAddress && !fieldState.error && (
-                    <div className="text-xs text-success">
-                      {inviteeAddress} →{' '}
-                      <span className="font-mono">
-                        {resolvedAddress.slice(0, 6)}…{resolvedAddress.slice(-4)}
-                      </span>
-                    </div>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+<FormField
+control={form.control}
+name="inviteeAddress"
+render={({ field, fieldState }) => (
+<FormItem>
+<FormControl>
+<Input
+{...field}
+type="text"
+placeholder="0x… or ENS name"
+className="h-11 rounded-md border-border/70 bg-background/35 shadow-inner focus-visible:border-primary/70 focus-visible:ring-primary/20"
+aria-invalid={!!fieldState.error || undefined}
+/>
+</FormControl>
+{resolving && (
+<div className="text-muted-foreground">Resolving ENS name…</div>
+)}
+{resolvedAddress && !fieldState.error && (
+<div className="text-success">
+{inviteeAddress} →{' '}
+<span className="">
+{resolvedAddress.slice(0, 6)}…{resolvedAddress.slice(-4)}
+</span>
+</div>
+)}
+<FormMessage />
+</FormItem>
+)}
+/>
 
-            {address &&
-              effectiveAddress &&
-              isAddress(effectiveAddress) &&
-              effectiveAddress.toLowerCase() === address.toLowerCase() && (
-                <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-500">
-                  Inviting yourself is allowed — your slot count at the source hop will be
-                  consumed.
-                </div>
-              )}
+{address &&
+effectiveAddress &&
+isAddress(effectiveAddress) &&
+effectiveAddress.toLowerCase() === address.toLowerCase() && (
+<div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-amber-500">
+Inviting yourself is allowed — your slot count at the source hop will be
+consumed.
+</div>
+)}
 
-            {duplicateWarning && (
-              <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-amber-500">
-                {duplicateWarning}
-              </div>
-            )}
+{duplicateWarning && (
+<div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-amber-500">
+{duplicateWarning}
+</div>
+)}
 
-            <StepFooter
-              onBack={() => setStep('mode')}
+<StepFooter
+onBack={() => setStep('mode')}
               onNext={() => setStep('review')}
               nextDisabled={!detailsValid}
               nextLabel="Continue"
@@ -527,29 +527,29 @@ export function InviteTab(props: InviteTabProps) {
           </div>
         )}
 
-        {step === 'review' && mode === 'direct' && (
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">Review and confirm</div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
-                You're sending an on-chain invite at {hopLabel(targetHop)}. You pay the gas.
+        {step === 'review' && mode === 'direct'&& (
+<div className="space-y-4">
+<div>
+<div className="mb-2 text-foreground">Review and confirm</div>
+<div className="text-muted-foreground">
+You're sending an on-chain invite at {hopLabel(targetHop)}. You pay the gas.
               </div>
             </div>
 
-            <div className="space-y-2 rounded-lg border border-border/70 bg-background/25 p-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <div className="space-y-2 rounded-lg border border-border/70 bg-background/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">From slot</span>
-                <span className="font-medium">
+                <span className="">
                   {selectedHop !== null ? hopLabel(selectedHop) : '—'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">To hop</span>
-                <span className="font-medium">{hopLabel(targetHop)}</span>
+                <span className="">{hopLabel(targetHop)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Recipient</span>
-                <span className="font-mono text-xs">
+                <span className="">
                   {effectiveAddress
                     ? `${effectiveAddress.slice(0, 6)}…${effectiveAddress.slice(-4)}`
                     : '—'}
@@ -568,7 +568,7 @@ export function InviteTab(props: InviteTabProps) {
         {step === 'status' && (
           <div className="space-y-4">
             <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+              <div className="mb-2 text-foreground">
                 {pipelineRunning
                   ? 'Submitting your invite'
                   : pipelineError
@@ -577,7 +577,7 @@ export function InviteTab(props: InviteTabProps) {
                   ? 'Invite sent!'
                   : 'Preparing transaction'}
               </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
+              <div className="text-muted-foreground">
                 {pipelineRunning
                   ? 'Confirm in your wallet. The recipient will appear in the graph once the transaction confirms.'
                   : pipelineDone
@@ -602,8 +602,8 @@ export function InviteTab(props: InviteTabProps) {
         {step === 'link' && mode === 'link' && (
           <div className="space-y-4">
             <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">Shareable link</div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
+              <div className="mb-2 text-foreground">Shareable link</div>
+              <div className="text-muted-foreground">
                 Sign an EIP-712 message to mint a redeemable link. Anyone with the link can join
                 at the chosen hop until you revoke it or it expires.
               </div>

@@ -42,12 +42,12 @@ export function FinalizePanel({ signer, crowdfundAddress, totalCommitted, capped
 
   return (
     <div className="rounded border border-border p-3 space-y-3">
-      <div className="text-sm font-medium">Finalize Crowdfund</div>
+      <div className="">Finalize Crowdfund</div>
 
       {/* Demand checks */}
-      <div className="text-xs space-y-1">
+      <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <span>Capped demand: <span className="font-medium">{formatUsdc(cappedDemand)}</span></span>
+          <span>Capped demand: <span className="">{formatUsdc(cappedDemand)}</span></span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">Minimum raise: {formatUsdc(MIN_SALE)}</span>
@@ -63,26 +63,26 @@ export function FinalizePanel({ signer, crowdfundAddress, totalCommitted, capped
 
       {/* Expected outcome */}
       {meetsMin && (
-        <div className="rounded bg-muted/50 p-2 text-xs space-y-1">
-          <div className="font-medium text-muted-foreground">Expected outcome (estimates):</div>
-          <div>Sale size: <span className="font-medium">{formatUsdc(actualSaleSize)}</span> ({meetsElastic ? 'EXPANDED' : 'BASE'})</div>
-          <div>ARM to distribute: <span className="font-medium">~{formatArm(armToDistribute)}</span></div>
-          <div>Net proceeds: <span className="font-medium">~{formatUsdc(actualSaleSize)}</span></div>
+        <div className="rounded bg-muted/50 p-2 space-y-1">
+          <div className="text-muted-foreground">Expected outcome (estimates):</div>
+          <div>Sale size: <span className="">{formatUsdc(actualSaleSize)}</span> ({meetsElastic ? 'EXPANDED' : 'BASE'})</div>
+          <div>ARM to distribute: <span className="">~{formatArm(armToDistribute)}</span></div>
+          <div>Net proceeds: <span className="">~{formatUsdc(actualSaleSize)}</span></div>
           {refundEstimate > 0n && (
-            <div>Refunds: <span className="font-medium text-amber-500">~{formatUsdc(refundEstimate)}</span> (oversubscription)</div>
+            <div>Refunds: <span className="text-amber-500">~{formatUsdc(refundEstimate)}</span> (oversubscription)</div>
           )}
         </div>
       )}
 
       {/* Below-min: finalization enters refund mode */}
       {belowMin && (
-        <div className="rounded bg-amber-500/10 border border-amber-500/30 p-2 text-xs text-amber-600 space-y-1">
+        <div className="rounded bg-amber-500/10 border border-amber-500/30 p-2 text-amber-600 space-y-1">
           <div>Capped demand is below the minimum raise ({formatUsdc(MIN_SALE)}). Finalizing will enter refund mode — all participants receive full USDC refunds.</div>
         </div>
       )}
 
       <button
-        className="w-full rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full rounded bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={tx.state.status === 'pending' || tx.state.status === 'submitted'}
         onClick={handleFinalize}
       >

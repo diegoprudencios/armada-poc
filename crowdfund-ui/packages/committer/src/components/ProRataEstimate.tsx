@@ -23,17 +23,17 @@ export function ProRataEstimate(props: ProRataEstimateProps) {
 
   return (
     <div className="space-y-2 rounded-lg border border-primary/25 bg-primary/5 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+      <div className="flex items-center gap-1 text-muted-foreground">
         <span>Estimated Allocation</span>
         <InfoTooltip text={TOOLTIPS.allocation} label="What is allocation?" />
         <InfoTooltip text={TOOLTIPS.proRata} label="What is pro-rata?" />
       </div>
 
       {hopEstimates.map((est) => (
-        <div key={est.hop} className="space-y-1 text-xs">
+        <div key={est.hop} className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">{hopLabel(est.hop)}</span>
-            <span className="font-medium tabular-nums text-foreground">
+            <span className="text-foreground">
               {formatUsdc(est.estimatedAccepted)} of {formatUsdc(est.totalPosition)}
               {est.existingCommitted > 0n && (
                 <span className="text-muted-foreground ml-1">
@@ -51,19 +51,19 @@ export function ProRataEstimate(props: ProRataEstimateProps) {
       ))}
 
       <div className="space-y-1 border-t border-primary/20 pt-2">
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between">
           <span className="text-muted-foreground">Est. ARM</span>
-          <span className="font-medium text-success">{formatArm(totalEstimatedArm)}</span>
+          <span className="text-success">{formatArm(totalEstimatedArm)}</span>
         </div>
         {totalEstimatedRefund > 0n && (
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Est. USDC refund</span>
             <span>{formatUsdc(totalEstimatedRefund)}</span>
           </div>
         )}
       </div>
 
-      <div className="space-y-0.5 text-[10px] text-muted-foreground">
+      <div className="space-y-0.5 text-muted-foreground">
         <div>Estimate only — demand changes between now and deadline.</div>
         <div>Commitments are final — no withdrawals before deadline.</div>
         <div>3-week maximum lock — USDC locked until finalization + refund claim.</div>

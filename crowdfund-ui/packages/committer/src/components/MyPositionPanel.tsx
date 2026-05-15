@@ -132,9 +132,6 @@ function SubtreeMini({
         x={center}
         y={center + 4}
         textAnchor="middle"
-        fontFamily="var(--font-heading)"
-        fontSize={11}
-        fontWeight={600}
         fill="var(--foreground)"
       >
         You
@@ -155,13 +152,13 @@ function StatTile({
 }) {
   return (
     <div className="rounded-md border border-border/60 bg-card/40 p-3">
-      <div className="font-heading text-xl font-semibold tabular-nums text-foreground">
+      <div className="text-foreground">
         {value}
       </div>
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+      <div className="text-muted-foreground">
         {label}
       </div>
-      {hint && <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div>}
+      {hint && <div className="mt-1 text-muted-foreground">{hint}</div>}
     </div>
   )
 }
@@ -183,7 +180,7 @@ function Section({
         className,
       )}
     >
-      <div className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="mb-3 text-muted-foreground">
         {title}
       </div>
       {children}
@@ -327,10 +324,10 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
         {claimAvailable ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-sm font-medium text-foreground">
+              <div className="text-foreground">
                 Claim is open
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-muted-foreground">
                 You can now claim your ARM tokens (or USDC refund).
               </div>
             </div>
@@ -340,7 +337,7 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
             </Button>
           </div>
         ) : (
-          <div className="flex items-start gap-3 text-sm">
+          <div className="flex items-start gap-3">
             <Clock
               className="mt-0.5 size-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
@@ -348,7 +345,7 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
             <div>
               <div className="text-foreground">Not yet available</div>
               {claimCountdown !== undefined && claimCountdown > 0 && (
-                <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                <div className="mt-0.5 text-muted-foreground">
                   Available in{' '}
                   <span className="text-foreground">{formatCountdown(claimCountdown)}</span>
                 </div>
@@ -363,14 +360,14 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
         <Section title="Your Network">
           <div className="flex flex-col items-center gap-3">
             <SubtreeMini invitees={invitees} />
-            <div className="text-center text-xs text-muted-foreground tabular-nums">
-              <span className="text-foreground font-medium">{invitees.length}</span>{' '}
+            <div className="text-center text-muted-foreground">
+              <span className="text-foreground">{invitees.length}</span>{' '}
               invitee{invitees.length === 1 ? '' : 's'}
               {inviteesCommitted > 0n && (
                 <>
                   {' '}
                   ·{' '}
-                  <span className="text-foreground font-medium">
+                  <span className="text-foreground">
                     {formatUsdc(inviteesCommitted)}
                   </span>{' '}
                   committed below you
@@ -391,14 +388,14 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
 
         <Section title="Invite Someone">
           <div className="space-y-3">
-            <div className="text-sm text-muted-foreground">
+            <div className="text-muted-foreground">
               Send an invite directly to a wallet, or generate a shareable link the invitee
               redeems on their own.
             </div>
-            <div className="rounded-md border border-border/60 bg-card/40 p-3 text-xs">
+            <div className="rounded-md border border-border/60 bg-card/40 p-3">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Slots remaining</span>
-                <span className="font-medium tabular-nums">
+                <span className="">
                   {invitesRemaining}/{totalSlots}
                 </span>
               </div>
@@ -430,28 +427,28 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <Section title="Your Invites">
           {invitees.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
+            <div className="text-muted-foreground">
               You haven't invited anyone yet.
-            </div>
-          ) : (
-            <ul className="space-y-1.5">
-              {invitees.slice(0, 6).map((inv) => {
-                const joined = inv.committed > 0n
-                return (
-                  <li
-                    key={`${inv.address}-${inv.hop}`}
-                    className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-xs"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-mono text-foreground">
-                        {renderInviteeName(inv.address)}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {hopLabel(inv.hop)}
-                        {inv.committed > 0n && (
-                          <>
-                            {' '}
-                            · <span className="tabular-nums">{formatUsdc(inv.committed)}</span>{' '}
+</div>
+) : (
+<ul className="space-y-1.5">
+{invitees.slice(0, 6).map((inv) => {
+const joined = inv.committed > 0n
+return (
+<li
+key={`${inv.address}-${inv.hop}`}
+className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2"
+>
+<div className="min-w-0">
+<div className="text-foreground">
+{renderInviteeName(inv.address)}
+</div>
+<div className="text-muted-foreground">
+{hopLabel(inv.hop)}
+{inv.committed > 0n && (
+<>
+{' '}
+· <span className="">{formatUsdc(inv.committed)}</span>{' '}
                             committed
                           </>
                         )}
@@ -459,7 +456,7 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
                     </div>
                     <span
                       className={cn(
-                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider',
+                        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5',
                         joined
                           ? 'border-success/50 bg-success/10 text-success'
                           : 'border-border/60 bg-card/40 text-muted-foreground',
@@ -467,91 +464,91 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
                     >
                       {joined ? <Check className="size-3" /> : <Clock className="size-3" />}
                       {joined ? 'Joined' : 'Pending'}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {invitees.length > 6 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="mt-2 h-8 w-full text-xs"
-              onClick={onGoToNetwork}
-            >
-              View all {invitees.length} in network
-              <ArrowRight className="size-3" />
-            </Button>
-          )}
-        </Section>
+</span>
+</li>
+)
+})}
+</ul>
+)}
+{invitees.length > 6 && (
+<Button
+variant="ghost"
+size="sm"
+className="mt-2 h-8 w-full"
+onClick={onGoToNetwork}
+>
+View all {invitees.length} in network
+<ArrowRight className="size-3" />
+</Button>
+)}
+</Section>
 
-        <Section title="Activity">
-          {activity.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              Your commits and invites will appear here.
-            </div>
-          ) : (
-            <ul className="space-y-1.5">
-              {activity.map((item, i) => {
-                if (item.kind === 'commit') {
-                  return (
-                    <li
-                      key={`${item.txHash}-${i}`}
-                      className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="flex size-5 items-center justify-center rounded-full bg-success/15 text-success">
-                          <Check className="size-3" />
-                        </span>
-                        <span>
-                          Committed at{' '}
-                          <span className="text-foreground">{hopLabel(item.hop)}</span>
-                        </span>
-                      </div>
-                      <span className="font-medium tabular-nums">
-                        +{formatUsdc(item.amount)}
-                      </span>
-                    </li>
-                  )
-                }
-                if (item.kind === 'invite-out') {
-                  return (
-                    <li
-                      key={`${item.txHash}-${i}`}
-                      className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-primary">
-                          <Send className="size-3" />
-                        </span>
-                        <span>
-                          Invited{' '}
-                          <span className="font-mono">{renderInviteeName(item.target)}</span>
-                        </span>
-                      </div>
-                      <span className="text-muted-foreground tabular-nums">
-                        {hopLabel(item.hop + 1)}
-                      </span>
-                    </li>
-                  )
-                }
-                // invite-in
-                return (
-                  <li
-                    key={`${item.txHash}-${i}`}
-                    className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="flex size-5 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                        <UserPlus className="size-3" />
-                      </span>
-                      <span>
-                        Invited by{' '}
-                        <span className="font-mono">{renderInviteeName(item.source)}</span>
+<Section title="Activity">
+{activity.length === 0 ? (
+<div className="text-muted-foreground">
+Your commits and invites will appear here.
+</div>
+) : (
+<ul className="space-y-1.5">
+{activity.map((item, i) => {
+if (item.kind ==='commit') {
+return (
+<li
+key={`${item.txHash}-${i}`}
+className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2"
+>
+<div className="flex items-center gap-2">
+<span className="flex size-5 items-center justify-center rounded-full bg-success/15 text-success">
+<Check className="size-3" />
+</span>
+<span>
+Committed at{' '}
+<span className="text-foreground">{hopLabel(item.hop)}</span>
+</span>
+</div>
+<span className="">
++{formatUsdc(item.amount)}
+</span>
+</li>
+)
+}
+if (item.kind ==='invite-out') {
+return (
+<li
+key={`${item.txHash}-${i}`}
+className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2"
+>
+<div className="flex items-center gap-2">
+<span className="flex size-5 items-center justify-center rounded-full bg-primary/15 text-primary">
+<Send className="size-3" />
+</span>
+<span>
+Invited{' '}
+<span className="">{renderInviteeName(item.target)}</span>
+</span>
+</div>
+<span className="text-muted-foreground">
+{hopLabel(item.hop + 1)}
+</span>
+</li>
+)
+}
+// invite-in
+return (
+<li
+key={`${item.txHash}-${i}`}
+className="flex items-center justify-between rounded-md border border-border/60 bg-card/40 px-3 py-2"
+>
+<div className="flex items-center gap-2">
+<span className="flex size-5 items-center justify-center rounded-full bg-muted text-muted-foreground">
+<UserPlus className="size-3" />
+</span>
+<span>
+Invited by{' '}
+                        <span className="">{renderInviteeName(item.source)}</span>
                       </span>
                     </div>
-                    <span className="text-muted-foreground tabular-nums">
+                    <span className="text-muted-foreground">
                       {hopLabel(item.hop)}
                     </span>
                   </li>
@@ -563,7 +560,7 @@ export function MyPositionPanel(props: MyPositionPanelProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="mt-2 h-8 w-full text-xs"
+              className="mt-2 h-8 w-full"
               onClick={onGoToNetwork}
             >
               View full activity

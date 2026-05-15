@@ -36,12 +36,12 @@ function TimelineRow(props: { label: string; isOpen: boolean; isPending?: boolea
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground">{label}</span>
         {endTimestamp > 0 && (
-          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${badgeClass}`}>
+          <span className={`px-1.5 py-0.5 rounded ${badgeClass}`}>
             {badgeText}
           </span>
         )}
       </div>
-      <div className="text-[10px] text-muted-foreground">
+      <div className="text-muted-foreground">
         {endTimestamp === 0
           ? 'Not yet set'
           : <>
@@ -82,21 +82,21 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
     <div className="rounded-lg border border-border bg-card p-4 space-y-4">
       {/* Phase + sale size */}
       <div className="flex items-center gap-3">
-        <span className={`text-xs px-2 py-1 rounded font-medium ${phaseColor(state.phase)}`}>
+        <span className={`px-2 py-1 rounded ${phaseColor(state.phase)}`}>
           {phaseName(state.phase)}
         </span>
-        <span className="text-sm text-muted-foreground">
+        <span className="text-muted-foreground">
           Sale: {formatUsdc(state.saleSize)} ({saleLabel})
         </span>
         {state.armLoaded ? (
-          <span className="text-xs text-success">ARM Loaded</span>
+          <span className="text-success">ARM Loaded</span>
         ) : (
-          <span className="text-xs text-amber-500">ARM Not Loaded</span>
+          <span className="text-amber-500">ARM Not Loaded</span>
         )}
       </div>
 
       {/* Timeline */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <TimelineRow
           label="Week 1 (Seeds + LT Invites)"
           isOpen={state.phase === 0 && localTimestamp >= state.windowStart && localTimestamp < state.launchTeamInviteEnd}
@@ -121,7 +121,7 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
 
       {/* Progress bar */}
       <div className="space-y-1">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-muted-foreground">
           <span>Total Committed: {formatUsdc(state.totalCommitted)}</span>
           <span>Max: {formatUsdc(MAX_SALE)}</span>
         </div>
@@ -143,7 +143,7 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
             title={`Elastic: ${formatUsdc(ELASTIC_TRIGGER)}`}
           />
         </div>
-        <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-4 text-muted-foreground">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-amber-500" /> Min ({formatUsdc(MIN_SALE)})
           </span>
@@ -160,23 +160,23 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
         const belowMin = estimate.totalAllocUsdc < CROWDFUND_CONSTANTS.MIN_SALE && state.cappedDemand > 0n
 
         return (
-          <div className="rounded border border-border p-3 space-y-1 text-xs">
+          <div className="rounded border border-border p-3 space-y-1">
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <span className="text-muted-foreground">Total committed</span>
-                <div className="font-medium">{formatUsdc(state.totalCommitted)}</div>
+                <div className="">{formatUsdc(state.totalCommitted)}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Effective demand</span>
-                <div className="font-medium">{formatUsdc(state.cappedDemand)}</div>
+                <div className="">{formatUsdc(state.cappedDemand)}</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Est. allocation</span>
-                <div className={`font-medium ${belowMin ? 'text-destructive' : ''}`}>{formatUsdc(estimate.totalAllocUsdc)}</div>
+                <div className={`${belowMin ? 'text-destructive' : ''}`}>{formatUsdc(estimate.totalAllocUsdc)}</div>
               </div>
             </div>
             {(committedDiffers || allocationDiffers) && (
-              <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1">
+              <div className="text-muted-foreground space-y-0.5 pt-1">
                 {committedDiffers && (
                   <div>Effective demand differs from total committed — some participants committed above their per-slot cap.</div>
                 )}
@@ -194,7 +194,7 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
 
       {/* Per-hop stats table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full">
           <thead>
             <tr className="border-b border-border text-left text-muted-foreground">
               <th className="py-1 pr-4">Hop</th>
@@ -223,7 +223,7 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
 
               return (
                 <tr key={hop} className="border-b border-border/50">
-                  <td className="py-1 pr-4 font-medium">{hopLabel(hop)}</td>
+                  <td className="py-1 pr-4">{hopLabel(hop)}</td>
                   <td className="py-1 pr-4">
                     {isFloorHop ? 'Floor' : `${(hopConfig?.ceilingBps ?? 0) / 100}%`}
                   </td>
@@ -235,7 +235,7 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
                   <td className="py-1 pr-4">{formatUsdc(stats.totalCommitted)}</td>
                   <td className="py-1 pr-4">{formatUsdc(stats.cappedCommitted)}</td>
                   <td className="py-1 pr-4">{formatUsdc(estimate.perHopAlloc[hop])}</td>
-                  <td className={`py-1 pr-4 font-medium ${overUnderColor}`}>
+                  <td className={`py-1 pr-4 ${overUnderColor}`}>
                     {overUnderPct.toFixed(1)}%
                   </td>
                 </tr>
@@ -248,15 +248,15 @@ export function StatusDashboard({ state, role }: StatusDashboardProps) {
       {/* LT budget tracker (launch team only) */}
       {role === 'launch_team' && (
         <div className="rounded border border-border p-3 space-y-2">
-          <div className="text-xs font-medium text-muted-foreground">Launch Team Budget</div>
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="text-muted-foreground">Launch Team Budget</div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <span className="text-muted-foreground">Hop-1 remaining: </span>
-              <span className="font-medium">{state.ltBudgetHop1Remaining} / {CROWDFUND_CONSTANTS.LAUNCH_TEAM_HOP1_BUDGET}</span>
+              <span className="">{state.ltBudgetHop1Remaining} / {CROWDFUND_CONSTANTS.LAUNCH_TEAM_HOP1_BUDGET}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Hop-2 remaining: </span>
-              <span className="font-medium">{state.ltBudgetHop2Remaining} / {CROWDFUND_CONSTANTS.LAUNCH_TEAM_HOP2_BUDGET}</span>
+              <span className="">{state.ltBudgetHop2Remaining} / {CROWDFUND_CONSTANTS.LAUNCH_TEAM_HOP2_BUDGET}</span>
             </div>
           </div>
         </div>

@@ -52,18 +52,18 @@ export function NodeDetail(props: NodeDetailProps) {
   })
 
   return (
-    <div className="space-y-2 text-sm">
+    <div className="space-y-2">
       {/* Address header: ENS name (truncated address) */}
-      <div className="font-medium">
+      <div className="">
         {ensName ? (
           <span>
             {ensName}{' '}
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="text-muted-foreground">
               ({truncateAddress(summary.address)})
             </span>
           </span>
         ) : (
-          <span className="font-mono text-xs">{summary.address}</span>
+          <span className="">{summary.address}</span>
         )}
       </div>
 
@@ -71,7 +71,7 @@ export function NodeDetail(props: NodeDetailProps) {
       {hopNodes.map((node) => {
         const slotCount = node.invitesReceived
         return (
-          <div key={`${node.address}-${node.hop}`} className="text-xs">
+          <div key={`${node.address}-${node.hop}`} className="">
             <span className="text-muted-foreground">{hopLabel(node.hop)}: </span>
             <span>{formatUsdc(node.committed)} committed</span>
             {slotCount > 1 && (
@@ -91,13 +91,13 @@ export function NodeDetail(props: NodeDetailProps) {
 
       {/* Total (only shown for multi-hop) */}
       {hopNodes.length > 1 && (
-        <div className="text-xs font-medium">
+        <div className="">
           Total: {formatUsdc(summary.totalCommitted)}
         </div>
       )}
 
       {/* Invited by: per-hop inviter chain */}
-      <div className="text-xs text-muted-foreground">
+      <div className="text-muted-foreground">
         Invited by:{' '}
         {inviterChain.map((entry, idx) => {
           const copyable =
@@ -131,30 +131,30 @@ export function NodeDetail(props: NodeDetailProps) {
       </div>
 
       {/* Invite usage summary */}
-      <div className="text-xs text-muted-foreground">
+      <div className="text-muted-foreground">
         Invites: {totalInvitesUsed}/{totalInvitesAvailable} used
       </div>
 
       {/* Post-finalization: allocation and claim status */}
       {phase === 1 && summary.allocatedArm !== null && (
         <div className="pt-1 border-t border-border space-y-1">
-          <div className="text-xs">
+          <div className="">
             <span className="text-muted-foreground">Allocated: </span>
-            <span className="font-medium text-success">{formatArm(summary.allocatedArm)}</span>
+            <span className="text-success">{formatArm(summary.allocatedArm)}</span>
           </div>
           {summary.refundUsdc !== null && summary.refundUsdc > 0n && (
-            <div className="text-xs">
+            <div className="">
               <span className="text-muted-foreground">Refund: </span>
               <span>{formatUsdc(summary.refundUsdc)}</span>
             </div>
           )}
           {summary.delegate && (
-            <div className="text-xs">
+            <div className="">
               <span className="text-muted-foreground">Delegate: </span>
               <span>{displayAddress(summary.delegate, resolveENS)}</span>
             </div>
           )}
-          <div className="text-xs">
+          <div className="">
             <span className="text-muted-foreground">ARM claimed: </span>
             <span>{summary.armClaimed ? '\u2713' : '\u2717'}</span>
             <span className="mx-2 text-border">|</span>

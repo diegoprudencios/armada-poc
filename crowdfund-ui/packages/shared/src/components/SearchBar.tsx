@@ -77,8 +77,8 @@ export function SearchBar(props: SearchBarProps) {
           // Soft translucent fill over the card surface, bigger radius,
           // and a primary-tinted focus ring + border for a more polished
           // anchor element. Primary substitutes for ChatGPT's literal cyan.
-          'w-full rounded-lg border border-border/60 bg-background/60 py-2 pl-10 pr-3 text-xs ' +
-          'placeholder:text-muted-foreground transition-colors ' +
+          'w-full rounded-lg border border-border/60 bg-background/60 py-2 pl-10 pr-3' +
+          'placeholder:text-muted-foreground transition-colors' +
           'focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/30'
         }
       />

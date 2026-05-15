@@ -70,7 +70,7 @@ export function ParticipantTable({ participants, phase, launchTeamAddress }: Par
       perHopColumnHelper.accessor('address', {
         header: 'Address',
         cell: (info) => (
-          <span className="font-mono">{truncateAddress(info.getValue())}</span>
+          <span className="">{truncateAddress(info.getValue())}</span>
         ),
       }),
       perHopColumnHelper.accessor('hop', {
@@ -86,7 +86,7 @@ export function ParticipantTable({ participants, phase, launchTeamAddress }: Par
           if (launchTeamAddress && val[0].toLowerCase() === launchTeamAddress.toLowerCase()) {
             return <span className="text-success">Launch Team</span>
           }
-          return <span className="font-mono">{truncateAddress(val[0])}</span>
+          return <span className="">{truncateAddress(val[0])}</span>
         },
       }),
       perHopColumnHelper.accessor('committed', {
@@ -200,7 +200,7 @@ export function ParticipantTable({ participants, phase, launchTeamAddress }: Par
       aggColumnHelper.accessor('address', {
         header: 'Address',
         cell: (info) => (
-          <span className="font-mono">{truncateAddress(info.getValue())}</span>
+          <span className="">{truncateAddress(info.getValue())}</span>
         ),
       }),
       aggColumnHelper.display({
@@ -290,118 +290,118 @@ export function ParticipantTable({ participants, phase, launchTeamAddress }: Par
   // Generic renderer — keeps each branch's Table<T> concrete so flexRender's
   // column-context generics resolve correctly (a ternary between Table<A> and
   // Table<B> yields a union that flexRender can't narrow through).
-  function TableBody<T>({ table }: { table: TanstackTable<T> }) {
-    return (
-      <table className="w-full text-xs">
-        <thead>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id} className="border-b border-border">
-              {headerGroup.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="py-1 pr-4 text-left text-muted-foreground cursor-pointer hover:text-foreground"
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                  {header.column.getIsSorted() === 'asc' ? ' ^' : ''}
+function TableBody<T>({ table }: { table: TanstackTable<T> }) {
+return (
+<table className="w-full">
+<thead>
+{table.getHeaderGroups().map((headerGroup) => (
+<tr key={headerGroup.id} className="border-b border-border">
+{headerGroup.headers.map((header) => (
+<th
+key={header.id}
+className="py-1 pr-4 text-left text-muted-foreground cursor-pointer hover:text-foreground"
+onClick={header.column.getToggleSortingHandler()}
+>
+{flexRender(header.column.columnDef.header, header.getContext())}
+{header.column.getIsSorted() ==='asc' ? ' ^' : ''}
                   {header.column.getIsSorted() === 'desc' ? ' v' : ''}
-                </th>
-              ))}
-            </tr>
-          ))}
-        </thead>
-        <tbody>
-          {table.getRowModel().rows.map((row) => (
-            <tr key={row.id} className="border-b border-border/30 hover:bg-muted/50">
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="py-1 pr-4">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    )
-  }
+</th>
+))}
+</tr>
+))}
+</thead>
+<tbody>
+{table.getRowModel().rows.map((row) => (
+<tr key={row.id} className="border-b border-border/30 hover:bg-muted/50">
+{row.getVisibleCells().map((cell) => (
+<td key={cell.id} className="py-1 pr-4">
+{flexRender(cell.column.columnDef.cell, cell.getContext())}
+</td>
+))}
+</tr>
+))}
+</tbody>
+</table>
+)
+}
 
-  return (
-    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">Participants</h2>
-        <span className="text-xs text-muted-foreground">{dataCount} entries</span>
-      </div>
+return (
+<div className="rounded-lg border border-border bg-card p-4 space-y-3">
+<div className="flex items-center justify-between">
+<h2 className="">Participants</h2>
+<span className="text-muted-foreground">{dataCount} entries</span>
+</div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* View mode toggle */}
-        <div className="flex rounded border border-input overflow-hidden">
-          <button
-            className={`px-2 py-1 text-[10px] ${viewMode === 'per-hop' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
+{/* Filters */}
+<div className="flex flex-wrap items-center gap-2">
+{/* View mode toggle */}
+<div className="flex rounded border border-input overflow-hidden">
+<button
+className={`px-2 py-1 ${viewMode ==='per-hop' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
             onClick={() => setViewModeWithSort('per-hop')}
-          >
-            Per-Hop
-          </button>
-          <button
-            className={`px-2 py-1 text-[10px] ${viewMode === 'per-address' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
+>
+Per-Hop
+</button>
+<button
+className={`px-2 py-1 ${viewMode ==='per-address' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
             onClick={() => setViewModeWithSort('per-address')}
-          >
-            Per-Address
-          </button>
-        </div>
+>
+Per-Address
+</button>
+</div>
 
-        <select
-          className="rounded border border-input bg-background px-2 py-1 text-xs"
-          value={hopFilter ?? 'all'}
-          onChange={(e) => setHopFilter(e.target.value === 'all' ? null : Number(e.target.value))}
-        >
-          <option value="all">All Hops</option>
-          <option value="0">Seed (hop-0)</option>
-          <option value="1">Hop-1</option>
-          <option value="2">Hop-2</option>
-        </select>
+<select
+className="rounded border border-input bg-background px-2 py-1"
+value={hopFilter ??'all'}
+          onChange={(e) => setHopFilter(e.target.value === 'all'? null : Number(e.target.value))}
+>
+<option value="all">All Hops</option>
+<option value="0">Seed (hop-0)</option>
+<option value="1">Hop-1</option>
+<option value="2">Hop-2</option>
+</select>
 
-        <select
-          className="rounded border border-input bg-background px-2 py-1 text-xs"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'committed' | 'invited')}
-        >
-          <option value="all">All Status</option>
-          <option value="committed">Committed</option>
-          <option value="invited">Invited Only</option>
-        </select>
+<select
+className="rounded border border-input bg-background px-2 py-1"
+value={statusFilter}
+onChange={(e) => setStatusFilter(e.target.value as'all' | 'committed' | 'invited')}
+>
+<option value="all">All Status</option>
+<option value="committed">Committed</option>
+<option value="invited">Invited Only</option>
+</select>
 
-        {/* Post-finalization claim filter */}
-        {phase >= 1 && (
-          <select
-            className="rounded border border-input bg-background px-2 py-1 text-xs"
-            value={claimFilter}
-            onChange={(e) => setClaimFilter(e.target.value as 'all' | 'claimed' | 'unclaimed')}
-          >
-            <option value="all">All Claims</option>
-            <option value="claimed">Claimed</option>
-            <option value="unclaimed">Unclaimed</option>
-          </select>
-        )}
+{/* Post-finalization claim filter */}
+{phase >= 1 && (
+<select
+className="rounded border border-input bg-background px-2 py-1"
+value={claimFilter}
+onChange={(e) => setClaimFilter(e.target.value as'all' | 'claimed' | 'unclaimed')}
+>
+<option value="all">All Claims</option>
+<option value="claimed">Claimed</option>
+<option value="unclaimed">Unclaimed</option>
+</select>
+)}
 
-        <input
-          type="text"
-          placeholder="Search address..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[150px] rounded border border-input bg-background px-2 py-1 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-      </div>
+<input
+type="text"
+placeholder="Search address..."
+value={search}
+onChange={(e) => setSearch(e.target.value)}
+className="flex-1 min-w-[150px] rounded border border-input bg-background px-2 py-1 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+/>
+</div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        {viewMode === 'per-hop' ? (
+{/* Table */}
+<div className="overflow-x-auto">
+{viewMode ==='per-hop' ? (
           <TableBody table={perHopTable} />
         ) : (
           <TableBody table={aggTable} />
         )}
         {dataCount === 0 && (
-          <div className="text-xs text-muted-foreground text-center py-4">No participants</div>
+          <div className="text-muted-foreground text-center py-4">No participants</div>
         )}
       </div>
     </div>

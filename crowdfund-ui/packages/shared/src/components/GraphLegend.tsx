@@ -55,7 +55,7 @@ export function GraphLegend({ connectedAddress, className }: GraphLegendProps) {
   return (
     <div
       className={[
-        'absolute z-10 rounded-md border border-border bg-card/80 backdrop-blur-sm shadow-sm text-xs',
+        'absolute z-10 rounded-md border border-border bg-card/80 backdrop-blur-sm shadow-sm',
         className ?? 'bottom-3 left-3',
       ].join(' ')}
     >

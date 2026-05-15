@@ -57,42 +57,42 @@ export function AmountInput({
   className,
   inputClassName,
   maxLabel = 'MAX',
-  onBlur,
-  ...ariaProps
+onBlur,
+...ariaProps
 }: AmountInputProps) {
-  const binding = React.useMemo(() => {
-    if (!ceilings || ceilings.length === 0) return null
-    let smallest = ceilings[0]
-    for (const c of ceilings) {
-      if (c.value < smallest.value) smallest = c
-    }
-    return smallest
-  }, [ceilings])
+const binding = React.useMemo(() => {
+if (!ceilings || ceilings.length === 0) return null
+let smallest = ceilings[0]
+for (const c of ceilings) {
+if (c.value < smallest.value) smallest = c
+}
+return smallest
+}, [ceilings])
 
-  const maxDisabled = disabled || !binding || binding.value <= 0n
+const maxDisabled = disabled || !binding || binding.value <= 0n
 
-  const handleMax = React.useCallback(() => {
-    if (!binding || binding.value <= 0n) return
-    onChange(formatFromBigint(binding.value, decimals))
-  }, [binding, decimals, onChange])
+const handleMax = React.useCallback(() => {
+if (!binding || binding.value <= 0n) return
+onChange(formatFromBigint(binding.value, decimals))
+}, [binding, decimals, onChange])
 
-  const maxButton = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className="h-11 self-center rounded-[4px] border border-border/60 bg-transparent px-4 text-xs text-muted-foreground hover:border-hop-0/40 hover:bg-hop-0/10 hover:text-foreground"
-      onClick={handleMax}
-      disabled={maxDisabled}
-    >
-      {maxLabel}
-    </Button>
-  )
+const maxButton = (
+<Button
+type="button"
+variant="ghost"
+size="sm"
+className="h-11 self-center rounded-[4px] border border-border/60 bg-transparent px-4 text-muted-foreground hover:border-hop-0/40 hover:bg-hop-0/10 hover:text-foreground"
+onClick={handleMax}
+disabled={maxDisabled}
+>
+{maxLabel}
+</Button>
+)
 
-  const showTooltip = !maxDisabled && ceilings && ceilings.length > 1 && binding
+const showTooltip = !maxDisabled && ceilings && ceilings.length > 1 && binding
 
-  return (
-    <div className={cn('flex items-center gap-2', className)}>
+return (
+<div className={cn('flex items-center gap-2', className)}>
       <Input
         id={id}
         name={name}
@@ -107,7 +107,7 @@ export function AmountInput({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         className={cn(
-          'h-11 flex-1 rounded-md border-border/70 bg-background/35 text-base font-medium tabular-nums shadow-inner placeholder:text-muted-foreground/60 focus-visible:border-primary/70 focus-visible:ring-primary/20',
+          'h-11 flex-1 rounded-md border-border/70 bg-background/35 shadow-inner placeholder:text-muted-foreground/60 focus-visible:border-primary/70 focus-visible:ring-primary/20',
           inputClassName,
         )}
       />

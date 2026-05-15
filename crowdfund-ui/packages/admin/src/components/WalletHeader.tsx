@@ -34,22 +34,22 @@ export function WalletHeader(props: WalletHeaderProps) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight">Armada Crowdfund Admin</h1>
-          <span className="text-xs text-muted-foreground uppercase">
+          <h1 className="">Armada Crowdfund Admin</h1>
+          <span className="text-muted-foreground">
             {getNetworkMode()}
           </span>
         </div>
         <div className="flex items-center gap-3">
           {connected && address ? (
             <>
-              <span className={`text-xs px-2 py-1 rounded ${badge.className}`}>
+              <span className={`px-2 py-1 rounded ${badge.className}`}>
                 {badge.label}
               </span>
-              <span className="text-xs font-mono text-muted-foreground">
+              <span className="text-muted-foreground">
                 {truncateAddress(address)}
               </span>
               <button
-                className="text-xs text-destructive hover:underline"
+                className="text-destructive hover:underline"
                 onClick={onDisconnect}
               >
                 Disconnect
@@ -57,7 +57,7 @@ export function WalletHeader(props: WalletHeaderProps) {
             </>
           ) : (
             <button
-              className="rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              className="rounded bg-primary px-3 py-1 text-primary-foreground hover:bg-primary/90"
               onClick={onConnect}
               disabled={connecting}
             >
@@ -67,7 +67,7 @@ export function WalletHeader(props: WalletHeaderProps) {
         </div>
       </div>
       {error && (
-        <div className="rounded border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive">
+        <div className="rounded border border-destructive/50 bg-destructive/10 p-2 text-destructive">
           {error}
         </div>
       )}

@@ -51,18 +51,18 @@ export function LastTxChip() {
           aria-label={`Last transaction: ${statusLabel(lastTx.status)}`}
         >
           <StatusIcon status={lastTx.status} />
-          <span className="font-mono text-[11px]">{hashDisplay}</span>
+          <span className="">{hashDisplay}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-3 text-sm">
+      <PopoverContent align="end" className="w-80 p-3">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <StatusIcon status={lastTx.status} className="size-4" />
-            <span className="font-medium">{statusLabel(lastTx.status)}</span>
+            <span className="">{statusLabel(lastTx.status)}</span>
           </div>
-          <div className="text-xs text-muted-foreground">{lastTx.label}</div>
+          <div className="text-muted-foreground">{lastTx.label}</div>
           {lastTx.hash && (
-            <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Hash</span>
               <div className="flex items-center gap-1">
                 {lastTx.explorerUrl ? (
@@ -70,12 +70,12 @@ export function LastTxChip() {
                     href={`${lastTx.explorerUrl}/tx/${lastTx.hash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-primary hover:underline"
+                    className="text-primary hover:underline"
                   >
                     {hashDisplay}
                   </a>
                 ) : (
-                  <span className="font-mono">{hashDisplay}</span>
+                  <span className="">{hashDisplay}</span>
                 )}
                 <Button
                   type="button"
@@ -96,7 +96,7 @@ export function LastTxChip() {
             </div>
           )}
           {lastTx.error && (
-            <div className="rounded border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+            <div className="rounded border border-destructive/40 bg-destructive/10 p-2 text-destructive">
               {lastTx.error}
             </div>
           )}

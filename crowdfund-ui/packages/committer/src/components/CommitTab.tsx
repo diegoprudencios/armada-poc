@@ -418,136 +418,136 @@ export function CommitTab(props: CommitTabProps) {
         {step === 'context' && (
           <div className="space-y-4">
             <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+              <div className="mb-2 text-foreground">
                 You're eligible to commit
-              </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
-                Your address has been whitelisted to participate in the crowdfund.
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                <span>Your positions</span>
-                <InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
-              </div>
-              {positions.map((pos) => (
-                <div
-                  key={pos.hop}
-                  className="flex items-center justify-between gap-3 py-2 text-xs"
-                >
-                  <span>
-                    <span className="font-medium text-foreground">{hopLabel(pos.hop)}</span>
-                    {pos.invitesReceived > 1 && (
-                      <span className="ml-1 text-muted-foreground">({pos.invitesReceived} slots)</span>
-                    )}
-                    <span className="ml-1 text-muted-foreground">— {inviterDisplay(pos, resolveENS)}</span>
-                  </span>
-                  <span className="text-muted-foreground tabular-nums">
-                    Cap: {formatUsdc(pos.effectiveCap)} · Committed: {formatUsdc(pos.committed)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <StepFooter
-              onBack={onBackToIntent}
-              onNext={() => setStep('amount')}
+</div>
+<div className="text-muted-foreground">
+Your address has been whitelisted to participate in the crowdfund.
+</div>
+</div>
+<div className="space-y-2">
+<div className="flex items-center gap-1 text-muted-foreground">
+<span>Your positions</span>
+<InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
+</div>
+{positions.map((pos) => (
+<div
+key={pos.hop}
+className="flex items-center justify-between gap-3 py-2"
+>
+<span>
+<span className="text-foreground">{hopLabel(pos.hop)}</span>
+{pos.invitesReceived > 1 && (
+<span className="ml-1 text-muted-foreground">({pos.invitesReceived} slots)</span>
+)}
+<span className="ml-1 text-muted-foreground">— {inviterDisplay(pos, resolveENS)}</span>
+</span>
+<span className="text-muted-foreground">
+Cap: {formatUsdc(pos.effectiveCap)} · Committed: {formatUsdc(pos.committed)}
+</span>
+</div>
+))}
+</div>
+<StepFooter
+onBack={onBackToIntent}
+onNext={() => setStep('amount')}
               backLabel="Back"
               nextLabel="Continue"
             />
           </div>
         )}
 
-        {step === 'amount' && (
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
-                Enter your commit amount
-              </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
-                You can commit at multiple hops if you have multiple positions.
-              </div>
-            </div>
+        {step === 'amount'&& (
+<div className="space-y-4">
+<div>
+<div className="mb-2 text-foreground">
+Enter your commit amount
+</div>
+<div className="text-muted-foreground">
+You can commit at multiple hops if you have multiple positions.
+</div>
+</div>
 
-            {positions.map((pos) => {
-              const demand = hopDemandDisplay(pos.hop, hopStats, saleSize)
-              const currentHopAmount = parsedAmounts.get(pos.hop) ?? 0n
-              const balanceHeadroom = balance - (totalAmount - currentHopAmount)
-              const ceilings = [
-                { label: 'Remaining at this hop', value: pos.remaining },
+{positions.map((pos) => {
+const demand = hopDemandDisplay(pos.hop, hopStats, saleSize)
+const currentHopAmount = parsedAmounts.get(pos.hop) ?? 0n
+const balanceHeadroom = balance - (totalAmount - currentHopAmount)
+const ceilings = [
+{ label:'Remaining at this hop', value: pos.remaining },
                 { label: 'Wallet balance', value: balanceHeadroom < 0n ? 0n : balanceHeadroom },
-              ]
-              return (
-                <div key={pos.hop} className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{hopLabel(pos.hop)}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      Committed: {formatUsdc(pos.committed)} / {formatUsdc(pos.effectiveCap)}
-                    </span>
-                  </div>
-                  {demand && (
-                    <div className="text-xs text-muted-foreground tabular-nums">
-                      <span>
-                        Hop demand: {demand.demand} ({demand.pct}% of{' '}
+]
+return (
+<div key={pos.hop} className="space-y-3">
+<div className="flex items-center justify-between">
+<span className="">{hopLabel(pos.hop)}</span>
+<span className="text-muted-foreground">
+Committed: {formatUsdc(pos.committed)} / {formatUsdc(pos.effectiveCap)}
+</span>
+</div>
+{demand && (
+<div className="text-muted-foreground">
+<span>
+Hop demand: {demand.demand} ({demand.pct}% of{' '}
                         {pos.hop <= 1 ? 'ceiling' : 'floor'})
-                      </span>
-                      {demand.warning && (
-                        <div className="mt-0.5 text-amber-500">{demand.warning}</div>
-                      )}
-                    </div>
-                  )}
-                  <FormField
-                    control={form.control}
-                    name={`amounts.${pos.hop}`}
-                    render={({ field, fieldState }) => (
-                      <FormItem>
-                        <FormControl>
-                          <AmountInput
-                            value={field.value ?? ''}
-                            onChange={field.onChange}
-                            onBlur={field.onBlur}
-                            ceilings={ceilings}
-                            error={!!fieldState.error}
-                            aria-label={`Commit amount for ${hopLabel(pos.hop)}`}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {pos.remaining === 0n && (
-                    <div className="text-xs text-amber-500">Cap reached at this hop</div>
-                  )}
-                </div>
-              )
-            })}
+</span>
+{demand.warning && (
+<div className="mt-0.5 text-amber-500">{demand.warning}</div>
+)}
+</div>
+)}
+<FormField
+control={form.control}
+name={`amounts.${pos.hop}`}
+render={({ field, fieldState }) => (
+<FormItem>
+<FormControl>
+<AmountInput
+value={field.value ??''}
+onChange={field.onChange}
+onBlur={field.onBlur}
+ceilings={ceilings}
+error={!!fieldState.error}
+aria-label={`Commit amount for ${hopLabel(pos.hop)}`}
+/>
+</FormControl>
+<FormMessage />
+</FormItem>
+)}
+/>
+{pos.remaining === 0n && (
+<div className="text-amber-500">Cap reached at this hop</div>
+)}
+</div>
+)
+})}
 
-            {totalAmount > 0n && (
-              <ProRataEstimate
-                hopEstimates={estimate.hopEstimates}
-                totalEstimatedArm={estimate.totalEstimatedArm}
-                totalEstimatedRefund={estimate.totalEstimatedRefund}
-              />
-            )}
+{totalAmount > 0n && (
+<ProRataEstimate
+hopEstimates={estimate.hopEstimates}
+totalEstimatedArm={estimate.totalEstimatedArm}
+totalEstimatedRefund={estimate.totalEstimatedRefund}
+/>
+)}
 
-            {totalAmount > 0n && (
-              <div className="space-y-1 rounded-lg border border-primary/25 bg-primary/5 p-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                <div>
-                  Total commitment:{' '}
-                  <span className="font-medium tabular-nums">{formatUsdc(totalAmount)}</span>
-                  {activeHopCount > 1 && (
-                    <span className="text-muted-foreground"> across {activeHopCount} hops</span>
-                  )}
-                </div>
-                <div className="text-xs text-muted-foreground tabular-nums">
-                  Wallet balance: {formatUsdc(balance)}
-                </div>
-              </div>
-            )}
+{totalAmount > 0n && (
+<div className="space-y-1 rounded-lg border border-primary/25 bg-primary/5 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+<div>
+Total commitment:{' '}
+<span className="">{formatUsdc(totalAmount)}</span>
+{activeHopCount > 1 && (
+<span className="text-muted-foreground"> across {activeHopCount} hops</span>
+)}
+</div>
+<div className="text-muted-foreground">
+Wallet balance: {formatUsdc(balance)}
+</div>
+</div>
+)}
 
-            {totalError && <div className="text-xs text-destructive">{totalError}</div>}
+{totalError && <div className="text-destructive">{totalError}</div>}
 
-            <StepFooter
-              onBack={() => setStep('context')}
+<StepFooter
+onBack={() => setStep('context')}
               onNext={handleAmountContinue}
               nextDisabled={amountStepDisabled}
               nextLabel="Continue"
@@ -555,37 +555,37 @@ export function CommitTab(props: CommitTabProps) {
           </div>
         )}
 
-        {step === 'review' && (
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
-                Review and confirm
-              </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
-                You're committing {formatUsdc(totalAmount)} USDC
+        {step === 'review'&& (
+<div className="space-y-4">
+<div>
+<div className="mb-2 text-foreground">
+Review and confirm
+</div>
+<div className="text-muted-foreground">
+You're committing {formatUsdc(totalAmount)} USDC
                 {activeHopCount > 1 && <> across {activeHopCount} hops</>}.
               </div>
             </div>
 
             <div className="space-y-2 rounded-lg border border-border/70 bg-background/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <div className="text-muted-foreground">
                 Breakdown
               </div>
               {[...parsedAmounts].map(([hop, amount]) => (
-                <div key={hop} className="flex items-center justify-between text-sm">
+                <div key={hop} className="flex items-center justify-between">
                   <span>{hopLabel(hop)}</span>
-                  <span className="font-medium tabular-nums">{formatUsdc(amount)}</span>
+                  <span className="">{formatUsdc(amount)}</span>
                 </div>
               ))}
-              <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm">
+              <div className="flex items-center justify-between border-t border-border/60 pt-2">
                 <span>Total</span>
-                <span className="font-bold tabular-nums">{formatUsdc(totalAmount)}</span>
+                <span className="">{formatUsdc(totalAmount)}</span>
               </div>
             </div>
 
             {needsApproval(totalAmount) && (
               <div className="space-y-2">
-                <div className="text-xs text-muted-foreground">
+                <div className="text-muted-foreground">
                   This will run {parsedAmounts.size + 1} transactions: 1 USDC approval +{' '}
                   {parsedAmounts.size} commit{parsedAmounts.size > 1 ? 's' : ''}.
                 </div>
@@ -605,14 +605,14 @@ export function CommitTab(props: CommitTabProps) {
                       <ToggleGroupItem
                         value="exact"
                         size="sm"
-                        className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                       >
                         Approve exact amount
                       </ToggleGroupItem>
                       <ToggleGroupItem
                         value="unlimited"
                         size="sm"
-                        className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                       >
                         Approve unlimited
                       </ToggleGroupItem>
@@ -620,7 +620,7 @@ export function CommitTab(props: CommitTabProps) {
                   )}
                 />
                 {approveUnlimited && (
-                  <div className="text-[10px] text-amber-500">
+                  <div className="text-amber-500">
                     Unlimited approval skips re-approval on future commits but grants the contract
                     full spending access.
                   </div>
@@ -645,7 +645,7 @@ export function CommitTab(props: CommitTabProps) {
         {step === 'status' && (
           <div className="space-y-4">
             <div>
-              <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
+              <div className="mb-2 text-foreground">
                 {pipelineRunning
                   ? 'Submitting your commitment'
                   : pipelineError
@@ -654,7 +654,7 @@ export function CommitTab(props: CommitTabProps) {
                   ? 'Transaction submitted!'
                   : 'Preparing transactions'}
               </div>
-              <div className="text-sm leading-relaxed text-muted-foreground">
+              <div className="text-muted-foreground">
                 {pipelineRunning
                   ? 'Confirm each request in your wallet. This page will update as transactions confirm.'
                   : pipelineError

@@ -27,7 +27,7 @@ export function InfoTooltip({ text, className, iconSize = 14, label = 'More info
         >
           <Info size={iconSize} />
         </TooltipTrigger>
-        <TooltipContent className="max-w-xs text-xs">{text}</TooltipContent>
+        <TooltipContent className="max-w-xs">{text}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   )

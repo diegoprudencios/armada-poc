@@ -40,7 +40,6 @@ export function IdenticonSvg({ address, size = 32, className }: IdenticonSvgProp
         overflow: 'hidden',
         pointerEvents: 'none',
         display: 'inline-block',
-        lineHeight: 0,
       }}
     />
   )

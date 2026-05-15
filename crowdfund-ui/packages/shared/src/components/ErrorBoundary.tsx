@@ -64,7 +64,7 @@ export function DefaultErrorFallback({ error, onReset }: DefaultErrorFallbackPro
       <AlertTriangle />
       <AlertTitle>Something went wrong</AlertTitle>
       <AlertDescription>
-        <div className="text-sm">{error.message || 'An unexpected error occurred.'}</div>
+        <div className="">{error.message || 'An unexpected error occurred.'}</div>
       </AlertDescription>
       <div className="col-start-2 flex gap-2">
         {onReset ? (

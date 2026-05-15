@@ -108,42 +108,42 @@ export function LaunchTeamInvites(props: LaunchTeamInvitesProps) {
   return (
     <div className="rounded border border-border p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Launch Team Invites</div>
-        <div className="text-xs text-muted-foreground">
+        <div className="">Launch Team Invites</div>
+        <div className="text-muted-foreground">
           {timeLeft > 0 ? formatCountdown(timeLeft) : 'expired'}
         </div>
       </div>
 
       {/* Budget display */}
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-2 gap-2">
         <div className="rounded border border-border p-2">
           <span className="text-muted-foreground">Hop-1: </span>
-          <span className="font-medium">{hop1Remaining} remaining</span>
+          <span className="">{hop1Remaining} remaining</span>
         </div>
         <div className="rounded border border-border p-2">
           <span className="text-muted-foreground">Hop-2: </span>
-          <span className="font-medium">{hop2Remaining} remaining</span>
+          <span className="">{hop2Remaining} remaining</span>
         </div>
       </div>
 
       {/* Hop toggle */}
       <div className="flex gap-1">
         <button
-          className={`flex-1 px-3 py-1 rounded text-xs ${
-            selectedHop === 0
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:text-foreground'
-          }`}
+          className={`flex-1 px-3 py-1 rounded ${
+selectedHop === 0
+? 'bg-primary text-primary-foreground'
+: 'bg-muted text-muted-foreground hover:text-foreground'
+}`}
           onClick={() => setSelectedHop(0)}
         >
           Invite to Hop-1 ({hop1Remaining})
         </button>
         <button
-          className={`flex-1 px-3 py-1 rounded text-xs ${
-            selectedHop === 1
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted text-muted-foreground hover:text-foreground'
-          }`}
+          className={`flex-1 px-3 py-1 rounded ${
+selectedHop === 1
+? 'bg-primary text-primary-foreground'
+: 'bg-muted text-muted-foreground hover:text-foreground'
+}`}
           onClick={() => setSelectedHop(1)}
         >
           Invite to Hop-2 ({hop2Remaining})
@@ -157,15 +157,15 @@ export function LaunchTeamInvites(props: LaunchTeamInvitesProps) {
           placeholder={isLocalMode() ? '0x... invitee address' : '0x... or ENS name'}
           value={inviteeAddress}
           onChange={(e) => setInviteeAddress(e.target.value)}
-          className="w-full rounded border border-input bg-background px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded border border-input bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
 
         {/* ENS resolution — only on non-local networks */}
         {looksLikeEns && !isLocalMode() && (
-          <div className="text-xs space-y-1">
+          <div className="space-y-1">
             {resolvedAddress ? (
               <div className="text-success">
-                {inviteeAddress} → <span className="font-mono">{resolvedAddress}</span>
+                {inviteeAddress} → <span className="">{resolvedAddress}</span>
               </div>
             ) : resolveError ? (
               <div className="text-destructive">{resolveError}</div>
@@ -183,7 +183,7 @@ export function LaunchTeamInvites(props: LaunchTeamInvitesProps) {
 
         {/* Already-whitelisted notice */}
         {existingSlots !== null && (
-          <div className="text-xs text-info bg-info/10 rounded px-2 py-1">
+          <div className="text-info bg-info/10 rounded px-2 py-1">
             This address already has {existingSlots} slot{existingSlots !== 1 ? 's' : ''} at Hop-{targetHop}.
             This invite adds another slot, increasing their cap by {formatUsdc(targetCapUsdc)}.
           </div>
@@ -191,7 +191,7 @@ export function LaunchTeamInvites(props: LaunchTeamInvitesProps) {
       </div>
 
       <button
-        className="w-full rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full rounded bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={!valid || tx.state.status === 'pending' || tx.state.status === 'submitted'}
         onClick={handleInvite}
       >

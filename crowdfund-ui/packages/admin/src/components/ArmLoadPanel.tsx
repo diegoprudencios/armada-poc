@@ -47,13 +47,13 @@ export function ArmLoadPanel({ signer, crowdfundAddress, provider, armTokenAddre
 
   return (
     <div className="rounded border border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
-      <div className="text-sm font-medium text-amber-500">ARM Not Loaded</div>
-      <div className="text-xs space-y-1">
+      <div className="text-amber-500">ARM Not Loaded</div>
+      <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">Contract:</span>
-          <span className="font-mono">{truncateAddress(crowdfundAddress)}</span>
+          <span className="">{truncateAddress(crowdfundAddress)}</span>
           <button
-            className="text-[10px] text-muted-foreground hover:text-foreground relative inline-block min-w-[32px] text-left"
+            className="text-muted-foreground hover:text-foreground relative inline-block min-w-[32px] text-left"
             onClick={handleCopy}
           >
             <AnimatePresence mode="wait" initial={false}>
@@ -86,15 +86,15 @@ export function ArmLoadPanel({ signer, crowdfundAddress, provider, armTokenAddre
         {armBalance !== null && (
           <div>
             <span className="text-muted-foreground">ARM balance: </span>
-            <span className="font-medium">{formatArm(armBalance)}</span>
+            <span className="">{formatArm(armBalance)}</span>
           </div>
         )}
       </div>
-      <div className="text-xs text-muted-foreground">
+      <div className="text-muted-foreground">
         ARM tokens must be deposited and verified before the commitment window opens.
       </div>
       <button
-        className="rounded bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+        className="rounded bg-amber-500 px-3 py-1.5 text-white hover:bg-amber-600 disabled:opacity-50"
         onClick={handleLoad}
         disabled={tx.state.status === 'pending' || tx.state.status === 'submitted'}
       >

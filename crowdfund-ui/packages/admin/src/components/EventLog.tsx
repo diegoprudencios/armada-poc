@@ -95,8 +95,8 @@ export function EventLog({ events, loading }: EventLogProps) {
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">Event Log</h2>
-        <span className="text-xs text-muted-foreground">
+        <h2 className="">Event Log</h2>
+        <span className="text-muted-foreground">
           {filtered.length} events {loading && '(syncing...)'}
         </span>
       </div>
@@ -107,9 +107,9 @@ export function EventLog({ events, loading }: EventLogProps) {
           {ALL_EVENT_TYPES.map((type) => (
             <button
               key={type}
-              className={`px-2 py-0.5 rounded text-[10px] ${
-                typeFilter.has(type) ? EVENT_COLORS[type] : 'bg-muted/50 text-muted-foreground/50'
-              }`}
+              className={`px-2 py-0.5 rounded ${
+typeFilter.has(type) ? EVENT_COLORS[type] : 'bg-muted/50 text-muted-foreground/50'
+}`}
               onClick={() => toggleType(type)}
             >
               {type}
@@ -121,33 +121,33 @@ export function EventLog({ events, loading }: EventLogProps) {
           placeholder="Filter by address..."
           value={addressSearch}
           onChange={(e) => setAddressSearch(e.target.value)}
-          className="w-full rounded border border-input bg-background px-2 py-1 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded border border-input bg-background px-2 py-1 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
       </div>
 
       {/* Event list */}
       <div className="max-h-64 overflow-y-auto space-y-1">
         {filtered.length === 0 ? (
-          <div className="text-xs text-muted-foreground text-center py-4">No events</div>
+          <div className="text-muted-foreground text-center py-4">No events</div>
         ) : (
           filtered.slice(0, visibleCount).map((event, i) => (
-            <div key={`${event.transactionHash}-${event.logIndex}-${i}`} className="flex items-center gap-2 text-xs py-1 border-b border-border/30">
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${EVENT_COLORS[event.type]}`}>
+            <div key={`${event.transactionHash}-${event.logIndex}-${i}`} className="flex items-center gap-2 py-1 border-b border-border/30">
+              <span className={`px-1.5 py-0.5 rounded whitespace-nowrap ${EVENT_COLORS[event.type]}`}>
                 {event.type}
               </span>
-              <span className="text-muted-foreground font-mono">{event.blockNumber}</span>
+              <span className="text-muted-foreground">{event.blockNumber}</span>
               <span className="flex-1 truncate">{formatEventData(event)}</span>
               {explorerUrl ? (
                 <a
                   href={`${explorerUrl}/tx/${event.transactionHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-foreground font-mono text-[10px] underline"
+                  className="text-muted-foreground hover:text-foreground underline"
                 >
                   {event.transactionHash.slice(0, 8)}...
                 </a>
               ) : (
-                <span className="text-muted-foreground font-mono text-[10px]">
+                <span className="text-muted-foreground">
                   {event.transactionHash.slice(0, 8)}...
                 </span>
               )}
@@ -156,7 +156,7 @@ export function EventLog({ events, loading }: EventLogProps) {
         )}
         {filtered.length > visibleCount && (
           <button
-            className="w-full py-1.5 text-xs text-muted-foreground hover:text-foreground"
+            className="w-full py-1.5 text-muted-foreground hover:text-foreground"
             onClick={() => setVisibleCount((prev) => prev + 200)}
           >
             Load more ({filtered.length - visibleCount} remaining)

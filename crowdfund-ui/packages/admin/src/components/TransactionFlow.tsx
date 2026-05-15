@@ -20,26 +20,26 @@ export function TransactionFlow(props: TransactionFlowProps) {
       {state.status === 'pending' && (
         <div className="flex items-center gap-2">
           <span className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-          <span className="text-sm">Waiting for wallet confirmation...</span>
+          <span className="">Waiting for wallet confirmation...</span>
         </div>
       )}
 
       {state.status === 'submitted' && (
         <div className="flex items-center gap-2">
           <span className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-          <span className="text-sm">Transaction submitted. Waiting for confirmation...</span>
+          <span className="">Transaction submitted. Waiting for confirmation...</span>
           {state.txHash && (
             explorerUrl ? (
               <a
                 href={`${explorerUrl}/tx/${state.txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-primary hover:underline font-mono"
+                className="text-primary hover:underline"
               >
                 {state.txHash.slice(0, 10)}...
               </a>
             ) : (
-              <span className="text-xs text-muted-foreground font-mono">
+              <span className="text-muted-foreground">
                 {state.txHash.slice(0, 10)}...
               </span>
             )
@@ -50,20 +50,20 @@ export function TransactionFlow(props: TransactionFlowProps) {
       {state.status === 'confirmed' && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-success">
-            <span className="text-sm font-medium">{successMessage}</span>
+            <span className="">{successMessage}</span>
           </div>
           {state.txHash && explorerUrl && (
             <a
               href={`${explorerUrl}/tx/${state.txHash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline font-mono"
+              className="text-primary hover:underline"
             >
               View on explorer
             </a>
           )}
           <button
-            className="text-xs text-primary hover:underline"
+            className="text-primary hover:underline"
             onClick={onReset}
           >
             Dismiss
@@ -73,9 +73,9 @@ export function TransactionFlow(props: TransactionFlowProps) {
 
       {state.status === 'error' && (
         <div className="space-y-2">
-          <div className="text-sm text-destructive">{state.error}</div>
+          <div className="text-destructive">{state.error}</div>
           <button
-            className="text-xs text-primary hover:underline"
+            className="text-primary hover:underline"
             onClick={onReset}
           >
             Try again

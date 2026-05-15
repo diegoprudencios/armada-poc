@@ -76,8 +76,8 @@ export function App() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-3">
-          <h1 className="text-xl font-bold text-destructive">Deployment Not Found</h1>
-          <p className="text-sm text-muted-foreground">{deployError}</p>
+          <h1 className="text-destructive">Deployment Not Found</h1>
+          <p className="text-muted-foreground">{deployError}</p>
         </div>
       </div>
     )
@@ -87,8 +87,8 @@ export function App() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="text-lg">Loading...</div>
-          <div className="text-sm text-muted-foreground">
+          <div className="">Loading...</div>
+          <div className="text-muted-foreground">
             Connecting to {getNetworkMode()} network
           </div>
         </div>

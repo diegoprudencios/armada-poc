@@ -107,6 +107,8 @@
    gradient sits on top of this for the in-viewport look. */
 html {
   background-color: var(--background-deep);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -209,7 +211,12 @@ body {
   }
   body {
     /* Base background colour is set via the radial gradient above; only the
-       text colour is applied here so the gradient is not overridden. */
+       text colour and the typographic baseline are applied here so the
+       gradient is not overridden. Body baseline matches the armada-crowdfund
+       mockup's global.css: 15px Geist with 1.5 line-height. */
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
     @apply text-foreground;
   }
 
