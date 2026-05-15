@@ -80,7 +80,7 @@ export function LifecycleBanner({
     return (
       <div
         className={cn(
-          'flex items-center gap-2 text-xs whitespace-nowrap',
+          'flex items-center gap-2 whitespace-nowrap',
           className,
         )}
         aria-label="Campaign lifecycle"
@@ -113,8 +113,8 @@ export function LifecycleBanner({
             )
           })}
         </ol>
-        <span className="font-medium text-foreground">{activeLabel}</span>
-        <span className="text-muted-foreground tabular-nums">· {resolvedHint}</span>
+        <span className="text-foreground">{activeLabel}</span>
+        <span className="text-muted-foreground">· {resolvedHint}</span>
       </div>
     )
   }
@@ -128,14 +128,14 @@ export function LifecycleBanner({
       )}
       aria-label="Campaign lifecycle"
     >
-      <ol className="flex items-center gap-2 text-sm">
+      <ol className="flex items-center gap-2">
         {STEPS.map((step, i) => {
           const status = stepStatus(step.id, stage)
           return (
             <li key={step.id} className="flex items-center gap-2">
               <span
                 className={cn(
-                  'flex size-5 items-center justify-center rounded-full border text-[10px] font-medium tabular-nums',
+                  'flex size-5 items-center justify-center rounded-full border',
                   status === 'done' && 'border-primary bg-primary text-primary-foreground',
                   status === 'active' &&
                     'border-primary bg-primary/15 text-primary shadow-[0_0_0_3px] shadow-primary/15',
@@ -148,7 +148,7 @@ export function LifecycleBanner({
               <span
                 className={cn(
                   'whitespace-nowrap',
-                  status === 'active' ? 'text-foreground font-medium' : 'text-muted-foreground',
+                  status === 'active' ? 'text-foreground' : 'text-muted-foreground',
                 )}
               >
                 {step.label}
@@ -166,7 +166,7 @@ export function LifecycleBanner({
           )
         })}
       </ol>
-      <div className="text-xs text-muted-foreground tabular-nums">{resolvedHint}</div>
+      <div className="text-muted-foreground">{resolvedHint}</div>
     </div>
   )
 }

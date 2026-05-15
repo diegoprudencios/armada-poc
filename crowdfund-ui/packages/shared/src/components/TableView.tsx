@@ -195,7 +195,7 @@ function PageButton({
       aria-label={ariaLabel}
       aria-current={ariaCurrent ? 'page' : undefined}
       className={cn(
-        'inline-flex size-8 items-center justify-center rounded-lg text-xs font-medium tabular-nums transition-colors',
+        'inline-flex size-8 items-center justify-center rounded-lg transition-colors',
         'disabled:cursor-not-allowed disabled:opacity-40',
         active
           ? 'bg-primary text-primary-foreground'
@@ -224,7 +224,7 @@ function FilterPill({
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+        'rounded-lg px-3 py-1.5 transition-colors',
         active
           ? // Subtle horizontal gradient on the active pill — adds a touch of
             // depth vs. a flat fill, matches the progress-bar treatment.
@@ -288,7 +288,7 @@ function RowActions({
   }
 
   const itemClass =
-    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
+    'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground'
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -436,7 +436,7 @@ export function TableView(props: TableViewProps) {
           }
           const rowPrimaryHop = primaryHop(info.row.original.hops)
           return (
-            <span className="inline-flex items-center gap-2 font-mono text-xs">
+            <span className="inline-flex items-center gap-2">
               {raw !== 'armada' && (
                 <span
                   aria-hidden
@@ -452,7 +452,7 @@ export function TableView(props: TableViewProps) {
                     <span className="cursor-help">{displayAddress(raw, resolveENS)}</span>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    <span className="font-mono text-[11px]">{raw}</span>
+                    <span className="">{raw}</span>
                   </TooltipContent>
                 </Tooltip>
               ) : (
@@ -461,26 +461,26 @@ export function TableView(props: TableViewProps) {
               {isThisConnected && (
                 // Connected-wallet badge — uses the teal --hop-connected
                 // token to match the row's existing left-rail accent.
-                <span className="rounded-md bg-accent-you/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-you">
-                  You
-                </span>
-              )}
-              {copyable && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopy}
-                  aria-label="Copy address"
-                  className="h-auto p-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
-                >
-                  <Copy className="size-3" />
-                </Button>
-              )}
-            </span>
-          )
-        },
-        sortingFn: 'alphanumeric',
+<span className="rounded-md bg-accent-you/15 px-1.5 py-0.5 text-accent-you">
+You
+</span>
+)}
+{copyable && (
+<Button
+type="button"
+variant="ghost"
+size="sm"
+onClick={handleCopy}
+aria-label="Copy address"
+className="h-auto p-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-foreground transition-opacity"
+>
+<Copy className="size-3" />
+</Button>
+)}
+</span>
+)
+},
+sortingFn:'alphanumeric',
         filterFn: (row, _columnId, filterValue: string) => {
           const addr = row.original.address
           const q = filterValue.toLowerCase()
@@ -500,7 +500,7 @@ export function TableView(props: TableViewProps) {
                 <span
                   key={h}
                   className={cn(
-                    'inline-flex items-center rounded-md px-2 py-1 text-xs tabular-nums',
+                    'inline-flex items-center rounded-md px-2 py-1',
                     hopBadgeClasses(h),
                   )}
                 >
@@ -515,23 +515,23 @@ export function TableView(props: TableViewProps) {
       }),
       columnHelper.accessor('totalCommitted', {
         header: 'Committed',
-        cell: (info) => {
-          const summary = info.row.original
-          const total = summary.hops.length
-          let committedCount = 0
-          for (const h of summary.hops) {
-            if ((summary.perHop.get(h) ?? 0n) > 0n) committedCount += 1
-          }
-          const fullyCommitted = total > 0 && committedCount === total
-          const breakdown = (
-            <div className="flex flex-col leading-tight">
-              <span className="text-base font-semibold tabular-nums">
-                {formatUsdc(info.getValue())}
-              </span>
-              {total > 0 && (
-                <span
-                  className={cn(
-                    'mt-0.5 text-xs tabular-nums',
+cell: (info) => {
+const summary = info.row.original
+const total = summary.hops.length
+let committedCount = 0
+for (const h of summary.hops) {
+if ((summary.perHop.get(h) ?? 0n) > 0n) committedCount += 1
+}
+const fullyCommitted = total > 0 && committedCount === total
+const breakdown = (
+<div className="flex flex-col">
+<span className="">
+{formatUsdc(info.getValue())}
+</span>
+{total > 0 && (
+<span
+className={cn(
+'mt-0.5',
                     fullyCommitted ? 'text-primary' : 'text-muted-foreground',
                   )}
                 >
@@ -549,7 +549,7 @@ export function TableView(props: TableViewProps) {
                 <span className="cursor-help">{breakdown}</span>
               </TooltipTrigger>
               <TooltipContent side="top">
-                <div className="flex flex-col gap-0.5 text-[11px] tabular-nums">
+                <div className="flex flex-col gap-0.5">
                   {summary.hops.map((h) => (
                     <div key={h} className="flex items-center justify-between gap-3">
                       <span>Hop {h}</span>
@@ -573,7 +573,7 @@ export function TableView(props: TableViewProps) {
           const inviter = info.getValue()
           const label = displayAddress(inviter, resolveENS)
           if (inviter === 'armada') {
-            return <span className="text-xs text-muted-foreground">{label}</span>
+            return <span className="text-muted-foreground">{label}</span>
           }
           const isConnectedInviter =
             !!connectedAddress && inviter === connectedAddress.toLowerCase()
@@ -582,12 +582,12 @@ export function TableView(props: TableViewProps) {
               <button
                 type="button"
                 onClick={(e) => handleInviterClick(e, inviter)}
-                className="cursor-pointer font-mono text-xs text-primary underline-offset-2 transition-colors hover:underline"
+                className="cursor-pointer text-primary underline-offset-2 transition-colors hover:underline"
               >
                 {label}
               </button>
               {isConnectedInviter && (
-                <span className="rounded-md bg-accent-you/15 px-1.5 py-0.5 text-[10px] font-medium text-accent-you">
+                <span className="rounded-md bg-accent-you/15 px-1.5 py-0.5 text-accent-you">
                   You
                 </span>
               )}
@@ -621,7 +621,7 @@ export function TableView(props: TableViewProps) {
           const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
           const display = (
             <div className="flex flex-col gap-1.5">
-              <span className="text-xs tabular-nums">
+              <span className="">
                 {used}/{total}
               </span>
               {total > 0 && (
@@ -635,50 +635,50 @@ export function TableView(props: TableViewProps) {
             </div>
           )
           // Tooltip only earns its keep when there's per-hop detail to show.
-          if (perHopCounts.length <= 1) return display
-          return (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="cursor-help">{display}</span>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <div className="flex flex-col gap-0.5 text-[11px] tabular-nums">
-                  {perHopCounts.map((c) => (
-                    <div key={c.hop} className="flex items-center justify-between gap-3">
-                      <span>Hop {c.hop}</span>
-                      <span>
-                        {c.used}/{c.total}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          )
-        },
-        sortingFn: (rowA, rowB) => {
-          const getUsed = (row: Row<AddressSummary>) => {
-            let used = 0
-            for (const hop of row.original.hops) {
-              const node = nodes.get(`${row.original.address}-${hop}`)
-              if (node) used += node.invitesUsed
-            }
-            return used
-          }
-          return getUsed(rowA) - getUsed(rowB)
-        },
-      }),
-    ]
+if (perHopCounts.length <= 1) return display
+return (
+<Tooltip>
+<TooltipTrigger asChild>
+<span className="cursor-help">{display}</span>
+</TooltipTrigger>
+<TooltipContent side="top">
+<div className="flex flex-col gap-0.5">
+{perHopCounts.map((c) => (
+<div key={c.hop} className="flex items-center justify-between gap-3">
+<span>Hop {c.hop}</span>
+<span>
+{c.used}/{c.total}
+</span>
+</div>
+))}
+</div>
+</TooltipContent>
+</Tooltip>
+)
+},
+sortingFn: (rowA, rowB) => {
+const getUsed = (row: Row<AddressSummary>) => {
+let used = 0
+for (const hop of row.original.hops) {
+const node = nodes.get(`${row.original.address}-${hop}`)
+if (node) used += node.invitesUsed
+}
+return used
+}
+return getUsed(rowA) - getUsed(rowB)
+},
+}),
+]
 
-    if (phase === 1) {
-      cols.push(
-        columnHelper.accessor('allocatedArm', {
+if (phase === 1) {
+cols.push(
+columnHelper.accessor('allocatedArm', {
           header: 'Allocated',
-          cell: (info) => {
-            const val = info.getValue()
-            return (
-              <span className="tabular-nums">
-                {val !== null ? formatArm(val) : '—'}
+cell: (info) => {
+const val = info.getValue()
+return (
+<span className="">
+{val !== null ? formatArm(val) :'—'}
               </span>
             )
           },
@@ -691,14 +691,14 @@ export function TableView(props: TableViewProps) {
         columnHelper.display({
           id: 'claimed',
           header: 'Claimed',
-          cell: (info) => {
-            const s = info.row.original
-            return (
-              <span className="text-xs">
-                {s.armClaimed && <span className="text-success">ARM</span>}
-                {s.armClaimed && s.refundClaimed && ' + '}
-                {s.refundClaimed && <span className="text-success">Refund</span>}
-                {!s.armClaimed && !s.refundClaimed && '—'}
+cell: (info) => {
+const s = info.row.original
+return (
+<span className="">
+{s.armClaimed && <span className="text-success">ARM</span>}
+{s.armClaimed && s.refundClaimed &&' + '}
+{s.refundClaimed && <span className="text-success">Refund</span>}
+{!s.armClaimed && !s.refundClaimed &&'—'}
               </span>
             )
           },
@@ -711,10 +711,10 @@ export function TableView(props: TableViewProps) {
     cols.push(
       columnHelper.display({
         id: 'actions',
-        header: () => <span className="block text-right">Actions</span>,
-        cell: (info) => {
-          const addr = info.row.original.address
-          if (addr === 'armada') return null
+header: () => <span className="block text-right">Actions</span>,
+cell: (info) => {
+const addr = info.row.original.address
+if (addr ==='armada') return null
           return (
             <div className="flex justify-end">
               <RowActions
@@ -793,7 +793,7 @@ export function TableView(props: TableViewProps) {
           When the host wires `onSearchQueryChange`, the search input lives
           inline (matching the mockup); otherwise just title + pills show. */}
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-base font-medium text-foreground">Participants</span>
+        <span className="text-foreground">Participants</span>
         {onSearchQueryChange && (
           <SearchBar
             value={searchQuery}
@@ -834,7 +834,7 @@ export function TableView(props: TableViewProps) {
       {/* Table — sits inside the outer card; rounding masks the thead bg
           while the outer card now provides the visible edge. */}
       <div className="overflow-hidden rounded-lg">
-        <table className="w-full text-sm">
+        <table className="w-full">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -846,7 +846,7 @@ export function TableView(props: TableViewProps) {
                       // Lighter, more product-UI header — no bg fill, subtle
                       // letter-spacing. The first body row's border-t
                       // provides the divider between header and body.
-                      'px-4 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground',
+                      'px-4 py-2 text-left text-muted-foreground',
                       header.column.getCanSort() &&
                         'cursor-pointer select-none hover:text-foreground',
                     )}
@@ -861,40 +861,40 @@ export function TableView(props: TableViewProps) {
                         if (!header.column.getCanSort()) return null
                         const sortState = header.column.getIsSorted()
                         if (sortState === 'asc') {
-                          return <ChevronUp className="size-3 text-foreground" />
-                        }
-                        if (sortState === 'desc') {
-                          return <ChevronDown className="size-3 text-foreground" />
-                        }
-                        return (
-                          <ChevronsUpDown className="size-3 opacity-40 group-hover:opacity-60" />
-                        )
-                      })()}
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row) => {
-              const addr = row.original.address
-              const isSelected = selectedAddress === addr
-              const isHovered = hoveredAddress === addr
-              const isConnected = !!connectedAddress && addr === connectedAddress.toLowerCase()
-              const hopNodes = row.original.hops
-                .map((hop) => nodes.get(`${addr}-${hop}`))
-                .filter((n): n is GraphNode => n !== undefined)
+return <ChevronUp className="size-3 text-foreground" />
+}
+if (sortState ==='desc') {
+return <ChevronDown className="size-3 text-foreground" />
+}
+return (
+<ChevronsUpDown className="size-3 opacity-40 group-hover:opacity-60" />
+)
+})()}
+</span>
+</th>
+))}
+</tr>
+))}
+</thead>
+<tbody>
+{table.getRowModel().rows.map((row) => {
+const addr = row.original.address
+const isSelected = selectedAddress === addr
+const isHovered = hoveredAddress === addr
+const isConnected = !!connectedAddress && addr === connectedAddress.toLowerCase()
+const hopNodes = row.original.hops
+.map((hop) => nodes.get(`${addr}-${hop}`))
+.filter((n): n is GraphNode => n !== undefined)
 
-              return (
-                <Fragment key={row.id}>
-                  <tr
-                    ref={(el) => {
-                      if (el) rowRefs.current.set(addr, el)
-                      else rowRefs.current.delete(addr)
-                    }}
-                    className={cn(
-                      'group h-16 border-t border-border/60 cursor-pointer transition-colors duration-200 animate-row-enter',
+return (
+<Fragment key={row.id}>
+<tr
+ref={(el) => {
+if (el) rowRefs.current.set(addr, el)
+else rowRefs.current.delete(addr)
+}}
+className={cn(
+'group h-16 border-t border-border/60 cursor-pointer transition-colors duration-200 animate-row-enter',
                       // State priority: selected > connected > externally-hovered > default.
                       isSelected
                         ? 'bg-gradient-to-r from-primary/20 via-primary/5 via-[40%] to-transparent border-l-2 border-l-primary'
@@ -907,93 +907,93 @@ export function TableView(props: TableViewProps) {
                           : isHovered
                             ? 'bg-muted/15'
                             : 'hover:bg-muted/40',
-                    )}
-                    onClick={() => handleRowClick(row)}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-2">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                  {row.getIsExpanded() && (
-                    <tr>
-                      <td colSpan={colCount} className="px-4 py-3 bg-muted/20">
-                        <NodeDetail
-                          summary={row.original}
-                          hopNodes={hopNodes}
-                          resolveENS={resolveENS}
-                          phase={phase}
-                        />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              )
-            })}
-            {table.getRowModel().rows.length === 0 && (
-              isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr
-                    key={`skeleton-${i}`}
-                    className="h-16 border-b border-border/40 opacity-25"
-                  >
-                    {Array.from({ length: colCount }).map((_, j) => (
-                      <td key={j} className="px-4 py-3">
-                        <Skeleton className="h-4 w-full" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={colCount} className="p-0">
-                    {searchQuery ? (
-                      <EmptyState
-                        icon={Search}
-                        title="No matching participants"
-                        description={`No participants match "${searchQuery}".`}
-                      />
-                    ) : (
-                      <EmptyState
-                        icon={Users}
-                        title="No participants yet"
-                        description="The invite graph is empty until the first commit lands."
-                      />
-                    )}
-                  </td>
-                </tr>
-              )
-            )}
-          </tbody>
-        </table>
-      </div>
+)}
+onClick={() => handleRowClick(row)}
+>
+{row.getVisibleCells().map((cell) => (
+<td key={cell.id} className="px-4 py-2">
+{flexRender(cell.column.columnDef.cell, cell.getContext())}
+</td>
+))}
+</tr>
+{row.getIsExpanded() && (
+<tr>
+<td colSpan={colCount} className="px-4 py-3 bg-muted/20">
+<NodeDetail
+summary={row.original}
+hopNodes={hopNodes}
+resolveENS={resolveENS}
+phase={phase}
+/>
+</td>
+</tr>
+)}
+</Fragment>
+)
+})}
+{table.getRowModel().rows.length === 0 && (
+isLoading ? (
+Array.from({ length: 5 }).map((_, i) => (
+<tr
+key={`skeleton-${i}`}
+className="h-16 border-b border-border/40 opacity-25"
+>
+{Array.from({ length: colCount }).map((_, j) => (
+<td key={j} className="px-4 py-3">
+<Skeleton className="h-4 w-full" />
+</td>
+))}
+</tr>
+))
+) : (
+<tr>
+<td colSpan={colCount} className="p-0">
+{searchQuery ? (
+<EmptyState
+icon={Search}
+title="No matching participants"
+description={`No participants match "${searchQuery}".`}
+/>
+) : (
+<EmptyState
+icon={Users}
+title="No participants yet"
+description="The invite graph is empty until the first commit lands."
+/>
+)}
+</td>
+</tr>
+)
+)}
+</tbody>
+</table>
+</div>
 
-      {/* Footer: count + pagination */}
-      {(() => {
-        const totalRows = table.getFilteredRowModel().rows.length
-        const pageState = table.getState().pagination
-        const from =
-          totalRows === 0 ? 0 : pageState.pageIndex * pageState.pageSize + 1
-        const to = Math.min(
-          (pageState.pageIndex + 1) * pageState.pageSize,
-          totalRows,
-        )
-        const pageCount = table.getPageCount()
-        const items = pageWindow(pageState.pageIndex + 1, pageCount)
-        return (
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground tabular-nums">
-            <span>
-              {totalRows === 0 ? (
-                searchQuery ? (
-                  <>No participants matching "{searchQuery}"</>
-                ) : (
-                  <>No participants yet</>
-                )
-              ) : (
-                <>
-                  Showing {from} to {to} of {totalRows} participant
-                  {totalRows !== 1 ? 's' : ''}
+{/* Footer: count + pagination */}
+{(() => {
+const totalRows = table.getFilteredRowModel().rows.length
+const pageState = table.getState().pagination
+const from =
+totalRows === 0 ? 0 : pageState.pageIndex * pageState.pageSize + 1
+const to = Math.min(
+(pageState.pageIndex + 1) * pageState.pageSize,
+totalRows,
+)
+const pageCount = table.getPageCount()
+const items = pageWindow(pageState.pageIndex + 1, pageCount)
+return (
+<div className="flex flex-wrap items-center justify-between gap-3 text-muted-foreground">
+<span>
+{totalRows === 0 ? (
+searchQuery ? (
+<>No participants matching "{searchQuery}"</>
+) : (
+<>No participants yet</>
+)
+) : (
+<>
+Showing {from} to {to} of {totalRows} participant
+{totalRows !== 1 ?'s' : ''}
                   {searchQuery && ` matching "${searchQuery}"`}
                 </>
               )}

@@ -125,18 +125,18 @@ function StatCard({
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="text-muted-foreground">
             {label}
           </div>
           <motion.div
             key={primaryAnimateKey ?? String(primary)}
             {...numberFade}
-            className={`mt-0.5 truncate text-xl font-semibold leading-tight ${primaryClassName ?? 'text-foreground'}`}
+            className={`mt-0.5 truncate ${primaryClassName ?? 'text-foreground'}`}
           >
             {primary}
           </motion.div>
           {sub && (
-            <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            <div className="mt-0.5 truncate text-muted-foreground">
               {sub}
             </div>
           )}
@@ -175,37 +175,37 @@ function PerHopStrip({
       text: 'text-hop-2',
       bar: 'bg-gradient-to-r from-hop-2 via-hop-2/90 to-hop-2/65',
       track: 'bg-hop-2/15',
-    },
-  ]
+},
+]
 
-  return (
-    <div className="grid grid-cols-1 gap-x-6 gap-y-1.5 px-1 sm:grid-cols-3">
-      {hopStats.map((stat, hop) => {
-        const cfg = HOP_CONFIGS[hop]
-        const ceilingBps = cfg?.ceilingBps ?? 0
-        const ceiling =
-          ceilingBps > 0
-            ? (effectiveSaleSize * BigInt(ceilingBps)) / 10_000n
-            : 0n
-        const pct =
-          ceiling > 0n
-            ? Math.min(999, Number((stat.cappedCommitted * 100n) / ceiling))
-            : 0
-        const visualWidth = Math.min(100, pct)
-        const colors = palette[hop] ?? palette[0]
-        return (
-          <div key={hop} className="flex items-center gap-2 tabular-nums">
-            <div className="w-10 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Hop {hop}
-            </div>
-            <div className={`h-1 flex-1 overflow-hidden rounded-full ${colors.track}`}>
-              <div
-                className={`h-full rounded-full transition-[width] duration-300 ${colors.bar}`}
-                style={{ width: `${visualWidth}%` }}
-              />
-            </div>
-            <div className="w-8 text-right text-[10px] text-muted-foreground">
-              {ceilingBps > 0 ? `${pct}%` : '—'}
+return (
+<div className="grid grid-cols-1 gap-x-6 gap-y-1.5 px-1 sm:grid-cols-3">
+{hopStats.map((stat, hop) => {
+const cfg = HOP_CONFIGS[hop]
+const ceilingBps = cfg?.ceilingBps ?? 0
+const ceiling =
+ceilingBps > 0
+? (effectiveSaleSize * BigInt(ceilingBps)) / 10_000n
+: 0n
+const pct =
+ceiling > 0n
+? Math.min(999, Number((stat.cappedCommitted * 100n) / ceiling))
+: 0
+const visualWidth = Math.min(100, pct)
+const colors = palette[hop] ?? palette[0]
+return (
+<div key={hop} className="flex items-center gap-2">
+<div className="w-10 text-muted-foreground">
+Hop {hop}
+</div>
+<div className={`h-1 flex-1 overflow-hidden rounded-full ${colors.track}`}>
+<div
+className={`h-full rounded-full transition-[width] duration-300 ${colors.bar}`}
+style={{ width: `${visualWidth}%` }}
+/>
+</div>
+<div className="w-8 text-right text-muted-foreground">
+{ceilingBps > 0 ? `${pct}%` :'—'}
             </div>
           </div>
         )
@@ -332,7 +332,7 @@ export function StatsBar(props: StatsBarProps) {
               <DollarSign className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="flex items-center gap-1 text-muted-foreground">
                 Total Committed
                 {committedDiffers && (
                   <InfoTooltip
@@ -344,26 +344,26 @@ export function StatsBar(props: StatsBarProps) {
               <motion.div
                 key={formatUsdc(totalCommitted)}
                 {...numberFade}
-                className="mt-0.5 truncate text-xl font-semibold leading-tight text-foreground tabular-nums"
+                className="mt-0.5 truncate text-foreground"
               >
                 {formatUsdc(totalCommitted)}
               </motion.div>
               {/* Sub-line — mirrors the "across 1 hop", "of 294 addresses",
                *  "ends May 28, 2025" sub-lines on the other cards. */}
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground tabular-nums">
+              <div className="mt-0.5 truncate text-muted-foreground">
                 of {formatUsdc(denomForBar)}
               </div>
             </div>
           </div>
           {/* Progress bar with % on the right */}
-          <div className="flex items-center gap-1.5 tabular-nums">
+          <div className="flex items-center gap-1.5">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-hop-root/15">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-hop-root via-hop-root/90 to-hop-root/65 transition-[width] duration-300"
                 style={{ width: `${visualFill}%` }}
               />
             </div>
-            <div className="text-[11px] leading-none text-muted-foreground">
+            <div className="text-muted-foreground">
               {fillPct}%
             </div>
           </div>
@@ -375,7 +375,7 @@ export function StatsBar(props: StatsBarProps) {
           iconStyle={cardIconStyle('--hop-0', '--hop-0-icon')}
           label="Your Allocation"
           primary={yourAllocPrimary}
-          primaryClassName={`tabular-nums ${yourAllocClass}`}
+          primaryClassName={`${yourAllocClass}`}
           sub={yourAllocSub}
           primaryAnimateKey={yourAllocPrimary}
         />
@@ -386,7 +386,7 @@ export function StatsBar(props: StatsBarProps) {
           iconStyle={cardIconStyle('--primary')}
           label="Participants"
           primary={
-            <span className="tabular-nums">
+            <span className="">
               {participantCount}
             </span>
           }
@@ -400,7 +400,7 @@ export function StatsBar(props: StatsBarProps) {
           iconStyle={cardIconStyle('--hop-2')}
           label="Time Remaining"
           primary={
-            <span className="tabular-nums">{time.primary}</span>
+            <span className="">{time.primary}</span>
           }
           sub={time.sub}
           primaryAnimateKey={time.primary}
@@ -414,7 +414,7 @@ export function StatsBar(props: StatsBarProps) {
        *  Other divergence explanations live in InfoTooltips on the relevant
        *  numbers above. */}
       {belowMin && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive">
           Estimated allocation is below the minimum raise (
           {formatUsdc(CROWDFUND_CONSTANTS.MIN_SALE)}). The sale would enter
           refund mode if finalized now.

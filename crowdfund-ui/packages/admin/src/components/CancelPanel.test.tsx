@@ -46,7 +46,7 @@ describe('CancelPanel', () => {
     expect(button).not.toBeDisabled()
   })
 
-  it('button is disabled for lowercase "cancel"', () => {
+  it('button is disabled for "cancel"', () => {
     render(<CancelPanel signer={null} crowdfundAddress="0x1234" />)
     const input = screen.getByPlaceholderText('Type CANCEL to confirm')
     fireEvent.change(input, { target: { value: 'cancel' } })

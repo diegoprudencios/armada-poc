@@ -627,11 +627,11 @@ export function TreeView(props: TreeViewProps) {
         className="rounded-lg border border-border bg-card p-6 text-center min-h-[600px] flex flex-col items-center justify-center"
       >
         <svg width="120" height="60">
-          <text x="60" y="30" textAnchor="middle" className="fill-foreground text-sm font-medium">
+          <text x="60" y="30" textAnchor="middle" className="fill-foreground">
             Armada
           </text>
         </svg>
-        <div className="text-sm text-muted-foreground mt-2">Waiting for seeds...</div>
+        <div className="text-muted-foreground mt-2">Waiting for seeds...</div>
       </div>
     )
   }
@@ -852,18 +852,18 @@ export function TreeView(props: TreeViewProps) {
             const { ry } = computeMaxRadii(dimensions.width, dimensions.height)
             return [0, 1, 2].map((h) => {
               // Label at the top of each ring's ellipse — y-axis, so use ry.
-              const bandRy = hopBand(h) * ry
-              return (
-                <text
-                  key={`ring-label-${h}`}
-                  x={0}
-                  y={-(bandRy + 8)}
-                  textAnchor="middle"
-                  fill={hopColorVar(h)}
-                  fillOpacity={0.9}
-                  className="text-[11px] font-semibold pointer-events-none select-none"
-                >
-                  {h === 0 ? 'Seed' : `Hop ${h}`}
+const bandRy = hopBand(h) * ry
+return (
+<text
+key={`ring-label-${h}`}
+x={0}
+y={-(bandRy + 8)}
+textAnchor="middle"
+fill={hopColorVar(h)}
+fillOpacity={0.9}
+className="pointer-events-none select-none"
+>
+{h === 0 ?'Seed' : `Hop ${h}`}
                 </text>
               )
             })
@@ -1243,25 +1243,25 @@ export function TreeView(props: TreeViewProps) {
           ? `Hops ${n.hops.join(', ')}`
           : `Hop ${n.hop}`
         const position = participateCta ? 'bottom-26 right-5' : 'bottom-3 right-5'
-        return (
-          <div
-            className={`absolute ${position} pointer-events-none z-20 min-w-[10rem] rounded-md border border-border bg-card/90 px-3 py-2 text-xs leading-tight shadow-md backdrop-blur-sm`}
-          >
-            <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Node
-            </div>
-            <div className="font-mono text-sm text-foreground">
-              {truncateAddress(n.address)}
-            </div>
-            <div className="mt-1 text-muted-foreground tabular-nums">
-              {formatUsdc(n.committed)} committed
-            </div>
-            <div className="text-muted-foreground">{hopLine}</div>
-          </div>
-        )
-      })()}
+return (
+<div
+className={`absolute ${position} pointer-events-none z-20 min-w-[10rem] rounded-md border border-border bg-card/90 px-3 py-2 shadow-md backdrop-blur-sm`}
+>
+<div className="mb-1 text-muted-foreground">
+Node
+</div>
+<div className="text-foreground">
+{truncateAddress(n.address)}
+</div>
+<div className="mt-1 text-muted-foreground">
+{formatUsdc(n.committed)} committed
+</div>
+<div className="text-muted-foreground">{hopLine}</div>
+</div>
+)
+})()}
 
-      {/* Click-pinned NodeDetail popover — anchored to the selected node's
+{/* Click-pinned NodeDetail popover — anchored to the selected node's
           screen position via a 1×1 invisible <div> used as PopoverAnchor.
           Content is rendered into a Radix portal so it escapes the
           container's overflow:hidden. Closes by clicking outside, pressing

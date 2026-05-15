@@ -76,7 +76,7 @@ export function TxStatusPipeline({ rows, className, title }: TxStatusPipelinePro
   return (
     <div className={cn('space-y-2', className)}>
       {title && (
-        <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="text-muted-foreground">
           {title}
         </div>
       )}
@@ -98,14 +98,14 @@ export function TxStatusPipeline({ rows, className, title }: TxStatusPipelinePro
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
-                <div className="text-sm font-medium text-foreground">{row.label}</div>
+                <div className="text-foreground">{row.label}</div>
                 {row.detail && (
-                  <div className="text-xs text-muted-foreground tabular-nums">
+                  <div className="text-muted-foreground">
                     {row.detail}
                   </div>
                 )}
               </div>
-              <div className="mt-0.5 text-xs text-muted-foreground">
+              <div className="mt-0.5 text-muted-foreground">
                 {statusCopy(row.status, row.errorMessage)}
               </div>
               {row.txHash &&
@@ -114,12 +114,12 @@ export function TxStatusPipeline({ rows, className, title }: TxStatusPipelinePro
                     href={row.explorerUrl(row.txHash)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-1 inline-block font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    className="mt-1 inline-block text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                   >
                     {shortHash(row.txHash)}
                   </a>
                 ) : (
-                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">
+                  <div className="mt-1 text-muted-foreground">
                     {shortHash(row.txHash)}
                   </div>
                 ))}

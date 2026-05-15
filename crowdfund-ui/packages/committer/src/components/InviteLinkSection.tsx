@@ -94,10 +94,10 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
 
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-border/70 bg-background/25 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      <div className="text-xs font-medium text-muted-foreground">Invite Links (EIP-712)</div>
+      <div className="text-muted-foreground">Invite Links (EIP-712)</div>
 
       {invitePositions.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No invite slots available for link creation.</div>
+        <div className="text-muted-foreground">No invite slots available for link creation.</div>
       ) : (
         <>
           {/* Hop selector + Create button */}
@@ -114,7 +114,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
                 key={pos.hop}
                 value={String(pos.hop)}
                 size="sm"
-                className="text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
               >
                 {hopLabel(pos.hop)} ({pos.invitesAvailable})
               </ToggleGroupItem>
@@ -127,7 +127,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
             const targetConfig = targetHop < HOP_CONFIGS.length ? HOP_CONFIGS[targetHop] : null
             const selectedPos = invitePositions.find((p) => p.hop === selectedHop)
             return (
-              <div className="space-y-1 rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <div className="space-y-1 rounded-lg border border-primary/25 bg-primary/5 p-3 text-muted-foreground">
                 <div>From: your {hopLabel(selectedHop)} position</div>
                 <div>
                   Inviting to: {hopLabel(targetHop)}
@@ -150,7 +150,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
           <div className="flex gap-2">
             <Button
               size="sm"
-              className="h-9 flex-1 rounded-[4px] bg-hop-0/75 text-xs text-white shadow-[0_0_18px_rgba(132,80,210,0.14)] hover:bg-hop-0/85"
+              className="h-9 flex-1 rounded-[4px] bg-hop-0/75 text-white shadow-[0_0_18px_rgba(132,80,210,0.14)] hover:bg-hop-0/85"
               disabled={creating || selectedHop === null}
               onClick={handleCreateLink}
             >
@@ -160,7 +160,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 rounded-[4px] border-border/70 bg-background/25 text-xs text-muted-foreground hover:text-foreground"
+                className="h-9 rounded-[4px] border-border/70 bg-background/25 text-muted-foreground hover:text-foreground"
                 disabled={creating}
                 onClick={handleCreateAll}
               >
@@ -170,7 +170,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
           </div>
 
           {pendingCount > totalSlots && (
-            <div className="text-xs text-amber-500">
+            <div className="text-amber-500">
               Warning: {pendingCount} outstanding links exceed {totalSlots} remaining invite slots.
             </div>
           )}
@@ -180,7 +180,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
       {/* Link management table */}
       {links.length > 0 && (
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">{links.length} link{links.length !== 1 ? 's' : ''}</div>
+          <div className="text-muted-foreground">{links.length} link{links.length !== 1 ? 's' : ''}</div>
           <div className="max-h-48 overflow-y-auto space-y-1">
             {links.map((link) => {
               const timeLeft = link.deadline - blockTimestamp
@@ -188,9 +188,9 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
               return (
                 <div
                   key={`${link.inviter}-${link.nonce}`}
-                  className="flex items-center gap-2 rounded-md border border-border/60 bg-card/30 p-2 text-xs"
+                  className="flex items-center gap-2 rounded-md border border-border/60 bg-card/30 p-2"
                 >
-                  <Badge variant={statusBadgeVariant[link.status]} className="text-[10px] font-medium">
+                  <Badge variant={statusBadgeVariant[link.status]} className="">
                     {link.status}
                   </Badge>
                   <span className="text-muted-foreground">{hopLabel(link.fromHop)}</span>
@@ -203,7 +203,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
                       <Button
                         variant="link"
                         size="sm"
-                        className="h-auto p-0 text-[10px]"
+                        className="h-auto p-0"
                         onClick={() => handleCopy(link)}
                       >
                         Copy
@@ -211,7 +211,7 @@ export function InviteLinkSection({ inviteLinks, positions, blockTimestamp }: In
                       <Button
                         variant="linkDestructive"
                         size="sm"
-                        className="h-auto p-0 text-[10px]"
+                        className="h-auto p-0"
                         onClick={() => handleRevoke(link.nonce)}
                       >
                         Revoke

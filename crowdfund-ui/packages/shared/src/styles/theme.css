@@ -107,6 +107,8 @@
    gradient sits on top of this for the in-viewport look. */
 html {
   background-color: var(--background-deep);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
@@ -124,8 +126,14 @@ body {
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-family-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-family-heading: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Tailwind v4 generates utilities from the `--font-*` namespace using the
+     segment after `--font-`. Names must be `--font-sans`, `--font-heading`,
+     `--font-mono` etc. to produce `.font-sans`, `.font-heading`, `.font-mono`.
+     Do NOT prefix with `family-` — that produces `.font-family-*` utilities
+     that no one in the codebase references, leaving body text and
+     `.font-heading` usages silently falling back to system fonts. */
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-heading: 'Charis SIL', Georgia, 'Times New Roman', serif;
 
   /* Composite drop-shadow for top-level surfaces. Pairs an ambient shadow
      with a 1px inset highlight to simulate a light-from-above bevel. Used
@@ -203,7 +211,12 @@ body {
   }
   body {
     /* Base background colour is set via the radial gradient above; only the
-       text colour is applied here so the gradient is not overridden. */
+       text colour and the typographic baseline are applied here so the
+       gradient is not overridden. Body baseline matches the armada-crowdfund
+       mockup's global.css: 15px Geist with 1.5 line-height. */
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
     @apply text-foreground;
   }
 

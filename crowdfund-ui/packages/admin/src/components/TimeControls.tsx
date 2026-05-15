@@ -109,28 +109,28 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
 
   return (
     <div className="rounded-lg border border-amber-500/50 bg-amber-500/5 p-4 space-y-3">
-      <div className="text-sm font-medium text-amber-500">Local Dev Controls (Anvil Only)</div>
+      <div className="text-amber-500">Local Dev Controls (Anvil Only)</div>
 
       {/* Quick-skip buttons */}
       <div className="space-y-1">
-        <div className="text-xs text-muted-foreground">Time Warp</div>
+        <div className="text-muted-foreground">Time Warp</div>
         <div className="flex flex-wrap gap-1">
           <button
-            className={`px-2 py-1 rounded bg-muted text-xs hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(week1.status)}`}
+            className={`px-2 py-1 rounded bg-muted hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(week1.status)}`}
             onClick={() => week1.run(() => timeControls.skipToWeek1End(state.launchTeamInviteEnd, state.blockTimestamp))}
             disabled={state.blockTimestamp >= state.launchTeamInviteEnd || week1.status === 'busy'}
           >
             {statusLabel(week1.status, 'Skip to Week-1 End')}
           </button>
           <button
-            className={`px-2 py-1 rounded bg-muted text-xs hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(windowEnd.status)}`}
+            className={`px-2 py-1 rounded bg-muted hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(windowEnd.status)}`}
             onClick={() => windowEnd.run(() => timeControls.skipToWindowEnd(state.windowEnd, state.blockTimestamp))}
             disabled={state.blockTimestamp >= state.windowEnd || windowEnd.status === 'busy'}
           >
             {statusLabel(windowEnd.status, 'Skip to Window End')}
           </button>
           <button
-            className={`px-2 py-1 rounded bg-muted text-xs hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(claimDeadline.status)}`}
+            className={`px-2 py-1 rounded bg-muted hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(claimDeadline.status)}`}
             onClick={() => claimDeadline.run(() => timeControls.skipToClaimDeadline(state.claimDeadline, state.blockTimestamp))}
             disabled={state.claimDeadline === 0 || state.blockTimestamp >= state.claimDeadline || claimDeadline.status === 'busy'}
           >
@@ -146,10 +146,10 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
           placeholder="Seconds"
           value={customSeconds}
           onChange={(e) => setCustomSeconds(e.target.value)}
-          className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="flex-1 rounded border border-input bg-background px-2 py-1 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <button
-          className={`px-3 py-1 rounded bg-muted text-xs hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(customAdvance.status)}`}
+          className={`px-3 py-1 rounded bg-muted hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(customAdvance.status)}`}
           onClick={handleCustomAdvance}
           disabled={customAdvance.status === 'busy'}
         >
@@ -160,11 +160,11 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
       {/* USDC Mint */}
       {onMintUsdc && (
         <div className="space-y-1">
-          <div className="text-xs text-muted-foreground">Mint USDC</div>
+          <div className="text-muted-foreground">Mint USDC</div>
           <div className="flex gap-2">
             <div className="flex-1 flex gap-1">
               <select
-                className="rounded border border-input bg-background px-2 py-1 text-xs"
+                className="rounded border border-input bg-background px-2 py-1"
                 value={ANVIL_ACCOUNTS.find((a) => a.address.toLowerCase() === mintRecipient.toLowerCase())?.address ?? ''}
                 onChange={(e) => setMintRecipient(e.target.value)}
               >
@@ -180,7 +180,7 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
                 placeholder="0x... recipient address"
                 value={mintRecipient}
                 onChange={(e) => setMintRecipient(e.target.value)}
-                className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                className="flex-1 rounded border border-input bg-background px-2 py-1 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
             <input
@@ -188,10 +188,10 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
               placeholder="Amount"
               value={mintAmount}
               onChange={(e) => setMintAmount(e.target.value)}
-              className="w-24 rounded border border-input bg-background px-2 py-1 text-xs font-mono"
+              className="w-24 rounded border border-input bg-background px-2 py-1"
             />
             <button
-              className={`px-3 py-1 rounded bg-muted text-xs hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(mint.status)}`}
+              className={`px-3 py-1 rounded bg-muted hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(mint.status)}`}
               onClick={handleMint}
               disabled={mint.status === 'busy' || !mintRecipient}
             >
@@ -203,11 +203,11 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
 
       {/* ETH Balance */}
       <div className="space-y-1">
-        <div className="text-xs text-muted-foreground">Set ETH Balance</div>
+        <div className="text-muted-foreground">Set ETH Balance</div>
         <div className="flex gap-2">
           <div className="flex-1 flex gap-1">
             <select
-              className="rounded border border-input bg-background px-2 py-1 text-xs"
+              className="rounded border border-input bg-background px-2 py-1"
               value={ANVIL_ACCOUNTS.find((a) => a.address.toLowerCase() === ethRecipient.toLowerCase())?.address ?? ''}
               onChange={(e) => setEthRecipient(e.target.value)}
             >
@@ -223,7 +223,7 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
               placeholder="0x... recipient address"
               value={ethRecipient}
               onChange={(e) => setEthRecipient(e.target.value)}
-              className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="flex-1 rounded border border-input bg-background px-2 py-1 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <input
@@ -231,10 +231,10 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
             placeholder="ETH"
             value={ethAmount}
             onChange={(e) => setEthAmount(e.target.value)}
-            className="w-24 rounded border border-input bg-background px-2 py-1 text-xs font-mono"
+            className="w-24 rounded border border-input bg-background px-2 py-1"
           />
           <button
-            className={`px-3 py-1 rounded bg-muted text-xs hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(mintEth.status)}`}
+            className={`px-3 py-1 rounded bg-muted hover:bg-muted/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${statusClass(mintEth.status)}`}
             onClick={handleMintEth}
             disabled={mintEth.status === 'busy' || !ethRecipient}
           >
@@ -245,12 +245,12 @@ export function TimeControls({ timeControls, state, onMintUsdc }: TimeControlsPr
 
       {/* Account switcher */}
       <div className="space-y-1">
-        <div className="text-xs text-muted-foreground">Switch Anvil Account</div>
+        <div className="text-muted-foreground">Switch Anvil Account</div>
         <div className="flex flex-wrap gap-1">
           {ANVIL_ACCOUNTS.map((acc) => (
             <button
               key={acc.address}
-              className="px-2 py-1 rounded bg-muted text-[10px] hover:bg-muted/80"
+              className="px-2 py-1 rounded bg-muted hover:bg-muted/80"
               onClick={() => handleSwitchAccount()}
               title={acc.address}
             >

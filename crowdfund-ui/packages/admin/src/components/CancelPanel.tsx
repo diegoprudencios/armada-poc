@@ -28,8 +28,8 @@ export function CancelPanel({ signer, crowdfundAddress }: CancelPanelProps) {
 
   return (
     <div className="rounded border border-destructive/50 bg-destructive/10 p-3 space-y-2">
-      <div className="text-sm font-medium text-destructive">Emergency Cancel</div>
-      <div className="text-xs text-muted-foreground">
+      <div className="text-destructive">Emergency Cancel</div>
+      <div className="text-muted-foreground">
         This action is irreversible. All commitments become refundable. Type CANCEL to confirm.
       </div>
       <input
@@ -37,10 +37,10 @@ export function CancelPanel({ signer, crowdfundAddress }: CancelPanelProps) {
         placeholder="Type CANCEL to confirm"
         value={confirmation}
         onChange={(e) => setConfirmation(e.target.value)}
-        className="w-full rounded border border-destructive/50 bg-background px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
+        className="w-full rounded border border-destructive/50 bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-destructive"
       />
       <button
-        className="w-full rounded bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+        className="w-full rounded bg-destructive px-3 py-1.5 text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
         disabled={!confirmed || tx.state.status === 'pending' || tx.state.status === 'submitted'}
         onClick={handleCancel}
       >

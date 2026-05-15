@@ -69,28 +69,28 @@ function MockObserverApp({ size }: { size: number }) {
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
   const [hoveredAddress, setHoveredAddress] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [focusRequest, setFocusRequest] = useState<{
-    address: string
-    tick: number
-  } | null>(null)
-  const resolveENS = useCallback(() => null, [])
+const [focusRequest, setFocusRequest] = useState<{
+address: string
+tick: number
+} | null>(null)
+const resolveENS = useCallback(() => null, [])
 
-  const handleViewInTable = useCallback((addr: string) => {
-    setSelectedAddress(addr)
-    setFocusRequest((prev) => ({ address: addr, tick: (prev?.tick ?? 0) + 1 }))
-  }, [])
+const handleViewInTable = useCallback((addr: string) => {
+setSelectedAddress(addr)
+setFocusRequest((prev) => ({ address: addr, tick: (prev?.tick ?? 0) + 1 }))
+}, [])
 
-  return (
-    <AppShell appName={`Observer · stress ?mock=stress${size}`} network="local">
-      <div className="container mx-auto p-4 space-y-4">
-        <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
-          <strong>STRESS MODE</strong> — {graph.summaries.size} synthetic addresses rendered.
-          Contract machinery bypassed. Remove <code>?mock=…</code> from the URL to exit.
-        </div>
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
-        {/* items-start keeps each column at its own natural height. Without
-            it the grid stretches both cells to match the tallest (usually
-            TableView with 300 rows at stress300), pulling TreeView's
+return (
+<AppShell appName={`Observer · stress ?mock=stress${size}`} network="local">
+<div className="container mx-auto p-4 space-y-4">
+<div className="rounded-lg border border-border bg-card p-3 text-muted-foreground">
+<strong>STRESS MODE</strong> — {graph.summaries.size} synthetic addresses rendered.
+Contract machinery bypassed. Remove <code>?mock=…</code> from the URL to exit.
+</div>
+<SearchBar value={searchQuery} onChange={setSearchQuery} />
+{/* items-start keeps each column at its own natural height. Without
+it the grid stretches both cells to match the tallest (usually
+TableView with 300 rows at stress300), pulling TreeView's
             container to a many-thousand-px height and producing a very
             tall, narrow ellipse plus a sim-restart feedback loop. */}
         <div className="grid lg:grid-cols-2 gap-4 items-start">
@@ -227,9 +227,9 @@ export function App() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-3">
-          <h1 className="text-xl font-bold text-destructive">Deployment Not Found</h1>
-          <p className="text-sm text-muted-foreground max-w-md">{deployError}</p>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="text-destructive">Deployment Not Found</h1>
+          <p className="text-muted-foreground max-w-md">{deployError}</p>
+          <p className="text-muted-foreground">
             Run <code className="bg-muted px-1 rounded">npm run setup</code> from the project root to deploy contracts.
           </p>
         </div>
@@ -241,8 +241,8 @@ export function App() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="text-lg">Loading...</div>
-          <div className="text-sm text-muted-foreground">
+          <div className="">Loading...</div>
+          <div className="text-muted-foreground">
             Connecting to {getNetworkMode()} network
           </div>
         </div>
@@ -261,12 +261,12 @@ export function App() {
       >
         <div className="container mx-auto p-4 space-y-4">
           <div className="rounded-lg border border-border bg-card p-8 text-center">
-            <h2 className="text-lg font-medium mb-2">Crowdfund Not Yet Open</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="mb-2">Crowdfund Not Yet Open</h2>
+            <p className="text-muted-foreground">
               Waiting for ARM tokens to be loaded. The commitment window will start once ARM is loaded.
             </p>
             {contractState.seedCount > 0 && (
-              <p className="text-sm text-muted-foreground mt-2">
+              <p className="text-muted-foreground mt-2">
                 {contractState.seedCount} seed{contractState.seedCount !== 1 ? 's' : ''} added
               </p>
             )}
@@ -308,7 +308,7 @@ export function App() {
               resolveENS={resolveENS}
               isLoading={eventsLoading}
             />
-            <p className="text-sm text-muted-foreground mt-4">
+            <p className="text-muted-foreground mt-4">
               Waiting for seeds to be added...
             </p>
           </div>
@@ -324,31 +324,31 @@ export function App() {
 
   const treeCampaignHeader = (
     <div className="px-1 py-1">
-      <div className="font-heading text-sm font-semibold tracking-tight">
+      <div className="">
         Armada Crowdfund
       </div>
-      <div className="mt-2 flex items-start gap-4 tabular-nums">
+      <div className="mt-2 flex items-start gap-4">
         <div>
-          <div className="text-sm font-semibold text-foreground">
+          <div className="text-foreground">
             {formatUsdc(contractState.totalCommitted)}
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-muted-foreground">
             Committed
           </div>
         </div>
         <div className="h-8 w-px bg-border/60" aria-hidden="true" />
         <div>
-          <div className="text-sm font-semibold text-foreground">
+          <div className="text-foreground">
             {contractState.participantCount}
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-muted-foreground">
             Participants
           </div>
         </div>
         <div className="h-8 w-px bg-border/60" aria-hidden="true" />
         <div>
-          <div className="text-sm font-semibold text-foreground">{daysLeft}</div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-foreground">{daysLeft}</div>
+          <div className="text-muted-foreground">
             Days left
           </div>
         </div>
@@ -359,7 +359,7 @@ export function App() {
   const treeCampaignDetailsLink = (
     <button
       type="button"
-      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
       onClick={() => {
         /* TODO: open campaign details */
       }}
@@ -482,7 +482,7 @@ export function App() {
         </div>
 
         {/* Event count footer */}
-        <div className="text-xs text-muted-foreground text-center">
+        <div className="text-muted-foreground text-center">
           {events.length} events loaded
           {eventsLoading && ' (syncing...)'}
         </div>

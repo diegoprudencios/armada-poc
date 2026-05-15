@@ -1,0 +1,122 @@
+/* ABOUTME: Layout-only chrome for the showcase page — sections, headings, swatches. */
+/* ABOUTME: Avoid styling primitives here; render them with their own component CSS. */
+
+.page {
+  min-height: 100vh;
+  padding: 96px 32px 96px;
+  font-family: "Geist", sans-serif;
+  color: var(--semantic-color-text-primary);
+}
+
+.section {
+  margin: 0 auto 64px;
+  max-width: 1100px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--semantic-color-border-default);
+}
+
+.h2 {
+  font-family: "Geist", sans-serif;
+  font-size: calc(var(--primitives-fontSize-2xl) * 1px);
+  font-weight: 500;
+  margin: 0;
+}
+
+.dim {
+  font-size: calc(var(--primitives-fontSize-base) * 1px);
+  color: var(--semantic-color-text-muted);
+}
+
+.subhead {
+  font-size: calc(var(--primitives-fontSize-xs) * 1px);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--semantic-color-text-dim);
+  margin: 0 0 12px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.swatchGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.swatchBox {
+  width: 100%;
+  height: 56px;
+  border-radius: 6px;
+  border: 1px solid var(--semantic-color-border-default);
+}
+
+.swatchLabel {
+  color: var(--semantic-color-text-muted);
+}
+
+.callout {
+  background: var(--semantic-color-surface-default);
+  border: 1px solid var(--semantic-color-border-default);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--semantic-color-text-secondary);
+  font-size: calc(var(--primitives-fontSize-base) * 1px);
+  line-height: 1.5;
+}
+
+.callout code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.bgRadial {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(1100px 700px at 50% -10%, rgba(196, 145, 229, 0.10), transparent 60%),
+    radial-gradient(900px 600px at 80% 110%, rgba(243, 208, 160, 0.08), transparent 60%),
+    var(--semantic-color-surface-bg);
+}
+
+/* Inset positioning override for the @armada/ui Header — matches the mockup's
+   Hero header (Hero.module.css `.headerOverride`). The Header's own CSS Module
+   sets `top/left/right: 0`; this class is emitted later in the cascade so its
+   24px values win without needing `!important`. */
+.headerInset {
+  top: var(--primitives-spacing-6);
+  left: var(--primitives-spacing-6);
+  right: var(--primitives-spacing-6);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

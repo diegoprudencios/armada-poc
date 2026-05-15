@@ -50,7 +50,7 @@ export function Stepper({ steps, current, children, className }: StepperProps) {
                 <div className="flex min-w-10 flex-col items-center gap-1.5">
                   <span
                     className={cn(
-                      'flex size-5 items-center justify-center rounded-full border text-[10px] font-semibold tabular-nums transition-all',
+                      'flex size-5 items-center justify-center rounded-full border transition-all',
                       status === 'done' &&
                         'border-primary/70 bg-primary/20 text-primary shadow-[0_0_16px_rgba(83,224,224,0.12)]',
                       status === 'active' &&
@@ -65,7 +65,7 @@ export function Stepper({ steps, current, children, className }: StepperProps) {
                   </span>
                   <span
                     className={cn(
-                      'hidden max-w-20 truncate text-center text-[10px] leading-none sm:block',
+                      'hidden max-w-20 truncate text-center sm:block',
                       status === 'active' ? 'text-foreground' : 'text-muted-foreground/70',
                     )}
                   >
@@ -133,7 +133,7 @@ export function StepFooter({
         <Button
           type="button"
           variant="outline"
-          className="h-9 rounded-[4px] border-border/70 bg-background/25 px-5 text-xs text-muted-foreground hover:bg-card/80 hover:text-foreground"
+          className="h-9 rounded-[4px] border-border/70 bg-background/25 px-5 text-muted-foreground hover:bg-card/80 hover:text-foreground"
           onClick={() => onBack()}
           disabled={nextLoading}
         >
@@ -145,7 +145,7 @@ export function StepFooter({
           type="button"
           variant={destructive ? 'destructive' : nextVariant}
           className={cn(
-            'ml-auto h-9 rounded-[4px] px-6 text-xs font-semibold',
+            'ml-auto h-9 rounded-[4px] px-6',
             !destructive &&
               nextVariant === 'default' &&
               'bg-hop-0/75 text-white shadow-[0_0_18px_rgba(132,80,210,0.14)] hover:bg-hop-0/85',

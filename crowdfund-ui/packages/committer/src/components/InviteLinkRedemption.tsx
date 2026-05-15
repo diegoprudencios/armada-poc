@@ -299,148 +299,148 @@ export function InviteLinkRedemption() {
 
       if (success) {
         setTimeout(() => navigate('/'), 2000)
-      }
-    },
-    [inviteData, deployment, allowance, targetHop, approvalTx, commitTx, navigate],
-  )
+}
+},
+[inviteData, deployment, allowance, targetHop, approvalTx, commitTx, navigate],
+)
 
-  // Invalid link
-  if (!inviteData) {
-    return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <h1 className="text-xl font-bold text-destructive">Invalid Invite Link</h1>
-          <p className="text-sm text-muted-foreground">This link is missing required parameters.</p>
-          <a href="/" className="text-sm text-primary hover:underline">Go to main app</a>
-        </div>
-      </div>
-    )
-  }
+// Invalid link
+if (!inviteData) {
+return (
+<div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+<div className="text-center space-y-3">
+<h1 className="text-destructive">Invalid Invite Link</h1>
+<p className="text-muted-foreground">This link is missing required parameters.</p>
+<a href="/" className="text-primary hover:underline">Go to main app</a>
+</div>
+</div>
+)
+}
 
-  const timeLeft = inviteData.deadline - blockTimestamp
+const timeLeft = inviteData.deadline - blockTimestamp
 
-  // Invite details — target hop config
-  const targetConfig = targetHop < HOP_CONFIGS.length ? HOP_CONFIGS[targetHop as 0 | 1 | 2] : null
+// Invite details — target hop config
+const targetConfig = targetHop < HOP_CONFIGS.length ? HOP_CONFIGS[targetHop as 0 | 1 | 2] : null
 
-  const submitting =
-    approvalTx.state.status === 'pending' ||
+const submitting =
+approvalTx.state.status ==='pending' ||
     approvalTx.state.status === 'submitted' ||
     commitTx.state.status === 'pending' ||
     commitTx.state.status === 'submitted'
 
-  return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 space-y-4">
-        <h1 className="text-xl font-bold">Armada Crowdfund Invite</h1>
+return (
+<div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+<div className="w-full max-w-md rounded-lg border border-border bg-card p-6 space-y-4">
+<h1 className="">Armada Crowdfund Invite</h1>
 
-        {/* Invite details — target hop config */}
-        <div className="rounded border border-border p-3 space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">From</span>
-            <span className="font-mono text-xs">{inviteData.inviter.slice(0, 6)}...{inviteData.inviter.slice(-4)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <span>Position</span>
-              <InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
-            </span>
-            <span>{hopLabel(targetHop)}</span>
-          </div>
-          {targetConfig && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cap</span>
-              <span>{formatUsdc(targetConfig.capUsdc)} USDC</span>
-            </div>
-          )}
-          {targetConfig && targetConfig.maxInvites > 0 && (
-            <div className="flex justify-between">
-              <span className="flex items-center gap-1 text-muted-foreground">
-                <span>Invite slots</span>
-                <InfoTooltip text={TOOLTIPS.slot} label="What is an invite slot?" />
-              </span>
-              <span>{targetConfig.maxInvites} (you can invite {targetConfig.maxInvites} people to {hopLabel(targetHop + 1)})</span>
-            </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Expires</span>
-            <span className={expired ? 'text-destructive' : ''}>
-              {expired ? 'Expired' : formatCountdown(timeLeft)}
-            </span>
-          </div>
-        </div>
+{/* Invite details — target hop config */}
+<div className="rounded border border-border p-3 space-y-2">
+<div className="flex justify-between">
+<span className="text-muted-foreground">From</span>
+<span className="">{inviteData.inviter.slice(0, 6)}...{inviteData.inviter.slice(-4)}</span>
+</div>
+<div className="flex justify-between">
+<span className="flex items-center gap-1 text-muted-foreground">
+<span>Position</span>
+<InfoTooltip text={TOOLTIPS.hop} label="What is a hop?" />
+</span>
+<span>{hopLabel(targetHop)}</span>
+</div>
+{targetConfig && (
+<div className="flex justify-between">
+<span className="text-muted-foreground">Cap</span>
+<span>{formatUsdc(targetConfig.capUsdc)} USDC</span>
+</div>
+)}
+{targetConfig && targetConfig.maxInvites > 0 && (
+<div className="flex justify-between">
+<span className="flex items-center gap-1 text-muted-foreground">
+<span>Invite slots</span>
+<InfoTooltip text={TOOLTIPS.slot} label="What is an invite slot?" />
+</span>
+<span>{targetConfig.maxInvites} (you can invite {targetConfig.maxInvites} people to {hopLabel(targetHop + 1)})</span>
+</div>
+)}
+<div className="flex justify-between">
+<span className="text-muted-foreground">Expires</span>
+<span className={expired ?'text-destructive' : ''}>
+              {expired ? 'Expired': formatCountdown(timeLeft)}
+</span>
+</div>
+</div>
 
-        {/* Pre-check errors */}
-        {preCheckLoading && (
-          <div className="text-xs text-muted-foreground">Validating invite link...</div>
-        )}
+{/* Pre-check errors */}
+{preCheckLoading && (
+<div className="text-muted-foreground">Validating invite link...</div>
+)}
 
-        {expired && <ErrorAlert>{PRE_CHECK_MESSAGES.expired}</ErrorAlert>}
+{expired && <ErrorAlert>{PRE_CHECK_MESSAGES.expired}</ErrorAlert>}
 
-        {!expired && preCheckError && (
-          <ErrorAlert>{PRE_CHECK_MESSAGES[preCheckError]}</ErrorAlert>
-        )}
+{!expired && preCheckError && (
+<ErrorAlert>{PRE_CHECK_MESSAGES[preCheckError]}</ErrorAlert>
+)}
 
-        {!expired && !preCheckError && !address && (
-          <Button className="w-full" onClick={connect}>
-            Connect Wallet
-          </Button>
-        )}
+{!expired && !preCheckError && !address && (
+<Button className="w-full" onClick={connect}>
+Connect Wallet
+</Button>
+)}
 
-        {!expired && !preCheckError && address && (
-          <Form {...form}>
-            <form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="text-xs text-muted-foreground">
-                Connected: <span className="font-mono">{address.slice(0, 6)}...{address.slice(-4)}</span>
-                {' '} Balance: {formatUsdc(balance)}
-              </div>
+{!expired && !preCheckError && address && (
+<Form {...form}>
+<form className="space-y-3" onSubmit={form.handleSubmit(onSubmit)}>
+<div className="text-muted-foreground">
+Connected: <span className="">{address.slice(0, 6)}...{address.slice(-4)}</span>
+{' '} Balance: {formatUsdc(balance)}
+</div>
 
-              <FormField
-                control={form.control}
-                name="amount"
-                render={({ field, fieldState }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs font-normal text-muted-foreground">
-                      Commitment Amount (USDC)
-                    </FormLabel>
-                    <FormControl>
-                      <AmountInput
-                        value={field.value ?? ''}
+<FormField
+control={form.control}
+name="amount"
+render={({ field, fieldState }) => (
+<FormItem>
+<FormLabel className="text-muted-foreground">
+Commitment Amount (USDC)
+</FormLabel>
+<FormControl>
+<AmountInput
+value={field.value ??''}
                         onChange={field.onChange}
                         onBlur={field.onBlur}
                         ceilings={[
                           { label: `${hopLabel(targetHop)} cap`, value: hopCap },
                           { label: 'Wallet balance', value: balance },
-                        ]}
-                        error={!!fieldState.error}
-                        placeholder="0"
-                      />
-                    </FormControl>
-                    {hopCap > 0n && (
-                      <div className="text-xs text-muted-foreground">
-                        {hopLabel(targetHop)} cap: {formatUsdc(hopCap)} per invite slot
-                      </div>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+]}
+error={!!fieldState.error}
+placeholder="0"
+/>
+</FormControl>
+{hopCap > 0n && (
+<div className="text-muted-foreground">
+{hopLabel(targetHop)} cap: {formatUsdc(hopCap)} per invite slot
+</div>
+)}
+<FormMessage />
+</FormItem>
+)}
+/>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={
-                  !form.formState.isValid ||
-                  parsedAmount === 0n ||
-                  submitting
-                }
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Submitting…
-                  </>
-                ) : (
-                  needsApproval ? 'Approve & Join' : 'Join & Commit'
+<Button
+type="submit"
+className="w-full"
+disabled={
+!form.formState.isValid ||
+parsedAmount === 0n ||
+submitting
+}
+>
+{submitting ? (
+<>
+<Loader2 className="size-3.5 animate-spin" />
+Submitting…
+</>
+) : (
+needsApproval ?'Approve & Join' : 'Join & Commit'
                 )}
               </Button>
             </form>

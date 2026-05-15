@@ -122,6 +122,9 @@ export { buildRadialGraph, computeAngleMap } from './lib/radialLayout.js'
 export { AppShell, NetworkBadge } from './components/AppShell.js'
 export type { AppShellProps, AppShellNetwork } from './components/AppShell.js'
 
+export { AppHeader } from './components/AppHeader.js'
+export type { AppHeaderProps, AppHeaderNetwork } from './components/AppHeader.js'
+
 export { CrowdfundToaster } from './components/CrowdfundToaster.js'
 
 export { CopyToast } from './components/CopyToast.js'

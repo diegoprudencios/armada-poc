@@ -54,19 +54,19 @@ export function ArmSweepPanel(props: ArmSweepPanelProps) {
 
   return (
     <div className="rounded border border-border p-3 space-y-2">
-      <div className="text-sm font-medium">ARM Sweep</div>
+      <div className="">ARM Sweep</div>
       {explanation && (
-        <div className="text-[10px] text-muted-foreground bg-muted/50 rounded px-2 py-1">
+        <div className="text-muted-foreground bg-muted/50 rounded px-2 py-1">
           {explanation}
         </div>
       )}
-      <div className="text-xs space-y-1">
+      <div className="space-y-1">
         <div>Contract ARM balance: {formatArm(contractArmBalance)}</div>
         <div>Pending claims: {formatArm(pendingClaims)}</div>
-        <div>Sweepable: <span className="font-medium">{formatArm(sweepable)}</span></div>
+        <div>Sweepable: <span className="">{formatArm(sweepable)}</span></div>
       </div>
       <button
-        className="w-full rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full rounded bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={sweepable === 0n || tx.state.status === 'pending' || tx.state.status === 'submitted'}
         onClick={handleSweep}
       >

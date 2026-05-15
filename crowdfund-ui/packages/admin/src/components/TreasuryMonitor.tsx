@@ -24,10 +24,10 @@ export function TreasuryMonitor({ treasury, treasuryAddress }: TreasuryMonitorPr
   return (
     <div className="rounded border border-border p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Treasury Monitor</div>
+        <div className="">Treasury Monitor</div>
         {treasuryAddress && (
-          <div className="flex items-center gap-2 text-[10px]">
-            <span className="text-muted-foreground font-mono">{truncateAddress(treasuryAddress)}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">{truncateAddress(treasuryAddress)}</span>
             <button
               className="text-muted-foreground hover:text-foreground relative inline-block min-w-[32px] text-left"
               onClick={handleCopy}
@@ -62,16 +62,16 @@ export function TreasuryMonitor({ treasury, treasuryAddress }: TreasuryMonitorPr
         )}
       </div>
       {treasury.loading ? (
-        <div className="text-xs text-muted-foreground">Loading balances...</div>
+        <div className="text-muted-foreground">Loading balances...</div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <div className="text-muted-foreground font-medium">Contract</div>
+            <div className="text-muted-foreground">Contract</div>
             <div>USDC: {formatUsdc(treasury.contractUsdcBalance)}</div>
             <div>ARM: {formatArm(treasury.contractArmBalance)}</div>
           </div>
           <div className="space-y-1">
-            <div className="text-muted-foreground font-medium">Treasury</div>
+            <div className="text-muted-foreground">Treasury</div>
             <div>USDC: {formatUsdc(treasury.treasuryUsdcBalance)}</div>
             <div>ARM: {formatArm(treasury.treasuryArmBalance)}</div>
           </div>

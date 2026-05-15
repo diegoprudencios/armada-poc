@@ -4,8 +4,7 @@
 import { useCallback, useState, useEffect, useMemo, type ReactNode } from 'react'
 import { type JsonRpcProvider } from 'ethers'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { ArrowRight, ChevronDown, GitBranch, Loader2, UserPlus, Wallet } from 'lucide-react'
-import colorCircleIcon from '../../shared/src/assets/color_circle.svg'
+import { ArrowRight, GitBranch, Loader2, UserPlus, Wallet } from 'lucide-react'
 import {
   Button,
   createProvider,
@@ -32,6 +31,7 @@ import {
   formatCountdown,
   formatUsdc,
   formatArm,
+  truncateAddress,
   generateMockGraph,
   useContractState,
   cn,
@@ -39,6 +39,7 @@ import {
   type UserAllocation,
   type UserHopPosition,
 } from '@armada/crowdfund-shared'
+import { Button as ArmadaButton, NavBar, WalletButton, type NavBarItem } from '@armada/ui'
 import { getExplorerUrl, getHubRpcUrls, getPollIntervalMs, getNetworkMode, getIndexerUrl } from '@/config/network'
 import { loadDeployment } from '@/config/deployments'
 import type { CrowdfundDeployment } from '@/config/deployments'
@@ -64,80 +65,69 @@ type Page = 'network' | 'participate' | 'claim' | 'my-position'
 const SHOW_LIFECYCLE_BAR = false
 
 const PAGE_ITEMS: ReadonlyArray<{ id: Page; label: string }> = [
-  { id: 'network', label: 'Network' },
-  { id: 'participate', label: 'Participate' },
+  { id: 'network', label: 'Crowdfund' },
+  { id: 'my-position', label: 'My position' },
   { id: 'claim', label: 'Claim' },
-  { id: 'my-position', label: 'My Position' },
 ]
 
 /**
- * Page navigation — renders as header nav on desktop, stacked list on mobile.
- *  Horizontal variant: color-only active state with a 2px primary underline,
- *  mirroring the reference mockup. Vertical variant (mobile sheet) keeps a
- *  subtle bg fill on active since there's no underline room in a stacked list.
+ *  Page navigation — renders as header nav on desktop, stacked list on mobile.
  *
- *  `softDisabled` items remain clickable so the destination page can render
- *  its own explanation, but render in a more-muted style with a parenthesized
- *  suffix (e.g. "(20d 13h)" on Claim while the invite window is still open,
- *  "(ended)" on Participate after the window closes). The map's value is the
- *  literal suffix text — pass an empty string to mute without a suffix.
+ *  Horizontal variant: pill nav from @armada/ui (NavBar + NavItem) matching the
+ *  armada-crowdfund mockup. Vertical variant (mobile sheet) keeps a subtle bg
+ *  fill on the active row.
+ *
+ *  The leading "The project" item is a placeholder — no onClick handler, so it
+ *  renders but does not navigate. Reserved for a future project/landing page.
  */
 function PageNav({
   current,
   onChange,
   orientation = 'horizontal',
-  softDisabled,
 }: {
   current: Page
   onChange: (p: Page) => void
   orientation?: 'horizontal' | 'vertical'
-  /** Pages that are present but not yet (or no longer) actionable, mapped
-   *  to the suffix text rendered after the label. */
-  softDisabled?: ReadonlyMap<Page, string>
 }) {
-  const isVertical = orientation === 'vertical'
+  if (orientation === 'horizontal') {
+    const items: NavBarItem[] = [
+      { label: 'The project' },
+      ...PAGE_ITEMS.map((item) => ({
+        label: item.label,
+        active: item.id === current,
+        onClick: () => onChange(item.id),
+      })),
+    ]
+    return <NavBar items={items} />
+  }
+
   return (
-    <ul
-      className={cn(
-        'flex',
-        isVertical ? 'flex-col items-stretch gap-1' : 'h-full items-stretch gap-7',
-      )}
-    >
+    <ul className="flex flex-col items-stretch gap-1">
+      <li>
+        <button
+          type="button"
+          aria-disabled="true"
+          className={cn(
+            'w-full cursor-default rounded-md px-3 py-1.5 text-left text-muted-foreground opacity-60',
+          )}
+        >
+          The project
+        </button>
+      </li>
       {PAGE_ITEMS.map((item) => {
         const active = item.id === current
-        const muted = softDisabled?.has(item.id) ?? false
-        const suffix = softDisabled?.get(item.id)
         return (
-          <li key={item.id} className={cn(!isVertical && 'flex h-full')}>
+          <li key={item.id}>
             <button
               type="button"
               onClick={() => onChange(item.id)}
               aria-current={active ? 'page' : undefined}
-              aria-disabled={muted ? 'true' : undefined}
               className={cn(
-                'text-sm font-medium transition-colors hover:text-foreground',
-                isVertical
-                  ? cn(
-                      'w-full rounded-md px-3 py-1.5 text-left',
-                      active ? 'bg-muted/60 text-foreground' : 'text-muted-foreground',
-                      muted && !active && 'opacity-60',
-                    )
-                  : cn(
-                      'relative flex h-full items-center px-0 text-[12px] font-semibold leading-none tracking-[0.01em]',
-                      active
-                        ? 'text-primary after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-primary'
-                        : muted
-                        ? 'text-muted-foreground/60'
-                        : 'text-muted-foreground',
-                    ),
+                'w-full rounded-md px-3 py-1.5 text-left transition-colors hover:text-foreground',
+                active ? 'bg-muted/60 text-foreground' : 'text-muted-foreground',
               )}
             >
               {item.label}
-              {muted && suffix && (
-                <span className="ml-1 text-[10px] tracking-wide tabular-nums opacity-80">
-                  ({suffix})
-                </span>
-              )}
             </button>
           </li>
         )
@@ -167,74 +157,53 @@ function HeaderWalletButton({ className }: { className?: string }) {
 
         if (!isReady) {
           return (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-8 items-center gap-2 rounded-lg border border-border/70 bg-card/70 px-3 text-xs font-semibold text-muted-foreground shadow-sm',
-                className,
-              )}
+            <WalletButton
+              label="Connecting..."
+              icon={<Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
               disabled
-            >
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-              Wallet
-            </button>
+              ariaLabel="Wallet connecting"
+              className={className}
+            />
           )
         }
 
         if (!isConnected) {
           return (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-8 items-center gap-2 rounded-lg border border-border/70 bg-card/80 px-3 text-xs font-semibold text-muted-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-card hover:text-foreground',
-                className,
-              )}
+            <WalletButton
+              label="Connect Wallet"
               onClick={openConnectModal}
-            >
-              <img
-                src={colorCircleIcon}
-                alt=""
-                className="size-[18px] rounded-full"
-                aria-hidden="true"
-              />
-              Connect Wallet
-            </button>
+              className={className}
+            />
           )
         }
 
         if (chain.unsupported) {
           return (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-8 items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/15',
-                className,
-              )}
+            <WalletButton
+              label="Wrong network"
+              variant="destructive"
               onClick={openChainModal}
-            >
-              Wrong network
-            </button>
+              ariaLabel="Wrong network — click to switch"
+              className={className}
+            />
           )
         }
 
+        // RainbowKit's `displayName` truncates to 4 chars total ("0x12...abcd").
+        // The mockup convention is 6 chars before the ellipsis ("0x1234...abcd"),
+        // so prefer the raw address through our `truncateAddress` helper. If
+        // displayName isn't an address (ENS resolved), keep it as-is.
+        const label = account.displayName.startsWith('0x')
+          ? truncateAddress(account.address)
+          : account.displayName
+
         return (
-          <button
-            type="button"
-            className={cn(
-              'inline-flex h-8 items-center gap-2 rounded-lg border border-border/70 bg-card/80 px-3 text-xs font-semibold text-muted-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-card hover:text-foreground',
-              className,
-            )}
+          <WalletButton
+            label={label}
             onClick={openAccountModal}
-          >
-            <img
-              src={colorCircleIcon}
-              alt=""
-              className="size-[18px] rounded-full"
-              aria-hidden="true"
-            />
-            <span className="tabular-nums">{account.displayName}</span>
-            <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-          </button>
+            ariaLabel={`Wallet ${label}`}
+            className={className}
+          />
         )
       }}
     </ConnectButton.Custom>
@@ -299,23 +268,10 @@ function MockCommitterApp({ size }: { size: number }) {
     setFocusRequest((prev) => ({ address: addr, tick: (prev?.tick ?? 0) + 1 }))
   }, [])
 
-  // Stress mode pretends we're mid-commit window: claim shows a fake
-  // countdown so the nav matches what live users see.
-  const mockSoftDisabled = useMemo<Map<Page, string>>(
-    () => new Map<Page, string>([['claim', formatCountdown(13 * 86400 + 4 * 3600)]]),
-    [],
-  )
-  const headerNav = (
-    <PageNav current={page} onChange={setPage} softDisabled={mockSoftDisabled} />
-  )
+  const headerNav = <PageNav current={page} onChange={setPage} />
   const mobileMenu = (
     <div className="flex flex-col gap-3">
-      <PageNav
-        current={page}
-        onChange={setPage}
-        orientation="vertical"
-        softDisabled={mockSoftDisabled}
-      />
+      <PageNav current={page} onChange={setPage} orientation="vertical" />
     </div>
   )
 
@@ -332,7 +288,7 @@ function MockCommitterApp({ size }: { size: number }) {
       mobileMenu={mobileMenu}
     >
       <div className="container mx-auto p-4 space-y-4">
-        <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
+        <div className="rounded-lg border border-border bg-card p-3 text-muted-foreground">
           <strong>STRESS MODE</strong> — {graph.summaries.size} synthetic addresses rendered,
           action-panel visuals stubbed as a whitelisted hop-1 participant.
           Interactions are disabled. Remove <code>?mock=…</code> from the URL to exit.
@@ -361,31 +317,31 @@ function MockCommitterApp({ size }: { size: number }) {
                 connectedAddress={mockConnectedAddress}
                 campaignHeader={
                   <div className="px-1 py-1">
-                    <div className="font-heading text-lg font-semibold tracking-tight">
+                    <div className="">
                       Armada Crowdfund
                     </div>
-                    <div className="mt-2 flex items-start gap-4 tabular-nums">
+                    <div className="mt-2 flex items-start gap-4">
                       <div>
-                        <div className="text-sm font-semibold text-foreground">
+                        <div className="text-foreground">
                           $15,000
                         </div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-muted-foreground">
                           Committed
                         </div>
                       </div>
                       <div className="h-8 w-px bg-border/60" aria-hidden="true" />
                       <div>
-                        <div className="text-sm font-semibold text-foreground">
+                        <div className="text-foreground">
                           {graph.summaries.size}
                         </div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-muted-foreground">
                           Participants
                         </div>
                       </div>
                       <div className="h-8 w-px bg-border/60" aria-hidden="true" />
                       <div>
-                        <div className="text-sm font-semibold text-foreground">13</div>
-                        <div className="text-[11px] text-muted-foreground">
+                        <div className="text-foreground">13</div>
+                        <div className="text-muted-foreground">
                           Days left
                         </div>
                       </div>
@@ -395,7 +351,7 @@ function MockCommitterApp({ size }: { size: number }) {
                 campaignDetailsLink={
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-3 py-1.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
                   >
                     View campaign details
                     <ArrowRight className="size-3" />
@@ -404,10 +360,10 @@ function MockCommitterApp({ size }: { size: number }) {
                 participateCta={
                   <div className="flex flex-col items-stretch gap-6 px-5 py-4 text-center sm:flex-row sm:items-center sm:justify-center sm:gap-0 sm:text-left">
                     <div className="space-y-1.5">
-                      <div className="text-xs font-medium text-foreground">
+                      <div className="text-foreground">
                         Ready to join this network?
                       </div>
-                      <div className="text-[11px] text-muted-foreground">
+                      <div className="text-muted-foreground">
                         Participate as an existing node.
                       </div>
                     </div>
@@ -459,10 +415,10 @@ function MockCommitterApp({ size }: { size: number }) {
 
         {page === 'claim' && (
           <div key="mock-page-claim" className="mx-auto max-w-2xl space-y-3 animate-page-enter">
-            <div className="rounded-lg border border-border bg-card p-6 text-sm shadow-elevated">
-              <div className="mb-1 font-medium text-foreground">Claim isn't open yet</div>
-              <div className="text-muted-foreground">
-                You'll be able to claim ARM tokens (or a USDC refund) after the
+            <div className="rounded-lg border border-border bg-card p-6 shadow-elevated">
+              <div className="mb-1 text-foreground">Claim isn't open yet</div>
+<div className="text-muted-foreground">
+You'll be able to claim ARM tokens (or a USDC refund) after the
                 commitment window closes and the sale finalizes.
               </div>
             </div>
@@ -479,9 +435,9 @@ function MockCommitterApp({ size }: { size: number }) {
         {page === 'my-position' && (
           <div
             key="mock-page-my-position"
-            className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground shadow-elevated animate-page-enter"
+            className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6 text-muted-foreground shadow-elevated animate-page-enter"
           >
-            <div className="mb-2 font-medium text-foreground">My Position</div>
+            <div className="mb-2 text-foreground">My position</div>
             Wallet-scoped dashboard — coming soon. This page will show your committed total,
             remaining invite slots, hop level, and a mini view of your subtree.
           </div>
@@ -516,52 +472,52 @@ function MockActionPanel({
           <Wallet className="size-3.5 text-muted-foreground" />
         </div>
         <div className="flex-1">
-          <div className="text-xs text-muted-foreground">Mock wallet · Hop 1</div>
-          <div className="font-mono text-sm">{truncated}</div>
+          <div className="text-muted-foreground">Mock wallet · Hop 1</div>
+          <div className="">{truncated}</div>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as ActionTab)}>
         <TabsList variant="line" className="w-full justify-start border-b border-border">
           {(['commit', 'invite'] as const).map((tab) => (
-            <TabsTrigger key={tab} value={tab} className="flex-1 capitalize">
+            <TabsTrigger key={tab} value={tab} className="flex-1">
               {tab}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
 
-      <div className="p-6 space-y-3 text-sm">
+      <div className="p-6 space-y-3">
         {activeTab === 'commit' && (
           <>
-            <div className="font-medium text-foreground">Commit USDC</div>
-            <div className="text-muted-foreground leading-relaxed">
+            <div className="text-foreground">Commit USDC</div>
+            <div className="text-muted-foreground">
               Eligible at Hop 1. In a live session you'd enter a per-hop
               USDC amount, review the pro-rata estimate, approve USDC, and
               submit a commit transaction here.
             </div>
           </>
         )}
-        {activeTab === 'invite' && (
-          <>
-            <div className="font-medium text-foreground">Invite participants</div>
-            <div className="text-muted-foreground leading-relaxed">
-              Generate an EIP-712 signed invite link or issue a direct
-              on-chain invite to a specific address. Slot counts and
-              expiration are shown here in live mode.
-            </div>
-          </>
-        )}
-        <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Interactions disabled — no signer or contract state in stress mode.
-        </div>
-      </div>
-    </div>
-  )
+        {activeTab === 'invite'&& (
+<>
+<div className="text-foreground">Invite participants</div>
+<div className="text-muted-foreground">
+Generate an EIP-712 signed invite link or issue a direct
+on-chain invite to a specific address. Slot counts and
+expiration are shown here in live mode.
+</div>
+</>
+)}
+<div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-muted-foreground">
+Interactions disabled — no signer or contract state in stress mode.
+</div>
+</div>
+</div>
+)
 }
 
 function getMockSizeFromUrl(): number {
-  if (typeof window === 'undefined') return 0
+if (typeof window ==='undefined') return 0
   const p = new URLSearchParams(window.location.search).get('mock')
   if (!p) return 0
   const n = parseInt(p.replace(/^stress/, ''), 10)
@@ -844,8 +800,8 @@ export function App() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-3">
-          <h1 className="text-xl font-bold text-destructive">Deployment Not Found</h1>
-          <p className="text-sm text-muted-foreground">{deployError}</p>
+          <h1 className="text-destructive">Deployment Not Found</h1>
+          <p className="text-muted-foreground">{deployError}</p>
         </div>
       </div>
     )
@@ -855,8 +811,8 @@ export function App() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center space-y-2">
-          <div className="text-lg">Loading...</div>
-          <div className="text-sm text-muted-foreground">
+          <div className="">Loading...</div>
+          <div className="text-muted-foreground">
             Connecting to {getNetworkMode()} network
           </div>
         </div>
@@ -864,24 +820,26 @@ export function App() {
     )
   }
 
-  const walletChrome = (
-    <div className="flex items-center gap-2">
+  const headerRightChrome = (
+    <div className="flex items-center gap-3">
       <HeaderWalletButton />
+      <ArmadaButton
+        variant="gradient"
+        size="md"
+        label="Participate"
+        showIcon
+        onClick={() => setPage('participate')}
+      />
     </div>
   )
 
   const mobileMenu = (
     <div className="flex flex-col gap-3">
-      <PageNav
-        current={page}
-        onChange={setPage}
-        orientation="vertical"
-        softDisabled={softDisabledPages}
-      />
+      <PageNav current={page} onChange={setPage} orientation="vertical" />
       <Separator />
       {wallet.connected ? (
-        <div className="flex flex-col gap-1 text-sm tabular-nums">
-          <span className="text-xs text-muted-foreground">Balance</span>
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Balance</span>
           <span>{formatUsdc(allowance.balance)}</span>
           {allowance.armBalance > 0n && (
             <span className="text-muted-foreground">
@@ -895,9 +853,7 @@ export function App() {
     </div>
   )
 
-  const headerNav = (
-    <PageNav current={page} onChange={setPage} softDisabled={softDisabledPages} />
-  )
+  const headerNav = <PageNav current={page} onChange={setPage} />
 
   // Derive "days remaining in commit window" for the inset campaign header.
   // Falls back to 0 before the window is known or after it closes.
@@ -908,31 +864,31 @@ export function App() {
 
   const treeCampaignHeader = (
     <div className="px-1 py-1">
-      <div className="font-heading text-lg font-semibold tracking-tight">
+      <div className="">
         Armada Crowdfund
       </div>
-      <div className="mt-2 flex items-start gap-4 tabular-nums">
+      <div className="mt-2 flex items-start gap-4">
         <div>
-          <div className="text-sm font-semibold text-foreground">
+          <div className="text-foreground">
             {formatUsdc(contractState.totalCommitted)}
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-muted-foreground">
             Committed
           </div>
         </div>
         <div className="h-8 w-px bg-border/60" aria-hidden="true" />
         <div>
-          <div className="text-sm font-semibold text-foreground">
+          <div className="text-foreground">
             {contractState.participantCount}
           </div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-muted-foreground">
             Participants
           </div>
         </div>
         <div className="h-8 w-px bg-border/60" aria-hidden="true" />
         <div>
-          <div className="text-sm font-semibold text-foreground">{daysLeft}</div>
-          <div className="text-[11px] text-muted-foreground">
+          <div className="text-foreground">{daysLeft}</div>
+          <div className="text-muted-foreground">
             Days left
           </div>
         </div>
@@ -948,7 +904,7 @@ export function App() {
   const treeCampaignDetailsLink = (
     <button
       type="button"
-      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-primary shadow-sm transition-opacity hover:opacity-85"
+      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-primary shadow-sm transition-opacity hover:opacity-85"
       style={{
         background:
           'linear-gradient(var(--card), var(--card)) padding-box, ' +
@@ -967,10 +923,10 @@ export function App() {
   const treeParticipateCta = (
     <div className="flex flex-col gap-6 px-5 py-4 text-center sm:flex-row sm:items-center sm:justify-center sm:gap-0 sm:text-left">
       <div className="space-y-1.5">
-        <div className="text-sm font-medium text-foreground">
+        <div className="text-foreground">
           Ready to join this network?
         </div>
-        <div className="text-[11px] text-muted-foreground">
+        <div className="text-muted-foreground">
           Participate as an existing node.
         </div>
       </div>
@@ -978,12 +934,12 @@ export function App() {
         size="sm"
         // Bold blue→purple gradient mirrors the "Send Invite" CTA from
         // the mockup. The pulsing halo is set inline because Tailwind v4's
-        // `animate-{name}` utility generation was producing an empty rule
-        // that shadowed our hand-written one. Inline `animation` is the
-        // simplest path that actually applies; the keyframe lives in
-        // theme.css alongside the other animations.
-        className="rounded-md bg-gradient-to-r from-primary to-hop-0 px-8 text-[13px] font-medium text-white sm:ml-24"
-        style={{ animation: 'glow-pulse 3.5s ease-in-out infinite' }}
+// `animate-{name}` utility generation was producing an empty rule
+// that shadowed our hand-written one. Inline `animation` is the
+// simplest path that actually applies; the keyframe lives in
+// theme.css alongside the other animations.
+className="rounded-md bg-gradient-to-r from-primary to-hop-0 px-8 text-white sm:ml-24"
+style={{ animation:'glow-pulse 3.5s ease-in-out infinite' }}
         onClick={() => setPage('participate')}
       >
         Participate
@@ -1023,7 +979,7 @@ export function App() {
       network={getNetworkMode()}
       headerNav={headerNav}
       headerStatus={lifecycleStatus}
-      headerRight={walletChrome}
+      headerRight={headerRightChrome}
       mobileMenu={mobileMenu}
     >
      <ErrorBoundary>
@@ -1082,7 +1038,7 @@ export function App() {
                 onFocusInTree={selectAddress}
               />
             </ErrorBoundary>
-            <div className="text-xs text-muted-foreground text-center">
+            <div className="text-muted-foreground text-center">
               {events.length} events loaded {eventsLoading && '(syncing...)'}
             </div>
           </div>
@@ -1126,37 +1082,37 @@ export function App() {
               </div>
             ) : softDisabledPages.has('participate') ? (
               // Window has closed (or hasn't opened yet) — explain instead of vanishing.
-              <div className="rounded-lg border border-border bg-card p-6 shadow-elevated">
-                <div className="mb-1 text-base font-medium text-foreground">
-                  This phase has ended
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  You can no longer commit or invite. Head over to Claim when the
-                  sale finalizes to claim your ARM tokens (or a USDC refund if the
-                  sale ends below the minimum raise).
-                </div>
-                <div className="mt-4">
-                  <Button size="sm" onClick={() => setPage('claim')}>
-                    Go to Claim
-                  </Button>
-                </div>
-              </div>
-            ) : intent === null ? (
-              // Step 1 of the checkout: choose intent. Sub-flows handle their
-              // own internal step state once the user picks one.
-              <div className="overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-elevated ring-1 ring-white/[0.03] backdrop-blur-sm">
-                <div className="space-y-5 px-6 py-6">
-                  <div>
-                    <div className="mb-2 text-lg font-semibold tracking-tight text-foreground">
-                      How do you want to participate?
-                    </div>
+<div className="rounded-lg border border-border bg-card p-6 shadow-elevated">
+<div className="mb-1 text-foreground">
+This phase has ended
+</div>
+<div className="text-muted-foreground">
+You can no longer commit or invite. Head over to Claim when the
+sale finalizes to claim your ARM tokens (or a USDC refund if the
+sale ends below the minimum raise).
+</div>
+<div className="mt-4">
+<Button size="sm" onClick={() => setPage('claim')}>
+Go to Claim
+</Button>
+</div>
+</div>
+) : intent === null ? (
+// Step 1 of the checkout: choose intent. Sub-flows handle their
+// own internal step state once the user picks one.
+<div className="overflow-hidden rounded-xl border border-border/80 bg-card/80 shadow-elevated ring-1 ring-white/[0.03] backdrop-blur-sm">
+<div className="space-y-5 px-6 py-6">
+<div>
+<div className="mb-2 text-foreground">
+How do you want to participate?
+</div>
 
-                  </div>
-                  <div className="grid grid-cols-1 gap-4">
-                    <button
-                      type="button"
-                      disabled={!eligibility.eligible}
-                      onClick={() => setIntent('commit')}
+</div>
+<div className="grid grid-cols-1 gap-4">
+<button
+type="button"
+disabled={!eligibility.eligible}
+onClick={() => setIntent('commit')}
                       className={cn(
                         'group relative flex items-center gap-4 overflow-hidden rounded-lg border border-border/70 bg-background/20 p-4 text-left transition-all',
                         'hover:border-hop-0/70 hover:bg-hop-0/5 hover:shadow-[0_0_24px_rgba(132,80,210,0.10)]',
@@ -1164,16 +1120,16 @@ export function App() {
                         intent === ('commit' as ParticipateIntent)
                           ? 'border-hop-0/80 bg-hop-0/10'
                           : 'border-border/70',
-                      )}
-                    >
-                      <div className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-hop-0/35 bg-hop-0/15 text-hop-0">
-                        <UserPlus className="size-4" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground">Commit USDC</div>
-                        <div className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                          {eligibility.eligible
-                            ? `Eligible at ${eligibility.positions.length} hop${eligibility.positions.length === 1 ? '' : 's'}`
+)}
+>
+<div className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-hop-0/35 bg-hop-0/15 text-hop-0">
+<UserPlus className="size-4" aria-hidden="true" />
+</div>
+<div className="min-w-0">
+<div className="text-foreground">Commit USDC</div>
+<div className="mt-1.5 text-muted-foreground">
+{eligibility.eligible
+? `Eligible at ${eligibility.positions.length} hop${eligibility.positions.length === 1 ?'' : 's'}`
                             : 'Not eligible — you need an invite first'}
                         </div>
                       </div>
@@ -1186,16 +1142,16 @@ export function App() {
                         'group relative flex items-center gap-4 overflow-hidden rounded-lg border border-border/70 bg-background/20 p-4 text-left transition-all',
                         'hover:border-hop-0/70 hover:bg-hop-0/5 hover:shadow-[0_0_24px_rgba(132,80,210,0.10)]',
                         'disabled:cursor-not-allowed disabled:opacity-50',
-                      )}
-                    >
-                      <div className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-hop-0/35 bg-hop-0/15 text-hop-0">
-                        <GitBranch className="size-4" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold text-foreground">Invite someone</div>
-                        <div className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                          {hasInviteSlots
-                            ? 'Send an on-chain invite or share a link'
+)}
+>
+<div className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-hop-0/35 bg-hop-0/15 text-hop-0">
+<GitBranch className="size-4" aria-hidden="true" />
+</div>
+<div className="min-w-0">
+<div className="text-foreground">Invite someone</div>
+<div className="mt-1.5 text-muted-foreground">
+{hasInviteSlots
+?'Send an on-chain invite or share a link'
                             : 'No invite slots available'}
                         </div>
                       </div>
@@ -1279,16 +1235,16 @@ export function App() {
               // Pre-claim explanation — keeps the page visible so users learn
               // when claim opens, instead of bouncing back to Participate.
               <div className="rounded-lg border border-border bg-card p-6 shadow-elevated">
-                <div className="mb-1 text-base font-medium text-foreground">
+                <div className="mb-1 text-foreground">
                   Claiming is not yet available
                 </div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground">
                   {claimAvailability.state === 'pre-open'
                     ? 'The campaign has not opened yet. Once ARM is loaded and the commitment window closes, you can claim from this page.'
                     : `${claimAvailability.reason}. You'll be able to claim ARM tokens (or a USDC refund if the sale ends below the minimum raise) from here.`}
                 </div>
                 {lifecycleCountdown !== undefined && lifecycleCountdown > 0 && (
-                  <div className="mt-3 text-xs text-muted-foreground tabular-nums">
+                  <div className="mt-3 text-muted-foreground">
                     Estimated:{' '}
                     <span className="text-foreground">
                       {formatCountdown(lifecycleCountdown)}

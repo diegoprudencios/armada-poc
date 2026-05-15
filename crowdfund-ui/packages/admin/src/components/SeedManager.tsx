@@ -80,14 +80,14 @@ export function SeedManager({ signer, crowdfundAddress, seedCount }: SeedManager
   return (
     <div className="rounded border border-border p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Seed Management</div>
-        <div className="text-xs text-muted-foreground">
+        <div className="">Seed Management</div>
+        <div className="text-muted-foreground">
           {seedCount} / {CROWDFUND_CONSTANTS.MAX_SEEDS}
         </div>
       </div>
       {isLocalMode() && (
         <button
-          className="w-full rounded border border-dashed border-muted-foreground/50 px-3 py-1.5 text-xs text-muted-foreground hover:border-foreground hover:text-foreground"
+          className="w-full rounded border border-dashed border-muted-foreground/50 px-3 py-1.5 text-muted-foreground hover:border-foreground hover:text-foreground"
           onClick={() => setInput(ANVIL_SEED_ADDRESSES.join('\n'))}
         >
           Fill Anvil Seeds ({ANVIL_SEED_ADDRESSES.length} accounts)
@@ -97,9 +97,9 @@ export function SeedManager({ signer, crowdfundAddress, seedCount }: SeedManager
         placeholder="Paste addresses (one per line, comma, or semicolon separated)"
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        className="w-full h-24 rounded border border-input bg-background px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+        className="w-full h-24 rounded border border-input bg-background px-3 py-2 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
       />
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center justify-between">
         <div>
           <span className="text-muted-foreground">{parsed.valid.length} valid</span>
           {parsed.invalid.length > 0 && (
@@ -111,7 +111,7 @@ export function SeedManager({ signer, crowdfundAddress, seedCount }: SeedManager
         )}
       </div>
       <button
-        className="w-full rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+        className="w-full rounded bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
         disabled={parsed.valid.length === 0 || wouldExceed || tx.state.status === 'pending' || tx.state.status === 'submitted'}
         onClick={handleAddSeeds}
       >

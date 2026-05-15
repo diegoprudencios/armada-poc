@@ -37,7 +37,7 @@ export function AdminActions({ state, role, signer, crowdfundAddress, treasury, 
 
   return (
     <div className="space-y-4">
-      <h2 className="text-sm font-medium">Admin Actions</h2>
+      <h2 className="">Admin Actions</h2>
 
       {/* Pre-finalization actions */}
       {isActive && (
@@ -104,7 +104,7 @@ export function AdminActions({ state, role, signer, crowdfundAddress, treasury, 
       {/* Canceled */}
       {isCanceled && (
         <div className="space-y-3">
-          <div className="rounded border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded border border-destructive/50 bg-destructive/10 p-3 text-destructive">
             Crowdfund has been canceled. All commitments are refundable.
           </div>
           <TreasuryMonitor treasury={treasury} treasuryAddress={treasuryAddress} />
@@ -129,7 +129,7 @@ export function AdminActions({ state, role, signer, crowdfundAddress, treasury, 
 
       {/* Observer role message */}
       {role === 'observer' && (
-        <div className="text-xs text-muted-foreground text-center py-2">
+        <div className="text-muted-foreground text-center py-2">
           Connect as launch team or security council to access admin actions.
         </div>
       )}

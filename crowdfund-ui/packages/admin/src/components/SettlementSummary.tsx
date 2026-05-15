@@ -39,53 +39,53 @@ export function SettlementSummary({ state, events }: SettlementSummaryProps) {
 
   return (
     <div className="rounded border border-border p-3 space-y-2">
-      <div className="text-sm font-medium">Settlement Summary</div>
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="">Settlement Summary</div>
+      <div className="grid grid-cols-2 gap-2">
         <div>
           <span className="text-muted-foreground">Finalized at: </span>
-          <span className="font-medium">{new Date(state.finalizedAt * 1000).toLocaleString()}</span>
+          <span className="">{new Date(state.finalizedAt * 1000).toLocaleString()}</span>
         </div>
         <div>
           <span className="text-muted-foreground">Sale size: </span>
-          <span className="font-medium">{formatUsdc(state.saleSize)}</span>
+          <span className="">{formatUsdc(state.saleSize)}</span>
         </div>
         <div>
           <span className="text-muted-foreground">Refund mode: </span>
-          <span className={`font-medium ${state.refundMode ? 'text-destructive' : 'text-success'}`}>
+          <span className={`${state.refundMode ? 'text-destructive' : 'text-success'}`}>
             {state.refundMode ? 'Yes' : 'No'}
           </span>
         </div>
         {netProceeds !== undefined && (
           <div>
             <span className="text-muted-foreground">Net proceeds: </span>
-            <span className="font-medium">{formatUsdc(netProceeds)}</span>
+            <span className="">{formatUsdc(netProceeds)}</span>
           </div>
         )}
         <div>
           <span className="text-muted-foreground">ARM claimed: </span>
-          <span className="font-medium">
+          <span className="">
             {formatArm(state.totalArmTransferred)} ({armClaimedPct.toFixed(1)}%)
           </span>
         </div>
         <div>
           <span className="text-muted-foreground">ARM unclaimed: </span>
-          <span className="font-medium">{formatArm(armUnclaimed)}</span>
+          <span className="">{formatArm(armUnclaimed)}</span>
         </div>
         {refundsOwed > 0n && (
           <>
             <div>
               <span className="text-muted-foreground">Refunds owed: </span>
-              <span className="font-medium">{formatUsdc(refundsOwed)}</span>
+              <span className="">{formatUsdc(refundsOwed)}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Refunds claimed: </span>
-              <span className="font-medium">{formatUsdc(refundsClaimed)}</span>
+              <span className="">{formatUsdc(refundsClaimed)}</span>
             </div>
           </>
         )}
         <div>
           <span className="text-muted-foreground">Claim deadline: </span>
-          <span className="font-medium">{claimTimeLeft > 0 ? formatCountdown(claimTimeLeft) : 'expired'}</span>
+          <span className="">{claimTimeLeft > 0 ? formatCountdown(claimTimeLeft) : 'expired'}</span>
         </div>
         {state.finalizedAt > 0 && (() => {
           const quietEnd = state.finalizedAt + CROWDFUND_CONSTANTS.GOVERNANCE_QUIET_PERIOD
@@ -93,7 +93,7 @@ export function SettlementSummary({ state, events }: SettlementSummaryProps) {
           return (
             <div>
               <span className="text-muted-foreground">Governance quiet period: </span>
-              <span className="font-medium">
+              <span className="">
                 {quietRemaining > 0
                   ? `ends in ${formatCountdown(quietRemaining)} — ${new Date(quietEnd * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                   : `ended ${new Date(quietEnd * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
