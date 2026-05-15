@@ -39,6 +39,7 @@ import {
   type UserAllocation,
   type UserHopPosition,
 } from '@armada/crowdfund-shared'
+import { NavBar, type NavBarItem } from '@armada/ui'
 import { getExplorerUrl, getHubRpcUrls, getPollIntervalMs, getNetworkMode, getIndexerUrl } from '@/config/network'
 import { loadDeployment } from '@/config/deployments'
 import type { CrowdfundDeployment } from '@/config/deployments'
@@ -71,16 +72,16 @@ const PAGE_ITEMS: ReadonlyArray<{ id: Page; label: string }> = [
 ]
 
 /**
- * Page navigation — renders as header nav on desktop, stacked list on mobile.
- *  Horizontal variant: color-only active state with a 2px primary underline,
- *  mirroring the reference mockup. Vertical variant (mobile sheet) keeps a
- *  subtle bg fill on active since there's no underline room in a stacked list.
+ *  Page navigation — renders as header nav on desktop, stacked list on mobile.
  *
- *  `softDisabled` items remain clickable so the destination page can render
- *  its own explanation, but render in a more-muted style with a parenthesized
- *  suffix (e.g. "(20d 13h)" on Claim while the invite window is still open,
- *  "(ended)" on Participate after the window closes). The map's value is the
- *  literal suffix text — pass an empty string to mute without a suffix.
+ *  Horizontal variant: pill nav from @armada/ui (NavBar + NavItem) matching the
+ *  armada-crowdfund mockup. Vertical variant (mobile sheet) keeps a subtle bg
+ *  fill on active and a parenthesized suffix for soft-disabled rows.
+ *
+ *  `softDisabled` items remain clickable so the destination page can render its
+ *  own explanation. Horizontally, the suffix is appended inline to the label
+ *  (e.g. "Claim (20d 13h)") because NavItem has no suffix slot. Vertically,
+ *  the suffix renders as a separate muted span.
  */
 function PageNav({
   current,
@@ -95,49 +96,41 @@ function PageNav({
    *  to the suffix text rendered after the label. */
   softDisabled?: ReadonlyMap<Page, string>
 }) {
-  const isVertical = orientation === 'vertical'
+  if (orientation === 'horizontal') {
+    const items: NavBarItem[] = PAGE_ITEMS.map((item) => {
+      const muted = softDisabled?.has(item.id) ?? false
+      const suffix = softDisabled?.get(item.id)
+      const label = muted && suffix ? `${item.label} (${suffix})` : item.label
+      return {
+        label,
+        active: item.id === current,
+        onClick: () => onChange(item.id),
+      }
+    })
+    return <NavBar items={items} />
+  }
+
   return (
-    <ul
-      className={cn(
-        'flex',
-        isVertical ? 'flex-col items-stretch gap-1' : 'h-full items-stretch gap-7',
-      )}
-    >
+    <ul className="flex flex-col items-stretch gap-1">
       {PAGE_ITEMS.map((item) => {
         const active = item.id === current
         const muted = softDisabled?.has(item.id) ?? false
         const suffix = softDisabled?.get(item.id)
         return (
-          <li key={item.id} className={cn(!isVertical && 'flex h-full')}>
+          <li key={item.id}>
             <button
               type="button"
               onClick={() => onChange(item.id)}
               aria-current={active ? 'page' : undefined}
               aria-disabled={muted ? 'true' : undefined}
               className={cn(
-                'transition-colors hover:text-foreground',
-                isVertical
-                  ? cn(
-                      'w-full rounded-md px-3 py-1.5 text-left',
-                      active ? 'bg-muted/60 text-foreground' : 'text-muted-foreground',
-                      muted && !active && 'opacity-60',
-                    )
-                  : cn(
-                      'relative flex h-full items-center px-0',
-                      active
-                        ? 'text-primary after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-primary'
-                        : muted
-                        ? 'text-muted-foreground/60'
-                        : 'text-muted-foreground',
-                    ),
+                'w-full rounded-md px-3 py-1.5 text-left transition-colors hover:text-foreground',
+                active ? 'bg-muted/60 text-foreground' : 'text-muted-foreground',
+                muted && !active && 'opacity-60',
               )}
             >
               {item.label}
-              {muted && suffix && (
-                <span className="ml-1 opacity-80">
-                  ({suffix})
-                </span>
-              )}
+              {muted && suffix && <span className="ml-1 opacity-80">({suffix})</span>}
             </button>
           </li>
         )
