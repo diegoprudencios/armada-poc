@@ -9,6 +9,7 @@ import {
   Header,
   Progress,
   BarTrackTicks,
+  WalletButton,
   type NavBarItem,
 } from '@armada/ui'
 import s from './showcase.module.css'
@@ -148,6 +149,18 @@ export function App() {
           <p className={s.subhead}>Dashboard layout — hideStatus</p>
           <div className={s.row}>
             <Progress hideStatus />
+          </div>
+        </section>
+
+        <section className={s.section}>
+          <div className={s.sectionHead}>
+            <h2 className={s.h2}>WalletButton</h2>
+            <span className={s.dim}>gradient-border pill — connected-state visual; wallet logic lives in the consuming app</span>
+          </div>
+          <div className={s.row}>
+            <WalletButton label="0x63c2…84c6" />
+            <WalletButton label="Connect Wallet" />
+            <WalletButton label="vitalik.eth" />
           </div>
         </section>
 
