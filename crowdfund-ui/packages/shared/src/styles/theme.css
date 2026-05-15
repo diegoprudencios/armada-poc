@@ -130,8 +130,8 @@ body {
      Do NOT prefix with `family-` — that produces `.font-family-*` utilities
      that no one in the codebase references, leaving body text and
      `.font-heading` usages silently falling back to system fonts. */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-heading: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-heading: 'Charis SIL', Georgia, 'Times New Roman', serif;
 
   /* Composite drop-shadow for top-level surfaces. Pairs an ambient shadow
      with a 1px inset highlight to simulate a light-from-above bevel. Used
