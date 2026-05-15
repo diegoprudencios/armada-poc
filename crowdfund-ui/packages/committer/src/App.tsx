@@ -39,7 +39,7 @@ import {
   type UserAllocation,
   type UserHopPosition,
 } from '@armada/crowdfund-shared'
-import { NavBar, type NavBarItem } from '@armada/ui'
+import { Button as ArmadaButton, NavBar, type NavBarItem } from '@armada/ui'
 import { getExplorerUrl, getHubRpcUrls, getPollIntervalMs, getNetworkMode, getIndexerUrl } from '@/config/network'
 import { loadDeployment } from '@/config/deployments'
 import type { CrowdfundDeployment } from '@/config/deployments'
@@ -66,7 +66,6 @@ const SHOW_LIFECYCLE_BAR = false
 
 const PAGE_ITEMS: ReadonlyArray<{ id: Page; label: string }> = [
   { id: 'network', label: 'Network' },
-  { id: 'participate', label: 'Participate' },
   { id: 'claim', label: 'Claim' },
   { id: 'my-position', label: 'My Position' },
 ]
@@ -857,9 +856,16 @@ export function App() {
     )
   }
 
-  const walletChrome = (
-    <div className="flex items-center gap-2">
+  const headerRightChrome = (
+    <div className="flex items-center gap-3">
       <HeaderWalletButton />
+      <ArmadaButton
+        variant="gradient"
+        size="md"
+        label="Participate"
+        showIcon
+        onClick={() => setPage('participate')}
+      />
     </div>
   )
 
@@ -1016,7 +1022,7 @@ style={{ animation:'glow-pulse 3.5s ease-in-out infinite' }}
       network={getNetworkMode()}
       headerNav={headerNav}
       headerStatus={lifecycleStatus}
-      headerRight={walletChrome}
+      headerRight={headerRightChrome}
       mobileMenu={mobileMenu}
     >
      <ErrorBoundary>
