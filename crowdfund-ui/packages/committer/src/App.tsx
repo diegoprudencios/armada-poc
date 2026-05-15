@@ -4,8 +4,7 @@
 import { useCallback, useState, useEffect, useMemo, type ReactNode } from 'react'
 import { type JsonRpcProvider } from 'ethers'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { ArrowRight, ChevronDown, GitBranch, Loader2, UserPlus, Wallet } from 'lucide-react'
-import colorCircleIcon from '../../shared/src/assets/color_circle.svg'
+import { ArrowRight, GitBranch, Loader2, UserPlus, Wallet } from 'lucide-react'
 import {
   Button,
   createProvider,
@@ -32,6 +31,7 @@ import {
   formatCountdown,
   formatUsdc,
   formatArm,
+  truncateAddress,
   generateMockGraph,
   useContractState,
   cn,
@@ -39,7 +39,7 @@ import {
   type UserAllocation,
   type UserHopPosition,
 } from '@armada/crowdfund-shared'
-import { Button as ArmadaButton, NavBar, type NavBarItem } from '@armada/ui'
+import { Button as ArmadaButton, NavBar, WalletButton, type NavBarItem } from '@armada/ui'
 import { getExplorerUrl, getHubRpcUrls, getPollIntervalMs, getNetworkMode, getIndexerUrl } from '@/config/network'
 import { loadDeployment } from '@/config/deployments'
 import type { CrowdfundDeployment } from '@/config/deployments'
@@ -173,22 +173,11 @@ function HeaderWalletButton({ className }: { className?: string }) {
 
         if (!isConnected) {
           return (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-8 items-center gap-2 rounded-lg border border-border/70 bg-card/80 px-3 text-muted-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-card hover:text-foreground',
-                className,
-              )}
+            <WalletButton
+              label="Connect Wallet"
               onClick={openConnectModal}
-            >
-              <img
-                src={colorCircleIcon}
-                alt=""
-                className="size-[18px] rounded-full"
-                aria-hidden="true"
-              />
-              Connect Wallet
-            </button>
+              className={className}
+            />
           )
         }
 
@@ -207,24 +196,21 @@ function HeaderWalletButton({ className }: { className?: string }) {
           )
         }
 
+        // RainbowKit's `displayName` truncates to 4 chars total ("0x12...abcd").
+        // The mockup convention is 6 chars before the ellipsis ("0x1234...abcd"),
+        // so prefer the raw address through our `truncateAddress` helper. If
+        // displayName isn't an address (ENS resolved), keep it as-is.
+        const label = account.displayName.startsWith('0x')
+          ? truncateAddress(account.address)
+          : account.displayName
+
         return (
-          <button
-            type="button"
-            className={cn(
-              'inline-flex h-8 items-center gap-2 rounded-lg border border-border/70 bg-card/80 px-3 text-muted-foreground shadow-sm transition-colors hover:border-primary/45 hover:bg-card hover:text-foreground',
-              className,
-            )}
+          <WalletButton
+            label={label}
             onClick={openAccountModal}
-          >
-            <img
-              src={colorCircleIcon}
-              alt=""
-              className="size-[18px] rounded-full"
-              aria-hidden="true"
-            />
-            <span className="">{account.displayName}</span>
-            <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
-          </button>
+            ariaLabel={`Wallet ${label}`}
+            className={className}
+          />
         )
       }}
     </ConnectButton.Custom>
