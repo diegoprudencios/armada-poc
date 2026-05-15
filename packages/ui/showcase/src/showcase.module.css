@@ -107,3 +107,16 @@
     radial-gradient(900px 600px at 80% 110%, rgba(243, 208, 160, 0.08), transparent 60%),
     var(--semantic-color-surface-bg);
 }
+
+/* Inset positioning override for the @armada/ui Header — matches the mockup's
+   Hero header (Hero.module.css `.headerOverride`). The Header's own CSS Module
+   sets `top/left/right: 0`; this class is emitted later in the cascade so its
+   24px values win without needing `!important`. */
+.headerInset {
+  top: var(--primitives-spacing-6);
+  left: var(--primitives-spacing-6);
+  right: var(--primitives-spacing-6);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

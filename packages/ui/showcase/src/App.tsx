@@ -39,7 +39,7 @@ export function App() {
     <>
       <div className={s.bgRadial} aria-hidden />
 
-      <Header navItems={NAV} autoHideOnScroll={false} />
+      <Header navItems={NAV} autoHideOnScroll={false} className={s.headerInset} />
 
       <main className={s.page}>
         <section className={s.section}>

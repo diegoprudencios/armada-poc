@@ -115,8 +115,8 @@ children,
         mobileMenu={mobileMenu}
       />
 
-      {/* pt-14 clears the fixed AppHeader (h-14 / 56px). */}
-      <main className="flex-1 pt-14">{children}</main>
+      {/* pt-20 clears the inset AppHeader (top-6 + h-14 = 24 + 56 = 80px). */}
+      <main className="flex-1 pt-20">{children}</main>
 
       {footer === undefined ? <DefaultFooter network={network} appName={appName} /> : footer}
     </div>

@@ -62,8 +62,11 @@ export function AppHeader({
   return (
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between',
-        'bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/72',
+        // Inset 24px from top + each side, matching the mockup's Hero header
+        // (Hero.module.css `.headerOverride`). Transparent background so the
+        // body's radial gradient shows through unobstructed; consumers needing
+        // contrast under busy content should add their own bg via className.
+        'fixed inset-x-6 top-6 z-40 flex h-14 items-center justify-between',
         className,
       )}
     >
