@@ -62,66 +62,64 @@ export function AppHeader({
   return (
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-40 flex h-14 items-center',
+        'fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between',
         'bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/72',
         className,
       )}
     >
-      <div className="container mx-auto flex h-full items-center gap-3 px-4">
-        {/* Left: hamburger (mobile) + Armada wordmark */}
-        <div className="flex h-full min-w-0 items-center gap-2">
-          {mobileMenu !== undefined && (
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="sm:hidden"
-                  aria-label="Open menu"
-                >
-                  <Menu className="size-5" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80 sm:max-w-sm">
-                <SheetHeader>
-                  <SheetTitle>ARMADA</SheetTitle>
-                  <SheetDescription>{appName}</SheetDescription>
-                </SheetHeader>
-                <div className="flex flex-col gap-3 px-4 pb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Network</span>
-                    <Tag label={network} />
-                  </div>
-                  <Separator />
-                  {mobileMenu}
+      {/* Left: hamburger (mobile) + Armada wordmark */}
+      <div className="flex shrink-0 items-center gap-2.5 pl-4">
+        {mobileMenu !== undefined && (
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="sm:hidden"
+                aria-label="Open menu"
+              >
+                <Menu className="size-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-80 sm:max-w-sm">
+              <SheetHeader>
+                <SheetTitle>ARMADA</SheetTitle>
+                <SheetDescription>{appName}</SheetDescription>
+              </SheetHeader>
+              <div className="flex flex-col gap-3 px-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Network</span>
+                  <Tag label={network} />
                 </div>
-              </SheetContent>
-            </Sheet>
-          )}
-          <ArmadaLogo className="shrink-0" />
-        </div>
-
-        {/* Centered desktop nav — absolute so it stays centered regardless of left/right slot widths */}
-        {headerNav && (
-          <nav
-            aria-label="Primary"
-            className="absolute left-1/2 hidden -translate-x-1/2 items-center sm:flex"
-          >
-            {headerNav}
-          </nav>
+                <Separator />
+                {mobileMenu}
+              </div>
+            </SheetContent>
+          </Sheet>
         )}
+        <ArmadaLogo />
+      </div>
 
-        {/* Inline status slot (desktop) — sits between centered nav and right chrome */}
-        {headerStatus && (
-          <div className="hidden h-full items-center sm:flex">{headerStatus}</div>
-        )}
+      {/* Centered desktop nav — absolute so it stays centered regardless of left/right slot widths */}
+      {headerNav && (
+        <nav
+          aria-label="Primary"
+          className="absolute left-1/2 hidden -translate-x-1/2 items-center sm:flex"
+        >
+          {headerNav}
+        </nav>
+      )}
 
-        {/* Right: network badge + app-specific actions (desktop only) */}
-        <div className="ml-auto hidden items-center gap-3 sm:flex">
-          <Tag label={network} />
-          {headerRight}
-        </div>
+      {/* Inline status slot (desktop) — sits between centered nav and right chrome */}
+      {headerStatus && (
+        <div className="hidden h-full items-center sm:flex">{headerStatus}</div>
+      )}
+
+      {/* Right: network badge + app-specific actions (desktop only) */}
+      <div className="hidden shrink-0 items-center gap-3 pr-4 sm:flex">
+        <Tag label={network} />
+        {headerRight}
       </div>
     </header>
   )
