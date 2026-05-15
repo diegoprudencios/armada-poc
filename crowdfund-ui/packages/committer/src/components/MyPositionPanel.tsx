@@ -132,7 +132,7 @@ function SubtreeMini({
         x={center}
         y={center + 4}
         textAnchor="middle"
-        fontFamily="var(--font-family-heading)"
+        fontFamily="var(--font-heading)"
         fontSize={11}
         fontWeight={600}
         fill="var(--foreground)"
