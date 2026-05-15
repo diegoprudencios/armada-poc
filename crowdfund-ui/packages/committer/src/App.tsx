@@ -65,9 +65,9 @@ type Page = 'network' | 'participate' | 'claim' | 'my-position'
 const SHOW_LIFECYCLE_BAR = false
 
 const PAGE_ITEMS: ReadonlyArray<{ id: Page; label: string }> = [
-  { id: 'network', label: 'Network' },
+  { id: 'network', label: 'Crowdfund' },
+  { id: 'my-position', label: 'My position' },
   { id: 'claim', label: 'Claim' },
-  { id: 'my-position', label: 'My Position' },
 ]
 
 /**
@@ -75,61 +75,59 @@ const PAGE_ITEMS: ReadonlyArray<{ id: Page; label: string }> = [
  *
  *  Horizontal variant: pill nav from @armada/ui (NavBar + NavItem) matching the
  *  armada-crowdfund mockup. Vertical variant (mobile sheet) keeps a subtle bg
- *  fill on active and a parenthesized suffix for soft-disabled rows.
+ *  fill on the active row.
  *
- *  `softDisabled` items remain clickable so the destination page can render its
- *  own explanation. Horizontally, the suffix is appended inline to the label
- *  (e.g. "Claim (20d 13h)") because NavItem has no suffix slot. Vertically,
- *  the suffix renders as a separate muted span.
+ *  The leading "The project" item is a placeholder — no onClick handler, so it
+ *  renders but does not navigate. Reserved for a future project/landing page.
  */
 function PageNav({
   current,
   onChange,
   orientation = 'horizontal',
-  softDisabled,
 }: {
   current: Page
   onChange: (p: Page) => void
   orientation?: 'horizontal' | 'vertical'
-  /** Pages that are present but not yet (or no longer) actionable, mapped
-   *  to the suffix text rendered after the label. */
-  softDisabled?: ReadonlyMap<Page, string>
 }) {
   if (orientation === 'horizontal') {
-    const items: NavBarItem[] = PAGE_ITEMS.map((item) => {
-      const muted = softDisabled?.has(item.id) ?? false
-      const suffix = softDisabled?.get(item.id)
-      const label = muted && suffix ? `${item.label} (${suffix})` : item.label
-      return {
-        label,
+    const items: NavBarItem[] = [
+      { label: 'The project' },
+      ...PAGE_ITEMS.map((item) => ({
+        label: item.label,
         active: item.id === current,
         onClick: () => onChange(item.id),
-      }
-    })
+      })),
+    ]
     return <NavBar items={items} />
   }
 
   return (
     <ul className="flex flex-col items-stretch gap-1">
+      <li>
+        <button
+          type="button"
+          aria-disabled="true"
+          className={cn(
+            'w-full cursor-default rounded-md px-3 py-1.5 text-left text-muted-foreground opacity-60',
+          )}
+        >
+          The project
+        </button>
+      </li>
       {PAGE_ITEMS.map((item) => {
         const active = item.id === current
-        const muted = softDisabled?.has(item.id) ?? false
-        const suffix = softDisabled?.get(item.id)
         return (
           <li key={item.id}>
             <button
               type="button"
               onClick={() => onChange(item.id)}
               aria-current={active ? 'page' : undefined}
-              aria-disabled={muted ? 'true' : undefined}
               className={cn(
                 'w-full rounded-md px-3 py-1.5 text-left transition-colors hover:text-foreground',
                 active ? 'bg-muted/60 text-foreground' : 'text-muted-foreground',
-                muted && !active && 'opacity-60',
               )}
             >
               {item.label}
-              {muted && suffix && <span className="ml-1 opacity-80">({suffix})</span>}
             </button>
           </li>
         )
@@ -291,23 +289,10 @@ function MockCommitterApp({ size }: { size: number }) {
     setFocusRequest((prev) => ({ address: addr, tick: (prev?.tick ?? 0) + 1 }))
   }, [])
 
-  // Stress mode pretends we're mid-commit window: claim shows a fake
-  // countdown so the nav matches what live users see.
-  const mockSoftDisabled = useMemo<Map<Page, string>>(
-    () => new Map<Page, string>([['claim', formatCountdown(13 * 86400 + 4 * 3600)]]),
-    [],
-  )
-  const headerNav = (
-    <PageNav current={page} onChange={setPage} softDisabled={mockSoftDisabled} />
-  )
+  const headerNav = <PageNav current={page} onChange={setPage} />
   const mobileMenu = (
     <div className="flex flex-col gap-3">
-      <PageNav
-        current={page}
-        onChange={setPage}
-        orientation="vertical"
-        softDisabled={mockSoftDisabled}
-      />
+      <PageNav current={page} onChange={setPage} orientation="vertical" />
     </div>
   )
 
@@ -473,7 +458,7 @@ You'll be able to claim ARM tokens (or a USDC refund) after the
             key="mock-page-my-position"
             className="mx-auto max-w-2xl rounded-lg border border-border bg-card p-6 text-muted-foreground shadow-elevated animate-page-enter"
           >
-            <div className="mb-2 text-foreground">My Position</div>
+            <div className="mb-2 text-foreground">My position</div>
             Wallet-scoped dashboard — coming soon. This page will show your committed total,
             remaining invite slots, hop level, and a mini view of your subtree.
           </div>
@@ -871,12 +856,7 @@ export function App() {
 
   const mobileMenu = (
     <div className="flex flex-col gap-3">
-      <PageNav
-        current={page}
-        onChange={setPage}
-        orientation="vertical"
-        softDisabled={softDisabledPages}
-      />
+      <PageNav current={page} onChange={setPage} orientation="vertical" />
       <Separator />
       {wallet.connected ? (
         <div className="flex flex-col gap-1">
@@ -894,9 +874,7 @@ export function App() {
     </div>
   )
 
-  const headerNav = (
-    <PageNav current={page} onChange={setPage} softDisabled={softDisabledPages} />
-  )
+  const headerNav = <PageNav current={page} onChange={setPage} />
 
   // Derive "days remaining in commit window" for the inset campaign header.
   // Falls back to 0 before the window is known or after it closes.
