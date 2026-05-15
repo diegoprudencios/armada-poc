@@ -1,0 +1,25 @@
+/* ABOUTME: CSS Module for BarTrackTicks — repeating linear gradient produces the tick pattern. */
+/* ABOUTME: Ticks are anchored to the track and independent of the animated fill width. */
+
+/**
+ * Ticks: repeating 1px lines at --bar-tick-gap, inset by --bar-tick-offset.
+ * Pure CSS — no resize/measure loop, no coupling to bar width animation.
+ */
+.host {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  --bar-tick-gap: var(--primitives-spacing-2);
+  --bar-tick-offset: var(--primitives-spacing-1);
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--primitives-color-purple-500) 30%, transparent) 0,
+    color-mix(in srgb, var(--primitives-color-purple-500) 30%, transparent) 1px,
+    transparent 1px,
+    transparent var(--bar-tick-gap)
+  );
+  background-repeat: repeat-x;
+  background-position: var(--bar-tick-offset) 0;
+  max-height: 10px;
+}

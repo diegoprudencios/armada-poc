@@ -1,0 +1,12 @@
+/* ABOUTME: CSS Module for NavBar — flex container with rounded ends. */
+/* ABOUTME: Sources dimensions and bg from --semantic-component-navbar-* tokens. */
+
+.navBar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--semantic-component-navbar-gap);
+  height: var(--semantic-component-navbar-height);
+  padding: 0 var(--semantic-component-navbar-padding-x);
+  background: var(--semantic-component-navbar-bg);
+  border-radius: 100px;
+}

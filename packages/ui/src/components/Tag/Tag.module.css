@@ -1,0 +1,24 @@
+/* ABOUTME: CSS Module for Tag — uppercase label with optional colored status dot. */
+/* ABOUTME: Sources sizing, color, and radius from --semantic-component-tag-* tokens. */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--semantic-component-tag-gap);
+  height: var(--semantic-component-tag-height);
+  padding: 0 var(--semantic-component-tag-padding-x);
+  background: var(--semantic-component-tag-bg);
+  border-radius: var(--semantic-component-tag-radius);
+  font-family: "Geist", sans-serif;
+  font-size: var(--semantic-component-tag-font-size);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--semantic-component-tag-label);
+  white-space: nowrap;
+}
+.dot { width: var(--semantic-component-tag-dot-size); height: var(--semantic-component-tag-dot-size); border-radius: 50%; flex-shrink: 0; }
+.active  { background: var(--semantic-component-tag-dot-active); }
+.warning { background: var(--semantic-component-tag-dot-warning); }
+.error   { background: var(--semantic-component-tag-dot-error); }
+.neutral { background: var(--semantic-component-tag-dot-neutral); }
