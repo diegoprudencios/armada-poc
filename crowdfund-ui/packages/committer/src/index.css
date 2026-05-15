@@ -7,4 +7,5 @@
 @plugin "tailwindcss-animate";
 @import "tw-animate";
 
+@import "@armada/ui/styles/tokens.css";
 @import "@armada/crowdfund-shared/styles/theme.css";

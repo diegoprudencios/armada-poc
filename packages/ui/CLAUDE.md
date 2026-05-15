@@ -15,6 +15,19 @@ The strategy, scope, deferred work, and open questions for the designer are capt
 |------|---------|
 | `src/styles/tokens.css` | Design tokens (CSS custom properties — `--primitives-*` and `--semantic-*`). Live source of truth. |
 | `src/styles/global.css` | Reset and base body styles. Import once at the app entry point. |
+
+> **Consumers must import `tokens.css`** — every component CSS Module in this
+> package references `--primitives-*` / `--semantic-*` variables defined
+> there. Without the import, the components render unstyled (font, padding,
+> bg, border-radius all undefined). Pattern:
+>
+> ```css
+> /* app/src/index.css */
+> @import "@armada/ui/styles/tokens.css";
+> ```
+>
+> Apps that load tokens via JS instead can `import "@armada/ui/styles/tokens.css"`
+> in their main entry — see `packages/ui/showcase/src/main.tsx`.
 | `src/tokens/armada-tokens.json` | Reference copy of the upstream Style-Dictionary-formatted token source. Keep in sync when editing `tokens.css`. |
 | `src/components/<Name>/<Name>.tsx` | Primitive component implementation. |
 | `src/components/<Name>/<Name>.module.css` | Co-located CSS Module — scoped lexically, no global side effects. |
