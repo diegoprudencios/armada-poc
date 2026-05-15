@@ -1,6 +1,9 @@
 // ABOUTME: Public barrel for @armada/ui — re-exports every primitive and its types.
 // ABOUTME: Style sheets are exported via package.json subpath exports, not from here.
 
+export { ArmadaLogo } from './components/ArmadaLogo'
+export type { ArmadaLogoProps } from './components/ArmadaLogo'
+
 export { Button } from './components/Button'
 export type { ButtonProps, ButtonVariant, ButtonSize } from './components/Button'
 

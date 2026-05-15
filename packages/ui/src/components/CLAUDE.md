@@ -6,13 +6,18 @@ Primitives ported (byte-identical) from `/Volumes/T7/armada-crowdfund/src/compon
 
 | Component | Depends on |
 |-----------|-----------|
+| `ArmadaLogo` | — |
 | `Button` | — |
 | `Tag` | — |
 | `NavItem` | — |
 | `NavBar` | NavItem |
-| `Header` | NavBar, Button |
+| `Header` | ArmadaLogo, NavBar, Button |
 | `BarTrackTicks` | — |
 | `Progress` | BarTrackTicks, Tag |
+
+## Approved deviations from byte-identical port
+
+- **`ArmadaLogo`** — the SVG markup was defined as a local helper inside the mockup's `Header.tsx`. We hoisted it into its own primitive so consumer apps can build their own header chrome (e.g. crowdfund-shared's `AppHeader`) without duplicating the SVG. `Header.tsx` now imports `ArmadaLogo` from a sibling instead of declaring it inline. The SVG markup itself is byte-identical to the mockup.
 
 ## Layout convention
 
