@@ -3,7 +3,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArmadaLogo } from '../ArmadaLogo'
-import { NavBar, NavBarItem } from '../NavBar'
+import { NavBar } from '../NavBar'
+import type { NavBarItem } from '../NavBar'
 import { Button } from '../Button'
 import styles from './Header.module.css'
 

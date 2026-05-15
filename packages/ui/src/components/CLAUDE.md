@@ -18,6 +18,7 @@ Primitives ported (byte-identical) from `/Volumes/T7/armada-crowdfund/src/compon
 ## Approved deviations from byte-identical port
 
 - **`ArmadaLogo`** — the SVG markup was defined as a local helper inside the mockup's `Header.tsx`. We hoisted it into its own primitive so consumer apps can build their own header chrome (e.g. crowdfund-shared's `AppHeader`) without duplicating the SVG. `Header.tsx` now imports `ArmadaLogo` from a sibling instead of declaring it inline. The SVG markup itself is byte-identical to the mockup.
+- **`Header.tsx` value/type import split** — the mockup uses `import { NavBar, NavBarItem } from '../NavBar'`. Our consumers (`committer`, `observer`, `admin`) compile with `verbatimModuleSyntax: true`, which requires type-only imports to use `import type`. Header.tsx splits the import (`import { NavBar }` plus `import type { NavBarItem }`). Same runtime behaviour; satisfies stricter consumer tsconfigs that transitively type-check this source.
 
 ## Layout convention
 
