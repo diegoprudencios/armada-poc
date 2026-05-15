@@ -157,17 +157,13 @@ function HeaderWalletButton({ className }: { className?: string }) {
 
         if (!isReady) {
           return (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-8 items-center gap-2 rounded-lg border border-border/70 bg-card/70 px-3 text-muted-foreground shadow-sm',
-                className,
-              )}
+            <WalletButton
+              label="Connecting..."
+              icon={<Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
               disabled
-            >
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-              Wallet
-            </button>
+              ariaLabel="Wallet connecting"
+              className={className}
+            />
           )
         }
 
@@ -183,16 +179,13 @@ function HeaderWalletButton({ className }: { className?: string }) {
 
         if (chain.unsupported) {
           return (
-            <button
-              type="button"
-              className={cn(
-                'inline-flex h-8 items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 text-destructive transition-colors hover:bg-destructive/15',
-                className,
-              )}
+            <WalletButton
+              label="Wrong network"
+              variant="destructive"
               onClick={openChainModal}
-            >
-              Wrong network
-            </button>
+              ariaLabel="Wrong network — click to switch"
+              className={className}
+            />
           )
         }
 
