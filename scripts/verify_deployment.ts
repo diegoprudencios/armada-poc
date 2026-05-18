@@ -348,6 +348,21 @@ async function checkYieldFeeWiring(
     fail(GROUP, "YieldVault adapter set", "Error reading adapter");
   }
 
+  // Treasury wired to ArmadaTreasuryGov from governance manifest
+  if (govManifest?.contracts?.treasury) {
+    try {
+      const vaultTreasury = await vault.treasury();
+      if (vaultTreasury.toLowerCase() === govManifest.contracts.treasury.toLowerCase()) {
+        pass(GROUP, "YieldVault treasury == ArmadaTreasuryGov");
+      } else {
+        fail(GROUP, "YieldVault treasury == ArmadaTreasuryGov",
+          `Expected ${govManifest.contracts.treasury}, got ${vaultTreasury}`);
+      }
+    } catch {
+      fail(GROUP, "YieldVault treasury == ArmadaTreasuryGov", "Error reading treasury");
+    }
+  }
+
   // Fee module on vault
   if (feeManifest?.contracts?.feeModuleProxy) {
     try {

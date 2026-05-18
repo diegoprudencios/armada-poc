@@ -73,10 +73,10 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     /// @notice The reserve ID in the Spoke
     uint256 public immutable reserveId;
 
-    // ============ State ============
+    /// @notice Treasury address for yield fees (ArmadaTreasuryGov). Set once at deployment.
+    address public immutable treasury;
 
-    /// @notice Treasury address for yield fees
-    address public treasury;
+    // ============ State ============
 
     /// @notice Contract owner
     address public owner;
