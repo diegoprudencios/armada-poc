@@ -122,9 +122,11 @@ describe("Fee Module Integration", function () {
       await ethers.getContractFactory("TransactModule", { libraries: { PoseidonT4: poseidonT4Address } })
     ).deploy();
 
-    // Treasury (deployed before PrivacyPool so address is available for initialize)
-    const ArmadaTreasury = await ethers.getContractFactory("ArmadaTreasury");
-    armadaTreasury = await ArmadaTreasury.deploy();
+    // Treasury (deployed before PrivacyPool so address is available for initialize).
+    // ArmadaTreasuryGov is the unified treasury (#152/#154); deployer acts as
+    // timelock-owner for this fee-module integration test.
+    const ArmadaTreasuryGov = await ethers.getContractFactory("ArmadaTreasuryGov");
+    armadaTreasury = await ArmadaTreasuryGov.deploy(deployerAddress);
     treasuryAddress = await armadaTreasury.getAddress();
 
     // PrivacyPool

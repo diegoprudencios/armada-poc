@@ -355,7 +355,6 @@ async function checkYieldFeeWiring(
   const GROUP = "Yield + Fee Wiring";
   const vaultAddr = yieldManifest.contracts.armadaYieldVault;
   const adapterAddr = yieldManifest.contracts.armadaYieldAdapter;
-  const treasuryAddr = yieldManifest.contracts.armadaTreasury;
 
   const vault = await ethers.getContractAt("ArmadaYieldVault", vaultAddr);
 
@@ -369,6 +368,21 @@ async function checkYieldFeeWiring(
     }
   } catch {
     fail(GROUP, "YieldVault adapter set", "Error reading adapter");
+  }
+
+  // Treasury wired to ArmadaTreasuryGov from governance manifest
+  if (govManifest?.contracts?.treasury) {
+    try {
+      const vaultTreasury = await vault.treasury();
+      if (vaultTreasury.toLowerCase() === govManifest.contracts.treasury.toLowerCase()) {
+        pass(GROUP, "YieldVault treasury == ArmadaTreasuryGov");
+      } else {
+        fail(GROUP, "YieldVault treasury == ArmadaTreasuryGov",
+          `Expected ${govManifest.contracts.treasury}, got ${vaultTreasury}`);
+      }
+    } catch {
+      fail(GROUP, "YieldVault treasury == ArmadaTreasuryGov", "Error reading treasury");
+    }
   }
 
   // Fee module on vault
@@ -393,7 +407,6 @@ async function checkYieldFeeWiring(
     for (const [name, addr] of [
       ["YieldVault", vaultAddr],
       ["YieldAdapter", adapterAddr],
-      ["ArmadaTreasury", treasuryAddr],
     ]) {
       try {
         const contract = await ethers.getContractAt("Ownable", addr);

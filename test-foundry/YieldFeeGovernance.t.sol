@@ -6,7 +6,7 @@ pragma solidity ^0.8.17;
 
 import "forge-std/Test.sol";
 import "../contracts/yield/ArmadaYieldVault.sol";
-import "../contracts/yield/ArmadaTreasury.sol";
+import "../contracts/governance/ArmadaTreasuryGov.sol";
 import "../contracts/aave-mock/MockAaveSpoke.sol";
 import "../contracts/cctp/MockUSDCV2.sol";
 
@@ -15,7 +15,7 @@ contract YieldFeeGovernanceTest is Test {
     ArmadaYieldVault public vault;
     MockUSDCV2 public usdc;
     MockAaveSpoke public spoke;
-    ArmadaTreasury public treasury;
+    ArmadaTreasuryGov public treasury;
 
     address public deployer = address(this);
     address public alice = address(0xA11CE);
@@ -32,7 +32,9 @@ contract YieldFeeGovernanceTest is Test {
         usdc.addMinter(address(spoke));
         spoke.addReserve(address(usdc), YIELD_BPS, true);
 
-        treasury = new ArmadaTreasury();
+        // Treasury is the unified ArmadaTreasuryGov (#152/#154). Tests here only use
+        // it as a fee-sink address; the timelock-owner arg is satisfied by address(this).
+        treasury = new ArmadaTreasuryGov(address(this));
         vault = new ArmadaYieldVault(
             address(spoke),
             0,

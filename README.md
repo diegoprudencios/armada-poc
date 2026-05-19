@@ -104,7 +104,7 @@ The POC includes a complete shielded yield system that allows users to earn yiel
 
 3. **Shielded Withdraw**: User's shielded ayUSDC is atomically unshielded, redeemed from the vault, and the resulting USDC (principal + yield) is shielded back.
 
-4. **Fee Collection**: A 10% yield fee is collected on withdrawal and sent to the ArmadaTreasury.
+4. **Fee Collection**: A 10% yield fee is collected on withdrawal and sent to the governance-controlled treasury (`ArmadaTreasuryGov`).
 
 ### Cross-Contract Calls (ArmadaYieldAdapter)
 
@@ -127,7 +127,7 @@ The proof commits `adaptParams = hash(npk, encryptedBundle, shieldKey)`, so the 
 |----------|-------------|
 | `ArmadaYieldVault` | ERC4626 vault wrapping Aave, issues non-rebasing ayUSDC shares |
 | `ArmadaYieldAdapter` | Trustless bridge: unshield → deposit/redeem → shield (adaptParams binds destination) |
-| `ArmadaTreasury` | Collects 10% yield fees on redemptions |
+| `ArmadaTreasuryGov` | Governance-controlled treasury (in `contracts/governance/`) — receives 10% yield fees |
 | `MockAaveSpoke` | Simulated Aave V4 spoke for local testing |
 
 ### Real-Time Yield Display
@@ -174,7 +174,6 @@ poc/
 │   ├── yield/              # Yield vault contracts
 │   │   ├── ArmadaYieldVault.sol
 │   │   ├── ArmadaYieldAdapter.sol
-│   │   ├── ArmadaTreasury.sol
 │   │   └── MockAaveSpoke.sol
 │   ├── MockUSDC.sol        # CCTP simulation (burn/mint)
 │   └── Faucet.sol          # Test token faucet

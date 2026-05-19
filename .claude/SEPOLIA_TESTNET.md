@@ -42,7 +42,7 @@ Core config module: `config/networks.ts` — single source of truth for chains, 
 **Contracts deployed:**
 - PrivacyPool + 4 modules (MerkleModule, VerifierModule, ShieldModule, TransactModule) — hub
 - PrivacyPoolClient — client
-- ArmadaTreasury — hub
+- ArmadaTreasuryGov (governance-controlled treasury) — hub
 
 **What this validates:**
 - Real CCTP V2 `depositForBurnWithHook` round-trip

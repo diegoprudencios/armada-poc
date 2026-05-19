@@ -121,12 +121,10 @@ async function main() {
   // Fee module extended selectors (setBaseArmadaTake, addTier, etc.) are hardcoded
   // in ArmadaGovernor.initialize() — no runtime registration needed.
 
-  // 6. Transfer yield contract ownership to timelock (all owner-gated config complete)
+  // 6. Transfer yield contract ownership to timelock (all owner-gated config complete).
+  //    ArmadaTreasuryGov is already owned by the timelock (immutable at deploy time).
   console.log("\n--- Transferring yield contract ownership to timelock ---");
-  const armadaTreasury = await ethers.getContractAt("Ownable", yieldDeployment.contracts.armadaTreasury);
   const armadaYieldAdapter = await ethers.getContractAt("Ownable", yieldDeployment.contracts.armadaYieldAdapter);
-  await (await armadaTreasury.transferOwnership(timelockAddress, nm.override())).wait();
-  console.log(`   ArmadaTreasury owner → ${timelockAddress}`);
   await (await yieldVault.transferOwnership(timelockAddress, nm.override())).wait();
   console.log(`   ArmadaYieldVault owner → ${timelockAddress}`);
   await (await armadaYieldAdapter.transferOwnership(timelockAddress, nm.override())).wait();
