@@ -6,7 +6,8 @@
     "usdc-v2-frontend",
     "crowdfund-ui/packages/*",
     "packages/*",
-    "packages/ui/showcase"
+    "packages/ui/showcase",
+    "apps/*"
   ],
   "scripts": {
     "compile": "hardhat compile",
@@ -58,6 +59,7 @@
     "crowdfund:committer": "npm run dev --workspace=@armada/crowdfund-committer",
     "crowdfund:admin": "npm run dev --workspace=@armada/crowdfund-admin",
     "ui:showcase": "npm run dev --workspace=@armada/ui-showcase",
+    "armada:interface": "npm run dev --workspace=@armada/interface",
     "crowdfund:indexer": "npm run dev --workspace=@armada/crowdfund-indexer",
     "crowdfund:indexer:cli": "npm run cli --workspace=@armada/crowdfund-indexer",
     "crowdfund:populate": "hardhat run scripts/crowdfund_populate.ts --network hub",

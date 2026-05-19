@@ -1,0 +1,107 @@
+// ABOUTME: Pure state transitions for TxRecord — advance(), markFailed(), markExpired(), markCancelled(), etc. No React, no IO.
+// ABOUTME: Hooks call these and write the result back to the txListAtom + IDB. Every transition increments updatedSeq (OCC; see storage.ts).
+
+import { lifecycleFor } from './lifecycles'
+import type { ArtifactsFor, StageFor, TxKind, TxRecord } from './types'
+
+/** Reach the next stage. Sets executionState to `completed` if at terminalSuccess, else `active`. */
+export function advance<K extends TxKind>(
+  record: TxRecord<K>,
+  toStage: StageFor<K>,
+  artifactPatch: Partial<ArtifactsFor<K>> = {},
+): TxRecord<K> {
+  const lifecycle = lifecycleFor(record.kind)
+  const stages = lifecycle.stages
+  const toIndex = stages.indexOf(toStage)
+  if (toIndex === -1) {
+    throw new Error(`reducer.advance: stage "${toStage}" is not part of lifecycle "${record.kind}"`)
+  }
+
+  const newCompleted = [...new Set([...record.stagesCompleted, ...stages.slice(0, toIndex)])] as StageFor<K>[]
+  const isTerminal = toStage === lifecycle.terminalSuccess
+
+  return {
+    ...record,
+    stage: toStage,
+    stagesCompleted: newCompleted,
+    executionState: isTerminal ? 'completed' : 'active',
+    updatedSeq: record.updatedSeq + 1,
+    updatedAt: Date.now(),
+    artifacts: { ...record.artifacts, ...artifactPatch },
+  }
+}
+
+/** Stage is in flight but blocked on an external event (e.g. Iris attestation). */
+export function markWaiting<K extends TxKind>(record: TxRecord<K>): TxRecord<K> {
+  return {
+    ...record,
+    executionState: 'waiting',
+    updatedSeq: record.updatedSeq + 1,
+    updatedAt: Date.now(),
+  }
+}
+
+/** A retry attempt is in flight after a recoverable failure. */
+export function markRetrying<K extends TxKind>(record: TxRecord<K>): TxRecord<K> {
+  return {
+    ...record,
+    executionState: 'retrying',
+    updatedSeq: record.updatedSeq + 1,
+    updatedAt: Date.now(),
+  }
+}
+
+export function markFailed<K extends TxKind>(record: TxRecord<K>, error: string): TxRecord<K> {
+  return {
+    ...record,
+    executionState: 'failed',
+    updatedSeq: record.updatedSeq + 1,
+    updatedAt: Date.now(),
+    artifacts: { ...record.artifacts, error } as Partial<ArtifactsFor<K>>,
+  }
+}
+
+export function markExpired<K extends TxKind>(record: TxRecord<K>): TxRecord<K> {
+  return {
+    ...record,
+    executionState: 'expired',
+    updatedSeq: record.updatedSeq + 1,
+    updatedAt: Date.now(),
+  }
+}
+
+export function markCancelled<K extends TxKind>(record: TxRecord<K>): TxRecord<K> {
+  return {
+    ...record,
+    executionState: 'cancelled',
+    updatedSeq: record.updatedSeq + 1,
+    updatedAt: Date.now(),
+  }
+}
+
+/** Is the current stage one the user/executor can retry from (vs starting over)? */
+export function isRetryable<K extends TxKind>(record: TxRecord<K>): boolean {
+  const lifecycle = lifecycleFor(record.kind)
+  return (lifecycle.retryableStages as readonly string[]).includes(record.stage)
+}
+
+/**
+ * Should this record be polled on app resume? Plan §7 + reviewer #7:
+ *   non-terminal AND (Date.now() - createdAt) < lifecycle.maxDurationMs → resume
+ *   else → caller marks it expired
+ *
+ * Using createdAt rather than updatedAt because the lifecycle cap is wall-clock total,
+ * not idle time. A long pause in updates while waiting on Iris is normal.
+ */
+export function shouldResume<K extends TxKind>(record: TxRecord<K>): boolean {
+  if (
+    record.executionState === 'completed' ||
+    record.executionState === 'failed' ||
+    record.executionState === 'expired' ||
+    record.executionState === 'cancelled'
+  ) {
+    return false
+  }
+  const lifecycle = lifecycleFor(record.kind)
+  return Date.now() - record.createdAt < lifecycle.maxDurationMs
+}
