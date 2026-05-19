@@ -146,70 +146,131 @@ type TxKind =
   | 'yield-withdraw'      // shielded yield shares → shielded USDC
   | 'payment-xchain'      // shielded → EVM (client chain, via CCTP)
 
-type TxStatus = 'building' | 'submitted' | 'confirmed' | 'failed' | 'expired'
+// Reviewer rec #1 — execution state is separate from protocol stage to avoid
+// semantic overlap (e.g. `stage = iris-attestation-pending` + `status = submitted`
+// muddies what "submitted" means).
+type TxExecutionState =
+  | 'pending'    // record created, executor has not started this stage
+  | 'active'     // executor is currently running the stage
+  | 'waiting'    // running but blocked on external event (Iris, mint receipt)
+  | 'retrying'   // retry attempt in flight after recoverable error
+  | 'completed'  // terminal success (stage === lifecycle.terminalSuccess)
+  | 'failed'     // terminal failure (unrecoverable)
+  | 'expired'    // exceeded lifecycle.maxDurationMs
+  | 'cancelled'  // user-initiated abort
+
+type TxWalletContext = {
+  evmAddress: string | undefined       // signer wallet at submit, if any
+  railgunWalletId: string              // always present — shielded origin
+  sourceChainId: number                // hub chain for shielded-only ops
+}
 
 type TxRecord<K extends TxKind = TxKind> = {
-  id: string                          // ulid generated client-side (idempotency key)
+  id: string                          // ulid (idempotency key)
   kind: K
-  status: TxStatus
-  stage: StageFor<K>                  // discriminated per kind
+  executionState: TxExecutionState    // lifecycle position — separate from stage (reviewer #1)
+  stage: StageFor<K>                  // protocol position — discriminated per kind
+  stagesCompleted: StageFor<K>[]
+  updatedSeq: number                  // monotonic OCC counter (reviewer #3); reducer increments, storage rejects stale writes
   createdAt: number
   updatedAt: number
-  artifacts: Partial<ArtifactsFor<K>> // tx hashes, attestations, error strings, accumulated as stages progress
-  meta: MetaFor<K>                    // amount, recipient, chain, fee quote, etc. — captured at submit
+  meta: MetaFor<K>                    // amount, recipient, chain, fee quote — captured at submit
+  artifacts: Partial<ArtifactsFor<K>> // tx hashes, attestations, errors — accumulated as stages complete
+  walletContext: TxWalletContext      // ownership/session (reviewer #4) — required for history filtering + debugging
 }
 ```
 
-Each `TxKind` declares its **stage sequence** in `lib/tx/lifecycles.ts`. Example for the worst case (cross-chain unshield):
+Each `TxKind` declares its **stage sequence + retry policy + duration cap** in `lib/tx/lifecycles.ts`. Per-kind expiry (reviewer #7) replaces the original global 30 min cap. Example (cross-chain unshield):
 
 ```ts
 const unshieldXchain: TxLifecycle = {
   kind: 'unshield-xchain',
   stages: [
-    'build-proof',
-    'submit-relayer',
-    'hub-burn-confirmed',
-    'iris-attestation-pending',
-    'iris-attestation-ready',
-    'client-mint-pending',
-    'client-mint-confirmed',
+    'build-proof', 'submit-relayer', 'hub-burn-confirmed',
+    'iris-attestation-pending', 'iris-attestation-ready',
+    'client-mint-pending', 'client-mint-confirmed',
   ],
   terminalSuccess: 'client-mint-confirmed',
-  estDuration: { p50: 30_000, p90: 120_000 },
   retryableStages: ['submit-relayer', 'iris-attestation-pending'],
+  estDuration: { p50: 30_000, p90: 120_000 },
+  maxDurationMs: 60 * 60_000,                                    // xchain: 60 min cap
+  retry: { maxAttempts: 5, backoffMs: 10_000 },
 }
 ```
 
+Same-chain kinds use `maxDurationMs: 10 * 60_000`; yield ops `15 * 60_000`. The reviewer's concern (a `shield` stuck for 30 min is dead but Iris legitimately needs 15-20 min) is handled per-kind rather than per-stage; refine to per-stage only when a real case demands it.
+
 Simpler kinds (`transfer-shielded`, `yield-deposit`) have shorter sequences but conform to the same shape — so a single `<TxLifecycleStepper>` renders any kind.
 
-### Storage
+### Storage (optimistic concurrency)
 
-- **In-memory:** `txListAtom: TxRecord[]` (Jotai). Derived atoms: `pendingTxsAtom`, `byIdAtom(id)`, `txsForKindAtom(kind)`.
-- **Persistent:** IndexedDB mirror. Every state transition writes through. Atomic put. Hydrate `txListAtom` from IDB on app load.
-- **Resume policy:** on load, for each non-terminal record:
-  - `updatedAt > 30 min ago` → mark `expired`, show in history with retry button
-  - else → resume polling for the current stage
+- **In-memory:** `txListAtom: TxRecord[]` (Jotai). Derived atoms: `pendingTxsAtom`, `txByIdAtom(id)`, `txsForKindAtom(kind)`, `txsForStateAtom(state)`. Write path goes through `upsertTxAtom` which rejects stale writes (`existing.updatedSeq >= incoming.updatedSeq`).
+- **Persistent:** IndexedDB mirror. Every state transition writes through `putTxIfFresh()` which enforces the same OCC. Hydrate `txListAtom` from IDB on app load via `useTxHistory()`.
+- **Resume policy:** on load (and on executor leader-acquire), for each non-terminal record:
+  - `Date.now() - createdAt < lifecycle.maxDurationMs` → resume polling for the current stage (`executeTx(record.id)`)
+  - else → mark `expired`, show in history with retry button
 
 ### Per-tx hook (NOT a singleton)
 
 ```ts
-const tx = useTx({ kind: 'shield', meta: { amount, recipient } })
-// tx.submit(), tx.record, tx.retry(), tx.cancel()
+const tx = useTx({ kind: 'shield' })
+// tx.submit(meta), tx.record, tx.retry(), tx.cancel()
 ```
 
-Multiple `useTx` instances coexist. Each owns a `id` (ulid). UI subscribes to derived atoms; the hook only writes to `txListAtom` and triggers pollers.
+Multiple `useTx` instances coexist. Each owns a `id` (ulid). UI subscribes to derived atoms; the hook dispatches into the executor (see §7a) but does not orchestrate.
 
 This fundamentally **fixes the committer's single-tx limitation**.
 
-### Pollers
+## 7a. Tx execution engine (reviewer rec #2 + #9)
 
-`lib/tx/poller.ts` — for each non-terminal `TxRecord`, determine the right poller from the current stage:
+The executor lives at **module scope** in `lib/tx/executor.ts` — NOT inside a hook. React doesn't own it. Hooks dispatch `executeTx(id)` / `cancelTx(id)`; the engine runs the handler chain in a fire-and-forget Promise.
 
-- `iris-attestation-pending` → `pollIris({ messageHash, abortSignal })`. 10s interval base, jittered ±20%, exponential backoff on 5xx. 30 min total cap.
-- `hub-burn-confirmed` / `client-mint-confirmed` → poll `getTransactionReceipt` via RPC OR relayer `/status/:txHash`, whichever path makes sense for the kind.
-- Pause when tab hidden — single `visibilityState` listener publishes to `tabVisibleAtom`; pollers gate on it.
+### Why outside React
 
-Each poller respects `AbortController`. Reducer dispatches a transition when the stage completes or fails.
+If we put the stage pipeline inside `useTx`, we'd hit:
+- StrictMode double-mounts (in dev) → duplicate handlers spawned for the same tx
+- Component unmount mid-stage → orphaned pollers
+- Stale closures over fast-changing state
+- Visibility races between mounted hook instances
+
+A module-scope executor sidesteps all of that. Hooks become thin subscription wrappers.
+
+### Architecture
+
+```
+TxRecord (persisted) → executeTx(id) → handler.run(record, ctx)
+                                       ↓
+                                ctx.upsert(nextRecord) — atom + IDB (OCC)
+                                       ↓
+                              chain loop reloads, decides next step
+```
+
+- `registerHandler<K>(handler: StageHandler<K>)` — feature passes register at module-import time.
+- `startEngine()` — called once from `App.tsx`'s mount effect. Idempotent. Acquires the leader lock + resumes non-terminal records.
+- `executeTx(id)` — spawns the handler chain. Reentrancy-guarded (running set keyed by id). No-op on follower tabs.
+- `cancelTx(id)` — aborts the controller, marks record `cancelled`.
+
+### Leader election (reviewer #9)
+
+`startEngine()` requests `navigator.locks.request('armada-tx-executor', { mode: 'exclusive', ifAvailable: true })`. The holder runs handlers; non-holders skip them entirely.
+
+Follower tabs in v1 are passive observers — atoms still hydrate from IDB, but they don't execute. When the leader closes its tab, the lock releases; the next tab to refresh becomes leader. We deliberately did NOT implement cross-tab live sync (BroadcastChannel + follower atom updates) in v1 — open multiple tabs and only the first is interactively useful. Land cross-tab live sync if/when UX feedback demands it.
+
+### Visibility gating
+
+Even on the leader, the chain loop pauses when `tabVisibleAtom` is false. This is polite to API quotas and avoids ratchet-tight retries on backgrounded tabs.
+
+### Stage handler contract
+
+```ts
+interface StageHandler<K extends TxKind> {
+  kind: K
+  run(record: TxRecord<K>, ctx: ExecutorCtx<K>): Promise<void>
+  resumableFrom: ReadonlyArray<StageFor<K>>
+}
+```
+
+The handler runs ONE stage: persists transitions via `ctx.upsert(...)`, honors `ctx.signal` for cancellation, and returns when the stage is done. The chain loop reads the updated record and decides whether to invoke `run` again (next stage), pause (`'waiting'`), or terminate (terminal state).
 
 ### UI: one stepper component, all kinds
 
@@ -248,18 +309,20 @@ Cache the quote in `feeQuoteAtom` keyed by `chainId`. Persist short-lived quote 
 
 ## 11. Polling + caching strategy
 
-| What | Mechanism | Cadence | Pause-on-hidden | Persistence |
+| What | Owner | Cadence | Pause-on-hidden | Persistence |
 |---|---|---|---|---|
-| Unshielded USDC balance | react-query | 15s (local) / 30s (sepolia) | ✓ (rq default + visibility gate) | rq cache (gcTime 10m) |
+| Unshielded USDC balance | react-query (in `useBalances`) | 15s (local) / 30s (sepolia) | ✓ | rq cache (gcTime 10m) |
 | Shielded balances | Railgun SDK events + manual refresh on tx | event-driven | n/a | IDB snapshot on settle |
 | Yield rate | react-query + event-triggered debounced refresh | 30s + on Aave events | ✓ | rq cache |
 | Fees | `useFees` custom (see §8) | TTL-based, refresh 30s before expiry | ✓ | IDB short-lived |
-| Iris attestations | custom abortable poller | 10s ±20% jitter, exp backoff on 5xx, 30 min cap | ✓ | n/a (lifecycle owns) |
-| Receipt-by-hash | RPC or relayer `/status` | 5s for first 30s, then 15s | ✓ | n/a |
+| Iris attestations | **executor stage handler** (`iris-attestation-pending`) via `lib/tx/poller.ts` | 10s ±20% jitter, exp backoff on 5xx, per-kind cap | ✓ | n/a (lifecycle owns) |
+| Receipt-by-hash | **executor stage handler** (`hub-*-confirmed` etc.) | 5s for first 30s, then 15s | ✓ | n/a |
 | Indexer health | react-query | 60s | ✓ | n/a |
 | ENS | react-query + IDB | on demand + 24h TTL | n/a | IDB |
 
-Centralization: a single `useTabVisible` hook listens to `visibilitychange` once and publishes to `tabVisibleAtom`. All pollers read this atom; nothing else touches `document.visibilityState`.
+**Ownership note:** in-flight tx pollers (Iris, receipt confirmations) are owned by the executor's stage handlers — NOT by React hooks. The handlers receive an `AbortSignal` via `ctx.signal` and propagate it into `poll(...)` from `lib/tx/poller.ts`. This means `cancelTx(id)` aborts pollers cleanly, and pollers naturally pause/resume with the chain loop.
+
+Centralization: a single `useTabVisible` hook listens to `visibilitychange` once and publishes to `tabVisibleAtom`. All pollers read this atom; nothing else touches `document.visibilityState`. The executor's chain loop also gates on it.
 
 ## 12. Pages + routes (decided)
 
@@ -328,6 +391,19 @@ Header nav (in @armada/ui AppHeader's `headerNav` slot): **Dashboard · History 
 | 17 | ESLint rule: `ethers` and `@railgun-community/*` import forbidden in `components/**` | Enforces business-logic-out-of-components |
 | 18 | ESLint rule: `console.log`/`debug` blocked in `lib/railgun/`, warned elsewhere with secret-typed args | Secret-leak prevention |
 | 19 | `eslint-plugin-jsx-a11y` from day one | Accessibility budget |
+| 20 | Split execution state from protocol stage (`executionState` separate from `stage`) | Reviewer #1 — avoid semantic overlap (e.g. "submitted" losing meaning when waiting on Iris) |
+| 21 | `updatedSeq` optimistic concurrency on `TxRecord` | Reviewer #3 — protect against duplicate-tab writes, poller races, recovery anomalies |
+| 22 | `walletContext` on every `TxRecord` (evmAddress, railgunWalletId, sourceChainId) | Reviewer #4 — history filtering + debugging need stable identity |
+| 23 | Per-kind `maxDurationMs` + `retry` policy in `TxLifecycle` | Reviewer #7 — global 30-min cap is wrong for shield (too long) and xchain (too short) |
+| 24 | Plural shielded wallet schema even though v1 UI is singular | Reviewer #5 — migration later is annoying; cost now is trivial |
+| 25 | Tx executor at module scope, NOT inside React | Reviewer #2 — avoids StrictMode double-mount + remount + stale-closure bugs |
+| 26 | Single-leader execution via `navigator.locks` (no follower live sync in v1) | Reviewer #9 — prevents duplicate-tab pollers; cross-tab live sync deferred until UX feedback demands it |
+| 27 | `EventSource` interface (RPC + Indexer implementations swappable) | Reviewer #8 — hooks don't couple to RPC; indexer rollout is a config change |
+| 28 | Typed telemetry `EventRegistry` (compile-time privacy enforcement) | Reviewer #12 — registry edit is the privacy review surface |
+| 29 | Fee validator with absolute + ratio bounds (no external price oracle) | Reviewer #6 simplified — guards against decimal bugs / stale cache / config errors without coupling to a price source |
+| 30 | Lazy-init Railgun engine with explicit `railgunEngineAtom` warmup state | Reviewer #10 — UI can render "warming up" indicator; preload opportunistically |
+| 31 | Memory zeroization discipline in `lib/railgun/` (best-effort `fill(0)` on key buffers) | Reviewer #11 — JS makes this imperfect but discipline reduces leak surface |
+| 32 | WebAuthn-friendly encryption schema (KEK/DEK separation; password-only for v1) | Reviewer #11 — don't paint into a corner that assumes password-only forever |
 
 ## 16. Telemetry
 
