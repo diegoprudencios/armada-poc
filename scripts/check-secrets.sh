@@ -14,6 +14,7 @@ ALLOWED_FILES=(
   "scripts/check-secrets.sh"        # This script (contains patterns, not secrets)
   "scripts/derive_relayer_railgun_address.ts"  # Local-dev relayer key derivation
   "relayer/config.ts"               # Anvil default key for local relayer
+  "apps/armada-interface/src/lib/crypto/boundary-vectors.test.ts"   # BN254 field-order constant + spec test vectors (publicly known math)
 )
 
 # Patterns that indicate secrets. Each entry: "LABEL:::REGEX"
