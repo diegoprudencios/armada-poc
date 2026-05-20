@@ -50,7 +50,6 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 | Item | Size | Notes |
 |---|---|---|
-| Query `/fees` for `maxFee` | S | `features/unshield-xchain/handler.ts` hardcodes `maxFee = 1_100_000n` (the local mock relayer's floor). Production needs the dynamic quote from the relayer + surfacing it on the Review step. |
 | Iris attestation polling for finer stage transitions | M | Today we collapse `iris-attestation-ready` / `client-mint-pending` / `client-mint-confirmed` into one detection. Real CCTP mode (Sepolia) needs Iris polling to split these. `lib/cctp.ts::pollIrisOnce` is stubbed. |
 | Real CCTP (Sepolia) end-to-end test | S | Handler is mode-agnostic by design but unverified on real CCTP. |
 | Retry/cancel mid-polling UX | S | If the destination delivery hangs, the user can't cleanly cancel; the executor will timeout at the lifecycle's `maxDurationMs` (60 min). Add a Cancel CTA wired to `useTx().cancel()` on the Progress step. |
@@ -73,9 +72,8 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 | Item | Size | Notes |
 |---|---|---|
-| `useFees()` → `/fees` endpoint | M | All modals show "Loading…" in FeeSummary. Wire the relayer HTTP client (`lib/relayer.ts` is partially stubbed). Cache quotes with 5-min TTL per the relayer's existing convention. |
-| `lib/relayer.ts` real HTTP client | M | Function signatures exist; bodies throw. Needs `/relay`, `/fees`, `/status/:txHash` integration. |
-| Per-kind fee surface on Review steps | S | FeeSummary primitive exists; just needs the quote source. |
+| `submitRelay()` HTTP client | M | `lib/relayer.ts::submitRelay` still throws. Needed for the relayer-mediated submit path that hides the second MetaMask prompt. The other endpoints (`fetchFees`, `pollStatus`) are wired. |
+| Stale-quote handling on submit | S | If a modal sits open through a fee-schedule refresh, the user could click Confirm with a stale `cacheId`. The relayer rejects with `FEE_EXPIRED`; we should detect that and offer a one-click re-quote rather than dumping the user into an error step. |
 
 ## Debug page
 
