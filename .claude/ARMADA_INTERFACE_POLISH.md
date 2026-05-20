@@ -30,15 +30,12 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 | Item | Size | Notes |
 |---|---|---|
-| Engine pre-warm on app mount | XS | `useRailgunEngineSync` mirrors lifecycle state, but the engine warms lazily on first enroll/unlock. Could pre-warm to make first tx instant. |
 | Tx history detail view | S | History page lists records but no detail/explorer-link panel. `TxLifecycleStepper` already exists; just need a route + outlet. |
 | Cross-tab follower live-sync | M | v1 has only the leader executor running. Other tabs see records but lifecycles freeze. Out of scope per Plan §7a; revisit when it bites. |
 
 ## Shield flow
 
-| Item | Size | Notes |
-|---|---|---|
-| `integrator` address pass-through | XS | Hardcoded `ZeroAddress` in `features/shield/handler.ts`. Hook this when fee-routing to partners is needed. |
+_(no open items)_
 
 ## Unshield-local
 
@@ -76,10 +73,7 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 ## Debug page
 
-| Item | Size | Notes |
-|---|---|---|
-| Copy buttons on contract address rows | XS | Today only the Railgun address has a copy button. Hub + client contract addresses would also benefit. |
-| Engine-state refresh control | XS | The page shows `engine.state` but has no way to reset / re-init. Useful for testing artifact-cache bugs. |
+_(no open items)_
 
 ## Telemetry
 
@@ -107,7 +101,6 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 | Item | Size | Notes |
 |---|---|---|
-| `Send` modal: validate destination has a deployment | XS | User can select a chain ID with no deployment manifest; the modal would error at submit. Pre-validate on input. |
 | Xchain stepper: smoother "skipped" stage rendering | XS | When detection lands, the stepper jumps three stages at once. Looks abrupt. A short transition or "summary" stage row would feel better. |
 
 ---
