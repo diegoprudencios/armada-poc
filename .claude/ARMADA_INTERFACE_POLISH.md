@@ -52,7 +52,6 @@ Updated as we ship more features. Items are tagged by area and rough size
 |---|---|---|
 | Iris attestation polling for finer stage transitions | M | Today we collapse `iris-attestation-ready` / `client-mint-pending` / `client-mint-confirmed` into one detection. Real CCTP mode (Sepolia) needs Iris polling to split these. `lib/cctp.ts::pollIrisOnce` is stubbed. |
 | Real CCTP (Sepolia) end-to-end test | S | Handler is mode-agnostic by design but unverified on real CCTP. |
-| Retry/cancel mid-polling UX | S | If the destination delivery hangs, the user can't cleanly cancel; the executor will timeout at the lifecycle's `maxDurationMs` (60 min). Add a Cancel CTA wired to `useTx().cancel()` on the Progress step. |
 
 ## Transfer-shielded
 
