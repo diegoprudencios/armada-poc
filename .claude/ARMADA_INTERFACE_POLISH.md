@@ -31,7 +31,6 @@ Updated as we ship more features. Items are tagged by area and rough size
 | Item | Size | Notes |
 |---|---|---|
 | Engine pre-warm on app mount | XS | `useRailgunEngineSync` mirrors lifecycle state, but the engine warms lazily on first enroll/unlock. Could pre-warm to make first tx instant. |
-| Proof-progress (0-100%) plumbed to record artifact + stepper UI | S | SDK callback exposes percent; today the stage row spins statically for 20-30s. Affects every kind that does `build-proof`. |
 | Tx history detail view | S | History page lists records but no detail/explorer-link panel. `TxLifecycleStepper` already exists; just need a route + outlet. |
 | Cross-tab follower live-sync | M | v1 has only the leader executor running. Other tabs see records but lifecycles freeze. Out of scope per Plan §7a; revisit when it bites. |
 
@@ -40,13 +39,11 @@ Updated as we ship more features. Items are tagged by area and rough size
 | Item | Size | Notes |
 |---|---|---|
 | `integrator` address pass-through | XS | Hardcoded `ZeroAddress` in `features/shield/handler.ts`. Hook this when fee-routing to partners is needed. |
-| Proof-progress UI during build-proof | S | Same gap as unshield/transfer — common fix when proof-progress lands. |
 
 ## Unshield-local
 
 | Item | Size | Notes |
 |---|---|---|
-| Proof-progress UI | S | Static 20-30s spinner; needs the engine's progress callback wired to a record artifact + stepper render. |
 | Relayer-mediated submit path | M | Today always user-signs the transact. Adding a "submit via relayer" toggle hides the second MetaMask prompt and uses the relayer for gas. Depends on `useFees` and relayer client. |
 
 ## Unshield-xchain
@@ -62,7 +59,6 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 | Item | Size | Notes |
 |---|---|---|
-| Proof-progress UI | S | Same common gap. |
 | `showSenderAddressToRecipient` + `memoText` exposure | S | Both currently hardcoded (`false` / `undefined`) in `lib/railgun/transfer.ts`. Future UX add: optional toggle + memo field on the Send-Private form. |
 
 ## Yield
