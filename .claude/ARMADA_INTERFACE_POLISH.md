@@ -24,13 +24,11 @@ Updated as we ship more features. Items are tagged by area and rough size
 | IC-4 end-to-end test vectors with real signatures | S | Needs sample wallet signatures + expected `root_secret` outputs. |
 | Web Worker entry points for spending-key derivation | M | Off-main-thread key ops to keep the UI responsive during signing ceremonies. |
 | Recovery secret QR-code export mode | S | Spec mentions QR alongside hex. We ship file + hex only; need a QR encoder dep. |
-| Auto-lock visible indicator | XS | `useAutoLock` is wired but there's no "N min until auto-lock" affordance in the header / settings. |
 
 ## Transaction executor + lifecycle
 
 | Item | Size | Notes |
 |---|---|---|
-| Tx history detail view | S | History page lists records but no detail/explorer-link panel. `TxLifecycleStepper` already exists; just need a route + outlet. |
 | Cross-tab follower live-sync | M | v1 has only the leader executor running. Other tabs see records but lifecycles freeze. Out of scope per Plan §7a; revisit when it bites. |
 
 ## Shield flow
@@ -62,14 +60,12 @@ _(no open items)_
 |---|---|---|
 | `rateToApy()` actual APY computation | S | `lib/yield.ts` returns 0. Need to derive APY from the spoke's `annualYieldBps` or sample rate-over-time. |
 | Slippage protection on withdraw | S | Modal computes shares from a locally-cached rate; if the rate moves between quote and execution, the user gets slightly more/less than requested. Add a min-out check at the adapter call or surface the slippage on the Review step. |
-| Verify proof reuse across stages | XS | `features/yield-deposit/handler.ts` + `features/yield-withdraw/handler.ts` re-call `buildYieldAdaptTransaction` in submit-relayer. Verify the SDK reuses the cached proof when inputs match; otherwise we pay another ~30s. |
 
 ## Fees & relayer integration
 
 | Item | Size | Notes |
 |---|---|---|
 | `submitRelay()` HTTP client | M | `lib/relayer.ts::submitRelay` still throws. Needed for the relayer-mediated submit path that hides the second MetaMask prompt. The other endpoints (`fetchFees`, `pollStatus`) are wired. |
-| Stale-quote handling on submit | S | If a modal sits open through a fee-schedule refresh, the user could click Confirm with a stale `cacheId`. The relayer rejects with `FEE_EXPIRED`; we should detect that and offer a one-click re-quote rather than dumping the user into an error step. |
 
 ## Debug page
 
@@ -99,9 +95,7 @@ _(no open items)_
 
 ## UI polish
 
-| Item | Size | Notes |
-|---|---|---|
-| Xchain stepper: smoother "skipped" stage rendering | XS | When detection lands, the stepper jumps three stages at once. Looks abrupt. A short transition or "summary" stage row would feel better. |
+_(no open items)_
 
 ---
 
