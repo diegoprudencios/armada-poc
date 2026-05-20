@@ -334,9 +334,10 @@ contract ArmadaYieldAdapter is ReentrancyGuard {
     }
 
     /**
-     * @notice Preview redeem - get USDC for shares amount
-     * @param shares Vault shares
-     * @return assets USDC amount (before yield fee)
+     * @notice Preview redeem — USDC the holder would receive for `shares`.
+     * @dev Delegates to `vault.convertToAssets`, which nets the protocol's pending yield
+     *      fee out of `totalAssets`. The returned value is the user-claimable amount
+     *      (i.e. already post-fee), not the gross.
      */
     function previewRedeem(uint256 shares) external view returns (uint256) {
         return vault.convertToAssets(shares);

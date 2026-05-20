@@ -142,11 +142,14 @@ describe("Yield Integration", function () {
       await time.increase(ONE_YEAR);
 
       // Check assets after yield
+      // WHY: After issue #75 (harvest-fee refactor), getUserAssets returns the
+      //      user-claimable value — i.e. share of (totalAssets - pendingProtocolFee).
+      //      For a single depositor that's principal + net-of-protocol-cut yield.
       const assetsAfterYear = await armadaYieldVault.getUserAssets(user.address);
 
-      // Expected: ~1050 USDC (5% APY)
-      const expectedYield = (DEPOSIT_AMOUNT * BigInt(YIELD_BPS)) / 10000n;
-      const expectedTotal = DEPOSIT_AMOUNT + expectedYield;
+      const expectedGrossYield = (DEPOSIT_AMOUNT * BigInt(YIELD_BPS)) / 10000n;
+      const expectedNetYield = (expectedGrossYield * (10000n - BigInt(YIELD_FEE_BPS))) / 10000n;
+      const expectedTotal = DEPOSIT_AMOUNT + expectedNetYield;
 
       // Allow 1 USDC tolerance for rounding
       expect(assetsAfterYear).to.be.closeTo(expectedTotal, ONE_USDC);
@@ -166,31 +169,32 @@ describe("Yield Integration", function () {
       // Get shares
       const shares = await armadaYieldVault.balanceOf(user.address);
 
-      // Get expected yield (before fee)
-      const userYield = await armadaYieldVault.getUserYield(user.address);
-      expect(userYield).to.be.gt(0);
+      // WHY: After issue #75, getUserYield and pendingProtocolFee together describe
+      //      the split: getUserYield = the user's net yield (post-protocol-cut),
+      //      pendingProtocolFee = the protocol's currently-owed cut. Sum is gross.
+      const userYieldNet = await armadaYieldVault.getUserYield(user.address);
+      const pendingFee = await armadaYieldVault.pendingProtocolFee();
+      expect(userYieldNet).to.be.gt(0);
+      expect(pendingFee).to.be.gt(0);
 
       // Treasury balance before
       const treasuryBefore = await armadaTreasury.getBalance(await usdc.getAddress());
 
-      // Redeem all
+      // Redeem all — settles the protocol's cut to treasury, pays user net amount.
       await armadaYieldVault.connect(user).redeem(
         shares,
         user.address,
         user.address
       );
 
-      // Check treasury received fee
+      // Treasury received exactly the protocol's pending cut (the gross fee).
       const treasuryAfter = await armadaTreasury.getBalance(await usdc.getAddress());
       const feeReceived = treasuryAfter - treasuryBefore;
+      expect(feeReceived).to.be.closeTo(pendingFee, ONE_USDC);
 
-      // Fee should be ~10% of yield
-      const expectedFee = (userYield * BigInt(YIELD_FEE_BPS)) / 10000n;
-      expect(feeReceived).to.be.closeTo(expectedFee, ONE_USDC);
-
-      // User should receive principal + yield - fee
+      // User received principal + net yield.
       const userFinal = await usdc.balanceOf(user.address);
-      const expectedUserFinal = INITIAL_BALANCE + userYield - feeReceived;
+      const expectedUserFinal = INITIAL_BALANCE + userYieldNet;
       expect(userFinal).to.be.closeTo(expectedUserFinal, ONE_USDC);
     });
 

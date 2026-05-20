@@ -55,21 +55,28 @@ contract YieldFullHandler is Test {
     // SHARE PRICE TRACKING
     // ═══════════════════════════════════════════════════════════════════
 
-    /// @dev Track share price with tolerance for integer rounding.
-    ///      ERC-4626 vaults with integer division inevitably have share price rounding:
-    ///      - _convertToShares rounds DOWN: new depositor gets fewer shares
-    ///      - This means totalAssets increased by `assets` but totalSupply increased by `shares`
-    ///        where shares = floor(assets * supply / totalAssets)
-    ///      - If assets is small relative to (totalAssets/supply), shares may be rounded down
-    ///        significantly, causing the share price to DROP after deposit
-    ///      - This is standard ERC-4626 behavior (virtual donation to existing holders)
-    ///      - We allow up to 0.01% (1 bps) deviation as acceptable rounding.
-    ///      - A decrease of more than 0.01% would indicate a real economic bug.
+    /// @dev Track the *user-claimable* share price with tolerance for integer rounding.
+    ///      WHY: After issue #75 (governance-tuned harvest cadence + redeem-only settle),
+    ///      depositors are priced against `(totalAssets - pendingProtocolFee)` so they
+    ///      pay the same per-share value whether or not a settle has occurred recently.
+    ///      A side effect is that the *gross* share price (`totalAssets/supply`) drops
+    ///      slightly on every deposit as the protocol's pending fee is implicitly carved
+    ///      out of the new mint. The economic invariant — that a holder's claim per share
+    ///      never silently shrinks — is the *net* (user-claimable) share price, computed
+    ///      as `(totalAssets - pendingProtocolFee) * 1e18 / supply`.
+    ///
+    ///      Standard ERC-4626 rounding still applies:
+    ///      - `_convertToShares` rounds DOWN, so depositors may be issued slightly fewer
+    ///        shares than the exact ratio. We allow 0.01% (1 bps) tolerance for that;
+    ///        a larger decrease indicates a real economic bug.
+    ///      - Redeem and `harvestProtocolFee` both extract value to the treasury; the
+    ///        handler sets `ghost_skipNextPriceCheck` around those operations.
     function _updateSharePrice() internal {
         uint256 supply = vault.totalSupply();
         if (supply == 0) return;
 
-        uint256 currentPrice = (vault.totalAssets() * 1e18) / supply;
+        uint256 userClaimable = vault.totalAssets() - vault.pendingProtocolFee();
+        uint256 currentPrice = (userClaimable * 1e18) / supply;
 
         if (!ghost_sharePriceInitialized) {
             ghost_lastSharePrice = currentPrice;
@@ -258,13 +265,15 @@ contract YieldFullInvariantTest is Test {
         );
     }
 
-    /// @notice Current share price within 1 bps of last recorded price
+    /// @notice Current share price within 1 bps of last recorded price.
+    /// @dev Uses user-claimable (totalAssets - pendingProtocolFee) — see _updateSharePrice doc.
     function invariant_currentSharePriceWithinTolerance() public view {
         uint256 supply = vault.totalSupply();
         if (supply == 0) return;
         if (!handler.ghost_sharePriceInitialized()) return;
 
-        uint256 currentPrice = (vault.totalAssets() * 1e18) / supply;
+        uint256 userClaimable = vault.totalAssets() - vault.pendingProtocolFee();
+        uint256 currentPrice = (userClaimable * 1e18) / supply;
         uint256 lastPrice = handler.ghost_lastSharePrice();
         if (currentPrice >= lastPrice) return; // no decrease, fine
 
