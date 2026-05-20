@@ -65,14 +65,13 @@ Updated as we ship more features. Items are tagged by area and rough size
 | Proof-progress UI | S | Same common gap. |
 | `showSenderAddressToRecipient` + `memoText` exposure | S | Both currently hardcoded (`false` / `undefined`) in `lib/railgun/transfer.ts`. Future UX add: optional toggle + memo field on the Send-Private form. |
 
-## Yield (not yet implemented)
+## Yield
 
 | Item | Size | Notes |
 |---|---|---|
-| Deployment schema extension | XS | `config/deployments.ts` doesn't carry the yield vault / adapter addresses. Need a secondary manifest loader (similar to the hub-v3.json / client-v3.json pattern for faucets). |
-| `lendAndShield` / `redeemAndShield` adapt-proof flow | L | New SDK shape (`generateUnshieldBaseTokenProof` + adapt contract call). Mirrors the legacy `useShieldedYieldTransaction` hook. |
-| `useYieldRate()` real polling | S | Stub today; reads atom only. Needs `ArmadaYieldVault` rate query + APY computation. |
-| BalanceHero "Earning in vault" wiring | XS | Currently always "—". When the vault balance feed lands, the `yieldSharesAtom` should populate. |
+| `rateToApy()` actual APY computation | S | `lib/yield.ts` returns 0. Need to derive APY from the spoke's `annualYieldBps` or sample rate-over-time. |
+| Slippage protection on withdraw | S | Modal computes shares from a locally-cached rate; if the rate moves between quote and execution, the user gets slightly more/less than requested. Add a min-out check at the adapter call or surface the slippage on the Review step. |
+| Verify proof reuse across stages | XS | `features/yield-deposit/handler.ts` + `features/yield-withdraw/handler.ts` re-call `buildYieldAdaptTransaction` in submit-relayer. Verify the SDK reuses the cached proof when inputs match; otherwise we pay another ~30s. |
 
 ## Fees & relayer integration
 
@@ -115,7 +114,6 @@ Updated as we ship more features. Items are tagged by area and rough size
 
 | Item | Size | Notes |
 |---|---|---|
-| Yield breakdown in BalanceHero | XS | Drops out automatically when yield wires up. |
 | `Send` modal: validate destination has a deployment | XS | User can select a chain ID with no deployment manifest; the modal would error at submit. Pre-validate on input. |
 | Xchain stepper: smoother "skipped" stage rendering | XS | When detection lands, the stepper jumps three stages at once. Looks abrupt. A short transition or "summary" stage row would feel better. |
 
