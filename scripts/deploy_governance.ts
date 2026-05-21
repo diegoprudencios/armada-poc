@@ -271,6 +271,24 @@ async function main() {
   await (await timelock.grantRole(CANCELLER_ROLE, governorAddress, nm.override())).wait();
   console.log("   Granted CANCELLER_ROLE to governor (for SC veto)");
 
+  // Testnet only: grant the deployer the operational roles so the deploy + post-deploy ops
+  // pipeline (e.g. authorizing the YieldAdapter via AdapterRegistry) can schedule + execute
+  // timelock actions. The Governor is unusable for ops on testnet (requires ARM tokens,
+  // proposal threshold, quorum, voting period). Anvil covers this via impersonation; mainnet
+  // must NEVER take this branch — adding a mainnet value to DeployEnv must NOT silently
+  // grant operator roles to the deployer. The explicit allowlist below makes that invariant
+  // unmissable. Any future testnet env (goerli, holesky, base-sepolia-hub, …) is opt-in.
+  const TESTNET_OPS_ENVS: ReadonlyArray<string> = ["sepolia"];
+  if (TESTNET_OPS_ENVS.includes(config.env)) {
+    const [deployerSigner] = await ethers.getSigners();
+    await (await timelock.grantRole(PROPOSER_ROLE, deployerSigner.address, nm.override())).wait();
+    console.log(`   Granted PROPOSER_ROLE to deployer (${config.env} ops)`);
+    await (await timelock.grantRole(EXECUTOR_ROLE, deployerSigner.address, nm.override())).wait();
+    console.log(`   Granted EXECUTOR_ROLE to deployer (${config.env} ops)`);
+    await (await timelock.grantRole(CANCELLER_ROLE, deployerSigner.address, nm.override())).wait();
+    console.log(`   Granted CANCELLER_ROLE to deployer (${config.env} ops)`);
+  }
+
   // 12. Configure ARM token (one-time setters)
   console.log("12. Configuring ARM token...");
   await (await armToken.initNoDelegation([treasuryAddress], nm.override())).wait();

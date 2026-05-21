@@ -224,10 +224,13 @@ async function deployHub(): Promise<HubDeploymentInfo> {
   const hookRouterAddress = await hookRouter.getAddress();
   console.log(`   CCTPHookRouter: ${hookRouterAddress}`);
 
-  // 9. Load verification keys for SNARK proof verification
+  // 9. Load verification keys for SNARK proof verification.
+  // Thread the nonce manager through so its N on-chain txs keep the counter in sync —
+  // omitting this leaves the manager N nonces behind once the load returns and the next
+  // override(...) call ends up with a stale nonce.
   console.log("\n9. Loading verification keys...");
   const { loadVerificationKeys, TESTING_ARTIFACT_CONFIGS } = await import("../lib/artifacts");
-  await loadVerificationKeys(privacyPool, TESTING_ARTIFACT_CONFIGS, true);
+  await loadVerificationKeys(privacyPool, TESTING_ARTIFACT_CONFIGS, true, () => nm.override());
 
   // 10. SNARK verification enabled
   console.log("\n10. SNARK verification enabled (testing mode disabled)");

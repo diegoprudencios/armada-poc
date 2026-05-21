@@ -9,7 +9,10 @@
  *   Phase 2: Governance + Crowdfund (hub only)
  *   Phase 3: Privacy Pool (hub + clients) — must follow Phase 2 (needs treasury address from governance)
  *   Phase 4: Mock Aave + Yield (hub only) — must follow Phase 2 (needs adapter registry from governance)
- *   Phase 5: Cross-chain linking
+ *   Phase 5: Cross-chain linking — needs deployer to still own the YieldAdapter (setPrivacyPool)
+ *   Phase 6: Fee module + yield-ownership transfer to timelock — MUST follow Phase 5 because
+ *            deploy_fee_module.ts transfers adapter ownership at the end, after which Phase 5's
+ *            owner-gated adapter.setPrivacyPool() would revert.
  *
  * Prerequisites:
  *   - source config/sepolia.env
@@ -20,7 +23,7 @@
  *   npx ts-node scripts/deploy_sepolia.ts [--phase N] [--hub-only]
  *
  * Options:
- *   --phase N     Run only phase N (1-5)
+ *   --phase N     Run only phase N (1-6)
  *   --hub-only    Skip client chain deployments (Phase 1 hub only)
  */
 
@@ -139,9 +142,11 @@ async function main() {
     }
   }
 
-  // ========== Phase 4: Yield Infrastructure ==========
+  // ========== Phase 4: Yield Infrastructure (deploy only — no ownership transfer) ==========
   // Must follow Phase 2: deploy_yield.ts requires the governance manifest
-  // (needs AdapterRegistry address from governance deployment)
+  // (needs AdapterRegistry address from governance deployment).
+  // Fee module is deferred to Phase 6 because it transfers adapter ownership to the timelock
+  // and Phase 5's link script needs the deployer to still own the adapter.
   if (shouldRun(4)) {
     console.log("\n" + "#".repeat(60));
     console.log("  PHASE 4: Yield Infrastructure (Hub Only)");
@@ -155,13 +160,10 @@ async function main() {
       "npx hardhat run scripts/deploy_yield.ts --network sepoliaHub",
       "Deploying Yield Contracts"
     );
-    run(
-      "npx hardhat run scripts/deploy_fee_module.ts --network sepoliaHub",
-      "Deploying Fee Module"
-    );
   }
 
   // ========== Phase 5: Cross-Chain Linking ==========
+  // Calls adapter.setPrivacyPool() — requires deployer to still own the adapter.
   if (shouldRun(5)) {
     console.log("\n" + "#".repeat(60));
     console.log("  PHASE 5: Cross-Chain Linking");
@@ -170,6 +172,21 @@ async function main() {
     run(
       "npx hardhat run scripts/link_privacy_pool.ts --network sepoliaHub",
       "Linking Privacy Pools across chains"
+    );
+  }
+
+  // ========== Phase 6: Fee Module + ownership transfer ==========
+  // Runs after link so adapter ownership is still with the deployer when Phase 5 fires.
+  // deploy_fee_module.ts wires the fee module into PrivacyPool + YieldVault, then transfers
+  // yield ownership to the timelock as its final step.
+  if (shouldRun(6)) {
+    console.log("\n" + "#".repeat(60));
+    console.log("  PHASE 6: Fee Module + ownership transfer (Hub Only)");
+    console.log("#".repeat(60));
+
+    run(
+      "npx hardhat run scripts/deploy_fee_module.ts --network sepoliaHub",
+      "Deploying Fee Module"
     );
   }
 

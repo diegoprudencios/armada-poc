@@ -28,10 +28,9 @@ import {
   getPrivacyPoolDeploymentFile,
   getYieldDeploymentFile,
   isCCTPReal,
-  isLocal,
   type ChainRole,
 } from "../config/networks";
-import { createNonceManager, loadDeployment } from "./deploy-utils";
+import { createNonceManager, loadDeployment, timelockCall } from "./deploy-utils";
 
 interface LinkConfig {
   role: ChainRole;
@@ -286,62 +285,38 @@ async function main() {
     console.log("");
     console.log("Configuring ArmadaYieldAdapter...");
     const adapter = await ethers.getContractAt("ArmadaYieldAdapter", adapterAddress);
-    await (await adapter.setPrivacyPool(hubPoolAddress, nm.override())).wait();
-    console.log(`  Adapter privacy pool set to: ${hubPoolAddress}`);
+
+    // Idempotent: if the adapter is already pointing at this pool, skip the setter — the
+    // call would revert under "not owner" after Phase 6 transfers adapter ownership to the
+    // timelock, but the desired end-state is already in place so this is a clean no-op.
+    const currentPool: string = await adapter.privacyPool();
+    if (currentPool.toLowerCase() === hubPoolAddress.toLowerCase()) {
+      console.log(`  Adapter privacy pool already set to: ${hubPoolAddress} (skip)`);
+    } else {
+      await (await adapter.setPrivacyPool(hubPoolAddress, nm.override())).wait();
+      console.log(`  Adapter privacy pool set to: ${hubPoolAddress}`);
+    }
     await (await privacyPool.setPrivilegedShieldCaller(adapterAddress, true, nm.override())).wait();
     console.log(`  Adapter set as privileged shield caller (fee exemption)`);
 
-    // Authorize adapter in governance adapter registry
+    // Authorize adapter in governance adapter registry. Both local (Anvil impersonation)
+    // and non-local (real timelock schedule + wait + execute) paths are now handled inside
+    // timelockCall — see scripts/deploy-utils.ts. Non-local requires the deployer to hold
+    // PROPOSER_ROLE + EXECUTOR_ROLE on the timelock (granted in deploy_governance.ts).
     const govFilename = getGovernanceDeploymentFile();
     const govDeployment = loadDeployment(govFilename);
     if (govDeployment?.contracts?.adapterRegistry && govDeployment?.contracts?.timelockController) {
       const timelockAddr = govDeployment.contracts.timelockController;
       const registryAddr = govDeployment.contracts.adapterRegistry;
-
-      if (isLocal()) {
-        // Impersonate timelock to call authorizeAdapter directly (Anvil only).
-        // Hardhat's provider middleware intercepts eth_sendTransaction and tries to
-        // sign locally, so we bypass it entirely with raw JSON-RPC fetch to Anvil.
-        const rpcUrl = process.env.HUB_RPC || "http://localhost:8545";
-        const jsonRpc = async (method: string, params: any[] = []) => {
-          const res = await fetch(rpcUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-          });
-          const json = await res.json();
-          if (json.error) throw new Error(`RPC ${method}: ${json.error.message}`);
-          return json.result;
-        };
-
-        // Fund the timelock so it can pay gas (must wait for mining before impersonated tx)
-        const [deployer] = await ethers.getSigners();
-        const fundTx = await deployer.sendTransaction({ to: timelockAddr, value: ethers.parseEther("1"), ...nm.override() });
-        await fundTx.wait();
-
-        const registry = await ethers.getContractAt("AdapterRegistry", registryAddr);
-        const calldata = registry.interface.encodeFunctionData("authorizeAdapter", [adapterAddress]);
-
-        await jsonRpc("anvil_impersonateAccount", [timelockAddr]);
-        const txHash = await jsonRpc("eth_sendTransaction", [{
-          from: timelockAddr,
-          to: registryAddr,
-          data: calldata,
-        }]);
-        // Poll for receipt since HardhatEthersProvider.waitForTransaction is not implemented
-        let receipt = null;
-        while (!receipt) {
-          receipt = await jsonRpc("eth_getTransactionReceipt", [txHash]);
-        }
-        await jsonRpc("anvil_stopImpersonatingAccount", [timelockAddr]);
-        console.log(`  Adapter authorized in adapter registry`);
-      } else {
-        console.log(`  WARNING: Adapter registry authorization requires a governance proposal on non-local networks.`);
-        console.log(`    Timelock: ${timelockAddr}`);
-        console.log(`    Registry: ${registryAddr}`);
-        console.log(`    Adapter:  ${adapterAddress}`);
-        console.log(`    Call: AdapterRegistry.authorizeAdapter(${adapterAddress})`);
-      }
+      const registry = await ethers.getContractAt("AdapterRegistry", registryAddr);
+      const calldata = registry.interface.encodeFunctionData("authorizeAdapter", [adapterAddress]);
+      await timelockCall(
+        timelockAddr,
+        registryAddr,
+        calldata,
+        "AdapterRegistry.authorizeAdapter()",
+        nm,
+      );
     }
   }
 

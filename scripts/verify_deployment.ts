@@ -19,11 +19,13 @@ import { ethers } from "hardhat";
 import { loadDeployment } from "./deploy-utils";
 import {
   isLocal,
+  isCCTPReal,
   getNetworkConfig,
   getCCTPDeploymentFile,
   getPrivacyPoolDeploymentFile,
   getGovernanceDeploymentFile,
   getYieldDeploymentFile,
+  getFeeModuleDeploymentFile,
   getCrowdfundDeploymentFile,
 } from "../config/networks";
 
@@ -123,6 +125,15 @@ async function checkSnarkVerification(poolManifest: any) {
 
 async function checkCCTPWiring(hubCCTP: any) {
   const GROUP = "CCTP Wiring";
+
+  // Real Circle CCTP V2 contracts (CCTP_MODE=real) don't expose the mock-only `minters`
+  // mapping on USDC or the `tokenMessenger()` view on MessageTransmitter. The wiring is
+  // managed by Circle, not us, so there's nothing meaningful for this script to assert.
+  if (isCCTPReal()) {
+    pass(GROUP, "TokenMessenger ↔ USDC wiring (managed by Circle, real CCTP)");
+    pass(GROUP, "MessageTransmitter → TokenMessenger link (managed by Circle, real CCTP)");
+    return;
+  }
 
   const usdc = await ethers.getContractAt("MockUSDCV2", hubCCTP.contracts.usdc);
   const tokenMessengerAddr = hubCCTP.contracts.tokenMessenger;
@@ -696,7 +707,7 @@ async function main() {
   const yieldFile = getYieldDeploymentFile();
   const crowdfundFile = getCrowdfundDeploymentFile();
   const suffix = config.env === "local" ? "" : `-${config.env}Hub`;
-  const feeFile = config.env === "local" ? "fee-module-hub.json" : `fee-module-hub-${config.env}.json`;
+  const feeFile = getFeeModuleDeploymentFile();
 
   const hubCCTP = loadOrWarn("CCTP Wiring", hubCCTPFile);
   const hubPool = loadOrWarn("SNARK Verification", hubPoolFile);
