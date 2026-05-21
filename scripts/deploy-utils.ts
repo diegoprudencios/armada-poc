@@ -214,9 +214,19 @@ export async function timelockCall(
   // Non-local: real schedule + wait + execute.
   const timelock = await ethers.getContractAt("TimelockController", timelockAddr);
   const ZERO_BYTES32 = "0x" + "00".repeat(32);
-  // Deterministic salt derived from the description so re-running the script produces the
-  // same operation id — gives us idempotency via isOperationDone / isOperationPending.
-  const salt = ethers.keccak256(ethers.toUtf8Bytes(description));
+  // Deterministic salt derived from (description, target, calldata) so re-running the script
+  // produces the same operation id (idempotency via isOperationDone / isOperationPending).
+  // Including target + calldata in the salt — not just the description — prevents the silent
+  // "already scheduled" false-match if two different operations were ever given the same
+  // description string (e.g. a copy-paste error in a future caller). The structural triple
+  // uniquely identifies the operation, so the salt collides only when the operations are
+  // actually the same.
+  const salt = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ["string", "address", "bytes"],
+      [description, targetAddr, calldata],
+    ),
+  );
   const value = 0n;
   const opId: string = await timelock.hashOperation(targetAddr, value, calldata, ZERO_BYTES32, salt);
 
