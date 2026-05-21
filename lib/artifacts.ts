@@ -136,17 +136,25 @@ export function formatVKeyForSolidity(
  * @param contract - RailgunSmartWallet contract instance (attached to proxy)
  * @param configs - Array of circuit configurations to load (default: testing subset)
  * @param logProgress - Whether to log progress (default: true)
+ * @param txOverrides - Optional callback returning tx overrides (e.g. nonce). Invoked once per
+ *   tx. Threading this in lets callers integrate with their own nonce manager so subsequent
+ *   deploy steps don't drift out of sync. Local/Anvil callers can omit it (ethers manages
+ *   nonces automatically); public-testnet deploys with manual nonce tracking must pass it.
  */
 export async function loadVerificationKeys(
+  // Loosely-typed so this helper accepts both the typechain-generated contract type and the
+  // minimal mock used in unit tests. The fourth argument carries ethers tx overrides.
   contract: {
     setVerificationKey: (
       nullifiers: number,
       commitments: number,
-      vkey: SolidityVerifyingKey
-    ) => Promise<{ wait: () => Promise<void> }>;
+      vkey: SolidityVerifyingKey,
+      ...rest: unknown[]
+    ) => Promise<{ wait: () => Promise<unknown> }>;
   },
   configs: ArtifactConfig[] = TESTING_ARTIFACT_CONFIGS,
-  logProgress: boolean = true
+  logProgress: boolean = true,
+  txOverrides?: () => Record<string, unknown>
 ): Promise<void> {
   if (logProgress) {
     console.log(`Loading ${configs.length} verification keys...`);
@@ -166,7 +174,8 @@ export async function loadVerificationKeys(
     const tx = await contract.setVerificationKey(
       config.nullifiers,
       config.commitments,
-      solidityVKey
+      solidityVKey,
+      txOverrides?.() ?? {}
     );
     await tx.wait();
   }
