@@ -59,6 +59,11 @@ interface HubDeploymentInfo {
     messageTransmitter: string;
     usdc: string;
   };
+  /** Block number the PrivacyPool router contract was deployed at. Used by the
+   *  armada-interface to bound the Railgun engine's initial Shield/Transact/Unshield
+   *  event scan — without it the engine starts from block 0 and burns through ~10M
+   *  unnecessary getLogs calls on public RPCs. */
+  deployBlock: number;
   timestamp: string;
 }
 
@@ -79,6 +84,10 @@ interface ClientDeploymentInfo {
     domain: number;
     privacyPool: string;
   };
+  /** Block number the PrivacyPoolClient was deployed at. Less load-bearing than the
+   *  hub's deployBlock — clients don't host the Railgun merkletree — but useful for
+   *  any future tooling that scans client-chain events from the contract's birth. */
+  deployBlock: number;
   timestamp: string;
 }
 
@@ -174,9 +183,11 @@ async function deployHub(): Promise<HubDeploymentInfo> {
   console.log("\n6. Deploying PrivacyPool (router)...");
   const PrivacyPool = await ethers.getContractFactory("PrivacyPool");
   const privacyPool = await PrivacyPool.deploy(nm.override());
-  await privacyPool.deploymentTransaction()!.wait();
+  const privacyPoolReceipt = await privacyPool.deploymentTransaction()!.wait();
   const privacyPoolAddress = await privacyPool.getAddress();
-  console.log(`   PrivacyPool: ${privacyPoolAddress}`);
+  // Capture for the manifest — interface uses this to bound initial event scan.
+  const privacyPoolDeployBlock = privacyPoolReceipt!.blockNumber;
+  console.log(`   PrivacyPool: ${privacyPoolAddress} (block ${privacyPoolDeployBlock})`);
 
   // 7. Resolve treasury address and initialize PrivacyPool
   // Priority: env var > governance manifest (ArmadaTreasuryGov) > deployer (local only)
@@ -257,6 +268,7 @@ async function deployHub(): Promise<HubDeploymentInfo> {
       messageTransmitter: messageTransmitterAddress,
       usdc: usdcAddress,
     },
+    deployBlock: privacyPoolDeployBlock,
     timestamp: new Date().toISOString(),
   };
 
@@ -323,9 +335,10 @@ async function deployClient(role: ChainRole): Promise<ClientDeploymentInfo> {
   console.log("1. Deploying PrivacyPoolClient...");
   const PrivacyPoolClient = await ethers.getContractFactory("PrivacyPoolClient");
   const privacyPoolClient = await PrivacyPoolClient.deploy(nm.override());
-  await privacyPoolClient.deploymentTransaction()!.wait();
+  const clientReceipt = await privacyPoolClient.deploymentTransaction()!.wait();
   const clientAddress = await privacyPoolClient.getAddress();
-  console.log(`   PrivacyPoolClient: ${clientAddress}`);
+  const clientDeployBlock = clientReceipt!.blockNumber;
+  console.log(`   PrivacyPoolClient: ${clientAddress} (block ${clientDeployBlock})`);
 
   // 2. Initialize PrivacyPoolClient
   console.log("\n2. Initializing PrivacyPoolClient...");
@@ -367,6 +380,7 @@ async function deployClient(role: ChainRole): Promise<ClientDeploymentInfo> {
       domain: hubDomain,
       privacyPool: hubPoolAddress,
     },
+    deployBlock: clientDeployBlock,
     timestamp: new Date().toISOString(),
   };
 
