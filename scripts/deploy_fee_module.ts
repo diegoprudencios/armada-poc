@@ -27,6 +27,7 @@
 
 import { ethers } from "hardhat";
 import {
+  getFeeModuleDeploymentFile,
   getGovernanceDeploymentFile,
   getPrivacyPoolDeploymentFile,
   getYieldDeploymentFile,
@@ -130,9 +131,9 @@ async function main() {
   await (await armadaYieldAdapter.transferOwnership(timelockAddress, nm.override())).wait();
   console.log(`   ArmadaYieldAdapter owner → ${timelockAddress}`);
 
-  // 7. Save to deployment manifest
-  const suffix = isLocal() ? "" : `-${network.name}`;
-  const feeFile = `fee-module-hub${suffix}.json`;
+  // 7. Save to deployment manifest. Use the canonical helper so the suffix is "-sepolia"
+  // (matching every other manifest) rather than hardhat's `network.name` ("sepoliaHub").
+  const feeFile = getFeeModuleDeploymentFile();
   const feeModuleDeployment = {
     chainId,
     deployer: deployer.address,

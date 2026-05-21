@@ -386,6 +386,15 @@ export function getYieldDeploymentFile(): string {
 }
 
 /**
+ * Get the fee module deployment filename.
+ */
+export function getFeeModuleDeploymentFile(): string {
+  const config = getNetworkConfig();
+  const suffix = config.env === "local" ? "" : `-${config.env}`;
+  return `fee-module-hub${suffix}.json`;
+}
+
+/**
  * Get the aave mock deployment filename for a chain.
  */
 export function getAaveMockDeploymentFile(role: ChainRole): string {

@@ -25,6 +25,7 @@ import {
   getPrivacyPoolDeploymentFile,
   getGovernanceDeploymentFile,
   getYieldDeploymentFile,
+  getFeeModuleDeploymentFile,
   getCrowdfundDeploymentFile,
 } from "../config/networks";
 
@@ -706,7 +707,7 @@ async function main() {
   const yieldFile = getYieldDeploymentFile();
   const crowdfundFile = getCrowdfundDeploymentFile();
   const suffix = config.env === "local" ? "" : `-${config.env}Hub`;
-  const feeFile = config.env === "local" ? "fee-module-hub.json" : `fee-module-hub-${config.env}.json`;
+  const feeFile = getFeeModuleDeploymentFile();
 
   const hubCCTP = loadOrWarn("CCTP Wiring", hubCCTPFile);
   const hubPool = loadOrWarn("SNARK Verification", hubPoolFile);
