@@ -35,6 +35,7 @@ import {
   getNetworkConfig,
   getChainRole,
   getGovernanceDeploymentFile,
+  isLocal,
 } from "../config/networks";
 import { createNonceManager, rejectAnvilAddresses, saveDeployment } from "./deploy-utils";
 
@@ -270,6 +271,22 @@ async function main() {
   const CANCELLER_ROLE = await timelock.CANCELLER_ROLE();
   await (await timelock.grantRole(CANCELLER_ROLE, governorAddress, nm.override())).wait();
   console.log("   Granted CANCELLER_ROLE to governor (for SC veto)");
+
+  // Non-local: also grant the deployer the operational roles. The deploy + post-deploy ops
+  // pipeline (e.g. authorizing the YieldAdapter via AdapterRegistry) needs SOMEONE able to
+  // schedule + execute timelock actions, and on testnet the Governor is unusable for ops
+  // (requires ARM tokens, proposal threshold, quorum, voting period). Mainnet hardening
+  // should renounce these roles in a separate post-launch script once ops are stable.
+  // On local, Anvil impersonation covers ops and these grants are unnecessary noise.
+  if (!isLocal()) {
+    const [deployerSigner] = await ethers.getSigners();
+    await (await timelock.grantRole(PROPOSER_ROLE, deployerSigner.address, nm.override())).wait();
+    console.log("   Granted PROPOSER_ROLE to deployer (non-local ops)");
+    await (await timelock.grantRole(EXECUTOR_ROLE, deployerSigner.address, nm.override())).wait();
+    console.log("   Granted EXECUTOR_ROLE to deployer (non-local ops)");
+    await (await timelock.grantRole(CANCELLER_ROLE, deployerSigner.address, nm.override())).wait();
+    console.log("   Granted CANCELLER_ROLE to deployer (non-local ops)");
+  }
 
   // 12. Configure ARM token (one-time setters)
   console.log("12. Configuring ARM token...");

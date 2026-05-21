@@ -149,9 +149,17 @@ export function saveDeployment(filename: string, data: any): void {
 // ============================================================================
 
 /**
- * Execute a call as the timelock via Anvil impersonation (local only).
- * On non-local, logs the governance proposal needed instead.
- * Checks receipt status and throws on revert.
+ * Execute a call as the timelock.
+ *
+ * - **Local (Anvil)**: impersonates the timelock directly via `anvil_impersonateAccount`.
+ *   Bypasses the configured delay since impersonation already represents an "executed" call.
+ * - **Non-local (testnet/mainnet)**: real OZ TimelockController schedule + wait + execute.
+ *   Requires the deployer to hold PROPOSER_ROLE + EXECUTOR_ROLE on the timelock
+ *   (`deploy_governance.ts` grants these on non-local). Idempotent: if the operation has
+ *   already been executed (e.g. on a re-run after a partial deploy), returns immediately.
+ *   If already scheduled but not yet executable, waits for the remaining delay and executes.
+ *
+ * Throws on revert. Returns `true` on success / no-op.
  */
 export async function timelockCall(
   timelockAddr: string,
@@ -201,11 +209,58 @@ export async function timelockCall(
     }
     console.log(`   ${description} done`);
     return true;
-  } else {
-    console.log(`   WARNING: ${description} requires a governance proposal on non-local networks.`);
-    console.log(`     Timelock: ${timelockAddr}`);
-    console.log(`     Target:   ${targetAddr}`);
-    console.log(`     Calldata: ${calldata}`);
-    return false;
   }
+
+  // Non-local: real schedule + wait + execute.
+  const timelock = await ethers.getContractAt("TimelockController", timelockAddr);
+  const ZERO_BYTES32 = "0x" + "00".repeat(32);
+  // Deterministic salt derived from the description so re-running the script produces the
+  // same operation id — gives us idempotency via isOperationDone / isOperationPending.
+  const salt = ethers.keccak256(ethers.toUtf8Bytes(description));
+  const value = 0n;
+  const opId: string = await timelock.hashOperation(targetAddr, value, calldata, ZERO_BYTES32, salt);
+
+  if (await timelock.isOperationDone(opId)) {
+    console.log(`   ${description}: already executed (idempotent skip)`);
+    return true;
+  }
+
+  let readyTimestamp: bigint;
+  if (await timelock.isOperationPending(opId)) {
+    readyTimestamp = await timelock.getTimestamp(opId);
+    console.log(`   ${description}: already scheduled (ready at ${readyTimestamp})`);
+  } else {
+    const minDelay: bigint = await timelock.getMinDelay();
+    console.log(`   ${description}: scheduling (delay = ${minDelay}s)...`);
+    const scheduleTx = await timelock.schedule(
+      targetAddr, value, calldata, ZERO_BYTES32, salt, minDelay, nm.override()
+    );
+    const scheduleReceipt = await scheduleTx.wait();
+    if (!scheduleReceipt) throw new Error(`schedule returned no receipt for ${description}`);
+    readyTimestamp = await timelock.getTimestamp(opId);
+  }
+
+  // Wait until the operation is executable. Poll the chain's block timestamp rather than
+  // sleeping wall-clock seconds — different chains advance their clocks differently.
+  while (true) {
+    const block = await ethers.provider.getBlock("latest");
+    const nowChain = BigInt(block?.timestamp ?? 0);
+    if (nowChain >= readyTimestamp) break;
+    const remaining = readyTimestamp - nowChain;
+    console.log(`   ${description}: waiting ${remaining}s for timelock delay to elapse...`);
+    // Sleep up to 30s at a time so we surface progress on longer delays.
+    const sleepSec = Number(remaining) > 30 ? 30 : Number(remaining);
+    await new Promise(resolve => setTimeout(resolve, sleepSec * 1000));
+  }
+
+  console.log(`   ${description}: executing...`);
+  const executeTx = await timelock.execute(
+    targetAddr, value, calldata, ZERO_BYTES32, salt, nm.override()
+  );
+  const executeReceipt = await executeTx.wait();
+  if (!executeReceipt || executeReceipt.status === 0) {
+    throw new Error(`Timelock execute reverted: ${description}`);
+  }
+  console.log(`   ${description}: done`);
+  return true;
 }
