@@ -66,6 +66,7 @@ _(no open items)_
 | Item | Size | Notes |
 |---|---|---|
 | `submitRelay()` HTTP client | M | `lib/relayer.ts::submitRelay` still throws. Needed for the relayer-mediated submit path that hides the second MetaMask prompt. The other endpoints (`fetchFees`, `pollStatus`) are wired. |
+| Shield-xchain fee display + relayer compensation | M | Tackle AFTER `submitRelay()` lands. Two tangled issues. **(a) Display bug:** the modal shows the relayer's hub-side gas cost (`feeForKind('shield-xchain')` in `lib/relayer.ts` returns `quote.fees.crossChainShield`) but the actual on-chain deduction is Iris's CCTP fast-transfer fee (~1–2 bps of amount, set independently of `maxFee`). User saw $1.45 quoted vs $0.02 deducted on Sepolia. Fix is to show a fast-fee estimate (`amount × 2 / 10000` or relayer-computed) and pass a proper bound as CCTP's `maxFee`. **(b) Architecture gap:** shield-xchain has no relayer-compensation path — the relayer pays hub-side `relayWithHook` gas out-of-pocket. Needs an explicit design decision (integrator slice? caller-deducted fee on hub side? subsidy is fine for POC but not production). |
 
 ## Debug page
 
