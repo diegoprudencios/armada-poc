@@ -4,6 +4,7 @@
 import { AmountInput, ChainSelect, FeeSummary } from '@/components/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import { parseUsdcInput } from '@/lib/format'
+import { getNetworkConfig } from '@/config/network'
 import styles from './ShieldInputStep.module.css'
 
 export interface ShieldInputStepProps {
@@ -32,6 +33,8 @@ export function ShieldInputStep({
   onCancel,
   onContinue,
 }: ShieldInputStepProps) {
+  const hubChainId = getNetworkConfig().hub.chainId
+  const isXchain = fromChainId !== hubChainId
   const amount = parseUsdcInput(amountStr)
   const tooMuch = amount > max
   const isValid = amount > 0n && !tooMuch
@@ -43,6 +46,12 @@ export function ShieldInputStep({
         value={fromChainId}
         onChange={onFromChainIdChange}
       />
+      {isXchain ? (
+        <div className={styles.xchainNotice}>
+          Cross-chain deposit takes ~30 seconds to a few minutes for the CCTP confirmation. You
+          can close this modal — progress is tracked in your activity history.
+        </div>
+      ) : null}
       <AmountInput
         variant="display"
         label="How much USDC?"
