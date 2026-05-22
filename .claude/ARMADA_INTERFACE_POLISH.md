@@ -76,14 +76,14 @@ _(no open items)_
 | Item | Size | Notes |
 |---|---|---|
 | Real telemetry sink | S | Console-only today (`lib/telemetry.ts`). Swap with PostHog / Statsig / etc. when product analytics is needed. The EventRegistry contract should remain the privacy gate. |
-| Visibility-gated polling | S | `useUsdcBalances` and `useShieldedBalanceSync` poll regardless of `tabVisibleAtom`. Backing off when hidden saves RPC quota. |
+| Visibility-gated polling + cadence tightening | S | Three polls today burn RPC quota unnecessarily: (1) `useUsdcBalances` and `useShieldedBalanceSync` poll regardless of `tabVisibleAtom` — gate on visibility; (2) `useYieldRate` polls every 30s, but at 500% APY a 30s tick changes a $100 balance by ~$0.0005 (invisible at USDC's 2-decimal UI precision) — bump to 5 min poll + refresh on EarnModal open + invalidate after the user's own yield tx confirms; (3) optionally gate yield polling entirely on `openModalAtom`. |
 
 ## Sepolia / real-network mode
 
 | Item | Size | Notes |
 |---|---|---|
 | Full end-to-end testing | M | Onboarding works in either mode; tx flows untested on Sepolia. |
-| Per-chain gas estimation | S | `lib/railgun/unshield.ts` + `transfer.ts` hardcode EIP-1559 values appropriate for Anvil. Real chains need RPC-derived values. |
+| Per-chain gas estimation (becomes load-bearing with `submitRelay`) | S | `lib/railgun/unshield.ts` + `transfer.ts` hardcode EIP-1559 values appropriate for Anvil. Today these are inert — our wrappers strip the gas fields off the SDK's returned tx and wagmi estimates fresh per-chain. The hardcoded values only matter once the relayer-submit path is wired (the relayer consumes the SDK's returned gas fields to budget native-token outlay). Fold into the `submitRelay()` work. |
 | Real Iris API integration | M | `lib/cctp.ts::pollIrisOnce` is stubbed. Needed for cross-chain flows on real CCTP. |
 
 ## Tests
