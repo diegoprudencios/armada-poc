@@ -21,6 +21,15 @@ contract ArmadaFeeModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, 
     uint256 public constant MAX_YIELD_FEE_BPS = 5000;  // 50%
     uint256 public constant MAX_INTEGRATOR_FEE_BPS = 500; // 5% max integrator base fee
 
+    /// @notice Default cadence for permissionless yield-vault harvests.
+    uint256 public constant DEFAULT_HARVEST_INTERVAL = 7 days;
+
+    /// @notice Floor on the harvest interval (prevents spamming the spoke with tiny withdrawals).
+    uint256 public constant MIN_HARVEST_INTERVAL = 1 hours;
+
+    /// @notice Ceiling on the harvest interval (prevents governance from effectively disabling harvest).
+    uint256 public constant MAX_HARVEST_INTERVAL = 365 days;
+
     // ══════════════════════════════════════════════════════════════════════════
     // STORAGE
     // ══════════════════════════════════════════════════════════════════════════
@@ -30,6 +39,10 @@ contract ArmadaFeeModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, 
 
     /// @notice Yield fee in basis points (default 1500 = 15%)
     uint256 public override yieldFeeBps;
+
+    /// @notice Permissionless harvest cadence (seconds). Read by `ArmadaYieldVault.harvestProtocolFee()`.
+    /// @dev Governance-tunable via `setHarvestInterval`. Bounded by MIN/MAX_HARVEST_INTERVAL.
+    uint256 public harvestInterval;
 
     /// @notice Volume tiers (sorted descending by threshold). Max 10.
     Tier[] internal _tiers;
@@ -85,6 +98,7 @@ contract ArmadaFeeModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, 
         // Defaults per spec
         baseArmadaTakeBps = 50;    // 0.50%
         yieldFeeBps = 1500;        // 15%
+        harvestInterval = DEFAULT_HARVEST_INTERVAL;
 
         // Default tier: $250k volume → 40 bps armada take
         _tiers.push(Tier({volumeThreshold: 250_000e6, armadaTakeBps: 40}));
@@ -119,6 +133,11 @@ contract ArmadaFeeModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, 
     /// @inheritdoc IArmadaFeeModule
     function getYieldFeeBps() external view override returns (uint256) {
         return yieldFeeBps;
+    }
+
+    /// @inheritdoc IArmadaFeeModule
+    function getHarvestInterval() external view override returns (uint256) {
+        return harvestInterval;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -229,6 +248,14 @@ contract ArmadaFeeModule is Initializable, UUPSUpgradeable, OwnableUpgradeable, 
         require(bps <= MAX_YIELD_FEE_BPS, "ArmadaFeeModule: above max yield fee");
         emit YieldFeeUpdated(yieldFeeBps, bps);
         yieldFeeBps = bps;
+    }
+
+    /// @inheritdoc IArmadaFeeModule
+    function setHarvestInterval(uint256 interval) external override onlyOwner {
+        require(interval >= MIN_HARVEST_INTERVAL, "ArmadaFeeModule: interval too short");
+        require(interval <= MAX_HARVEST_INTERVAL, "ArmadaFeeModule: interval too long");
+        emit HarvestIntervalUpdated(harvestInterval, interval);
+        harvestInterval = interval;
     }
 
     /// @inheritdoc IArmadaFeeModule

@@ -48,6 +48,7 @@ interface IArmadaFeeModule is IFeeCollector {
     event TierUpdated(uint256 index, uint256 volumeThreshold, uint256 armadaTakeBps);
     event TierRemoved(uint256 index);
     event YieldFeeUpdated(uint256 oldBps, uint256 newBps);
+    event HarvestIntervalUpdated(uint256 oldInterval, uint256 newInterval);
     event IntegratorTermsSet(address indexed integrator, uint256 takeBps, uint256 threshold, bool active);
     event PrivacyPoolUpdated(address indexed oldPool, address indexed newPool);
     event YieldVaultUpdated(address indexed oldVault, address indexed newVault);
@@ -69,6 +70,11 @@ interface IArmadaFeeModule is IFeeCollector {
 
     /// @notice Returns the current yield fee rate in basis points.
     function getYieldFeeBps() external view returns (uint256);
+
+    /// @notice Returns the governance-tuned harvest interval in seconds.
+    /// @dev This is the minimum cadence at which `ArmadaYieldVault.harvestProtocolFee()`
+    ///      can be called. Governance updates via `setHarvestInterval`.
+    function getHarvestInterval() external view returns (uint256);
 
     // ══════════════════════════════════════════════════════════════════════════
     // FEE RECORDING (AUTHORIZED CALLERS)
@@ -107,6 +113,7 @@ interface IArmadaFeeModule is IFeeCollector {
     function setTier(uint256 index, uint256 threshold, uint256 takeBps) external;
     function removeTier(uint256 index) external;
     function setYieldFee(uint256 bps) external;
+    function setHarvestInterval(uint256 interval) external;
     function setIntegratorTerms(address integrator, uint256 takeBps, uint256 threshold, bool active) external;
     function setPrivacyPool(address _privacyPool) external;
     function setYieldVault(address _yieldVault) external;

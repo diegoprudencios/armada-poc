@@ -35,15 +35,22 @@ interface IAaveSpoke {
 
 /**
  * @title ArmadaYieldVault
- * @notice ERC-20 wrapper around Aave V4 Spoke for shielded yield
+ * @notice ERC-20 wrapper around Aave V4 Spoke for shielded yield.
  * @dev Issues non-rebasing shares compatible with shielded notes.
- *      Tracks principal to calculate yield and applies 10% yield fee on redemption.
  *
- * Key properties:
- * - Non-rebasing: Share balances stay constant, share value increases
- * - Principal tracking: Accurately calculates yield at redemption
- * - Yield fee: 10% of yield goes to treasury on redemption
- * - Privileged path: Adapter can deposit/redeem without fees
+ *      Fee accounting model:
+ *      - `pendingProtocolFee()` always reports the protocol's currently-owed cut of yield.
+ *      - `_convertToAssets`/`_convertToShares` net `pendingProtocolFee` out of `totalAssets`,
+ *         so share price reflects what users can actually claim regardless of whether the
+ *         pending cut has been swept yet. Deposits price correctly without an in-line settle.
+ *      - `redeem` settles the pending cut before paying out (math demands it: a user pulling
+ *         their proportional share from the spoke otherwise erodes the protocol's claim).
+ *      - `harvestProtocolFee()` is the permissionless cadence-gated entrypoint for sweeping
+ *         the protocol's cut to treasury when nobody redeems. Cadence is read from
+ *         `ArmadaFeeModule.getHarvestInterval()` (governance-owned, default 7 days).
+ *
+ *      Treasury (ArmadaTreasuryGov) receives fee via plain `safeTransfer`; `feeModule`,
+ *      when wired, records the fee for RevenueCounter accounting.
  */
 contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -58,6 +65,11 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
 
     /// @notice Maximum yield fee: 50% (5000 bps)
     uint256 public constant MAX_YIELD_FEE_BPS = 5000;
+
+    /// @notice Fallback harvest cadence used when `feeModule` is unset (test paths only).
+    /// @dev In production the fee module is always wired, so the effective cadence comes
+    ///      from `IArmadaFeeModule.getHarvestInterval()` and this constant is unused.
+    uint256 public constant FALLBACK_HARVEST_INTERVAL = 7 days;
 
     /// @notice Yield fee in basis points, governable via extended proposal.
     uint256 public yieldFeeBps = 1000; // 10% at launch
@@ -91,6 +103,13 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     /// @notice Total principal deposited (for yield calculation)
     uint256 public totalPrincipal;
 
+    /// @notice Lifetime protocol fee swept to treasury (in underlying units).
+    /// @dev Used to compute pending fee as `(yieldEver * feeBps / 10000) - cumulativeProtocolFee`.
+    uint256 public cumulativeProtocolFee;
+
+    /// @notice Timestamp of the last protocol fee settle (via redeem or external harvest).
+    uint256 public lastHarvestTime;
+
     /// @notice Per-user cost basis per share, scaled by 1e18
     /// @dev Tracks weighted average deposit price. On deposit, the cost basis is updated
     ///      as a weighted average of existing and new shares. On redeem, principal is
@@ -123,6 +142,7 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
     event YieldFeeUpdated(uint256 oldFeeBps, uint256 newFeeBps);
     event FeeModuleUpdated(address indexed oldModule, address indexed newModule);
+    event ProtocolFeeHarvested(uint256 amount, uint256 cumulativeAfter, uint256 settledAt);
 
     // ============ Modifiers ============
 
@@ -156,6 +176,7 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
         underlying = IERC20(spoke.getUnderlyingAsset(_reserveId));
         treasury = _treasury;
         owner = msg.sender;
+        lastHarvestTime = block.timestamp;
     }
 
     // ============ Admin Functions ============
@@ -201,6 +222,44 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
         feeModule = _feeModule;
     }
 
+    // ============ Protocol Fee Harvest ============
+
+    /**
+     * @notice Permissionless trigger to sweep the protocol's pending yield cut to treasury.
+     * @dev Cadence is read from `ArmadaFeeModule.getHarvestInterval()` (governance-owned).
+     *      Reverts if the interval since the last settle has not elapsed.
+     *      Calling `redeem` between harvests also settles, so the timer can be reset earlier.
+     */
+    function harvestProtocolFee() external nonReentrant {
+        require(
+            block.timestamp >= lastHarvestTime + _effectiveHarvestInterval(),
+            "ArmadaYieldVault: interval not met"
+        );
+        _settleProtocolFee();
+    }
+
+    /**
+     * @notice Amount of yield-fee that the next settle would withdraw.
+     * @return Pending protocol fee in underlying units.
+     */
+    function pendingProtocolFee() external view returns (uint256) {
+        return _pendingProtocolFee();
+    }
+
+    /**
+     * @notice Earliest timestamp at which the next permissionless harvest is allowed.
+     */
+    function nextHarvestTime() external view returns (uint256) {
+        return lastHarvestTime + _effectiveHarvestInterval();
+    }
+
+    /**
+     * @notice The harvest cadence currently in force (seconds).
+     */
+    function harvestInterval() external view returns (uint256) {
+        return _effectiveHarvestInterval();
+    }
+
     // ============ Core Functions ============
 
     /**
@@ -213,7 +272,9 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
         require(assets > 0, "ArmadaYieldVault: zero assets");
         require(receiver != address(0), "ArmadaYieldVault: zero receiver");
 
-        // Calculate shares before state changes
+        // No inline settle on deposit: `_convertToShares` already nets `pendingProtocolFee`
+        // out of `totalAssets`, so the depositor pays the correct user-side price and the
+        // protocol's pending claim is preserved.
         shares = _convertToShares(assets);
         require(shares > 0, "ArmadaYieldVault: zero shares");
 
@@ -243,12 +304,13 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     }
 
     /**
-     * @notice Redeem vault shares for underlying assets
-     * @dev Applies 10% yield fee unless caller is privileged adapter
-     * @param shares Amount of shares to redeem
-     * @param receiver Address to receive underlying
-     * @param owner_ Address that owns the shares
-     * @return assets Amount of underlying received (after fees)
+     * @notice Redeem vault shares for underlying assets.
+     * @dev Settles the protocol's pending fee at the top of the call. Without this, a
+     *      redeeming user would pull their proportional share of `totalAssets` from the
+     *      spoke without the protocol's cut being withdrawn — eroding the protocol's
+     *      tracked claim. After settle, `_convertToAssets` returns the user-claimable
+     *      payout directly (pending is zero). The `yieldFee` field in `Withdraw` is
+     *      retained for log-parser compatibility but is always 0.
      */
     function redeem(
         uint256 shares,
@@ -265,56 +327,91 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
             _approve(owner_, msg.sender, allowed - shares);
         }
 
-        // Calculate assets from shares (before fees)
-        uint256 grossAssets = _convertToAssets(shares);
+        // Settle pending protocol fee BEFORE pricing the redemption. After settle,
+        // _convertToAssets returns the user-claimable value (protocol's cut is gone).
+        _settleProtocolFee();
 
-        // Calculate principal portion using cost basis (independent of balanceOf)
+        // Now compute payout against the post-settle share price.
+        assets = _convertToAssets(shares);
+
+        // Decrement aggregate principal by the user's cost-basis portion. The per-user
+        // cost basis (userCostBasisPerShare) is intentionally NOT decremented — it is
+        // an average price that stays valid for the user's remaining shares.
         uint256 costBasis = userCostBasisPerShare[owner_];
         uint256 principalPortion = (shares * costBasis) / COST_BASIS_PRECISION;
-
-        // Clamp to totalPrincipal to avoid underflow
         if (principalPortion > totalPrincipal) {
             principalPortion = totalPrincipal;
         }
         totalPrincipal -= principalPortion;
-        // Note: costBasisPerShare is not decremented on redeem - it's an average
-        // price that stays valid for remaining shares
 
-        // Burn shares
+        // Burn shares before external call
         _burn(owner_, shares);
 
-        // Withdraw from Aave Spoke
-        spoke.withdraw(reserveId, grossAssets, address(this));
-
-        // Calculate yield and fee
-        // Note: Fees are always applied. The adapter privilege was removed
-        // because the privacy-preserving flow applies fees at the user level.
-        uint256 yieldFee = 0;
-        if (grossAssets > principalPortion) {
-            uint256 yield_ = grossAssets - principalPortion;
-            // Read yield fee rate from fee module when set, otherwise use local yieldFeeBps
-            uint256 effectiveFeeBps = feeModule != address(0)
-                ? IArmadaFeeModule(feeModule).getYieldFeeBps()
-                : yieldFeeBps;
-            yieldFee = (yield_ * effectiveFeeBps) / BPS_DENOMINATOR;
-        }
-
-        assets = grossAssets - yieldFee;
-
-        // Transfer fee to treasury. Treasury is ArmadaTreasuryGov, which receives
-        // tokens via plain safeTransfer (no recordFee call required).
-        if (yieldFee > 0) {
-            underlying.safeTransfer(treasury, yieldFee);
-            if (feeModule != address(0)) {
-                // Record yield fee in centralized fee module for RevenueCounter
-                IArmadaFeeModule(feeModule).recordYieldFee(yieldFee);
-            }
-        }
-
-        // Transfer assets to receiver
+        // Withdraw the user's portion from the spoke and forward to receiver
+        spoke.withdraw(reserveId, assets, address(this));
         underlying.safeTransfer(receiver, assets);
 
-        emit Withdraw(msg.sender, receiver, owner_, assets, shares, yieldFee);
+        emit Withdraw(msg.sender, receiver, owner_, assets, shares, 0);
+    }
+
+    // ============ Protocol Fee Settlement (internal) ============
+
+    /**
+     * @dev Pending protocol fee in underlying units. Pure function over current state.
+     *      Lifetime gross yield = totalAssets() + cumulativeProtocolFee - totalPrincipal
+     *      Protocol's lifetime claim = lifetime gross yield * effectiveFeeBps / 10000
+     *      Pending = claim - cumulativeProtocolFee (clamped at 0).
+     *
+     *      This formulation is invariant to deposits/redeems between harvests — both
+     *      change totalPrincipal and totalAssets by matching amounts, leaving the
+     *      yield/cut tally accurate.
+     */
+    function _pendingProtocolFee() internal view returns (uint256) {
+        uint256 currentAssets = totalAssets();
+        uint256 grossYieldEver = currentAssets + cumulativeProtocolFee;
+        if (grossYieldEver <= totalPrincipal) {
+            return 0;
+        }
+        grossYieldEver -= totalPrincipal;
+        uint256 owedEver = (grossYieldEver * _effectiveYieldFeeBps()) / BPS_DENOMINATOR;
+        if (owedEver <= cumulativeProtocolFee) {
+            return 0;
+        }
+        return owedEver - cumulativeProtocolFee;
+    }
+
+    /**
+     * @dev Sweep any pending protocol fee from the spoke to the treasury and update trackers.
+     *      Called by deposit, redeem, and the external harvestProtocolFee (cadence-gated).
+     */
+    function _settleProtocolFee() internal {
+        uint256 fee = _pendingProtocolFee();
+        if (fee > 0) {
+            spoke.withdraw(reserveId, fee, address(this));
+            underlying.safeTransfer(treasury, fee);
+            cumulativeProtocolFee += fee;
+            if (feeModule != address(0)) {
+                IArmadaFeeModule(feeModule).recordYieldFee(fee);
+            }
+            emit ProtocolFeeHarvested(fee, cumulativeProtocolFee, block.timestamp);
+        }
+        lastHarvestTime = block.timestamp;
+    }
+
+    /// @dev Effective yield fee bps — fee module override if wired, else local `yieldFeeBps`.
+    function _effectiveYieldFeeBps() internal view returns (uint256) {
+        if (feeModule != address(0)) {
+            return IArmadaFeeModule(feeModule).getYieldFeeBps();
+        }
+        return yieldFeeBps;
+    }
+
+    /// @dev Effective harvest cadence — fee module override if wired, else FALLBACK constant.
+    function _effectiveHarvestInterval() internal view returns (uint256) {
+        if (feeModule != address(0)) {
+            return IArmadaFeeModule(feeModule).getHarvestInterval();
+        }
+        return FALLBACK_HARVEST_INTERVAL;
     }
 
     // ============ View Functions ============
@@ -367,29 +464,13 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     }
 
     /**
-     * @notice Preview redeem - get assets after fees
-     * @param shares Amount of shares to redeem
-     * @param owner_ Address that owns the shares
-     * @return assets Amount of underlying after fees
+     * @notice Preview redeem — assets the holder would receive right now.
+     * @dev Per-user fee math is gone: `_convertToAssets` already nets `pendingProtocolFee`
+     *      out of `totalAssets`, so the returned figure is what `redeem` will pay (modulo
+     *      block-level yield drift). The `owner_` parameter is retained for ABI stability.
      */
-    function previewRedeem(uint256 shares, address owner_) external view returns (uint256 assets) {
-        uint256 grossAssets = _convertToAssets(shares);
-
-        // Calculate principal portion using cost basis
-        uint256 costBasis = userCostBasisPerShare[owner_];
-        uint256 principalPortion = (shares * costBasis) / COST_BASIS_PRECISION;
-
-        // Calculate fee
-        if (grossAssets > principalPortion) {
-            uint256 yield_ = grossAssets - principalPortion;
-            uint256 effectiveFeeBps = feeModule != address(0)
-                ? IArmadaFeeModule(feeModule).getYieldFeeBps()
-                : yieldFeeBps;
-            uint256 yieldFee = (yield_ * effectiveFeeBps) / BPS_DENOMINATOR;
-            assets = grossAssets - yieldFee;
-        } else {
-            assets = grossAssets;
-        }
+    function previewRedeem(uint256 shares, address /* owner_ */) external view returns (uint256) {
+        return _convertToAssets(shares);
     }
 
     /**
@@ -404,29 +485,39 @@ contract ArmadaYieldVault is ERC20, ReentrancyGuard {
     // ============ Internal Functions ============
 
     /**
-     * @notice Convert assets to shares using current exchange rate
+     * @notice Convert assets to shares at the current user-side exchange rate.
+     * @dev Denominator is `totalAssets - pendingProtocolFee` so depositors pay the same
+     *      price whether or not a settle has occurred recently.
      */
     function _convertToShares(uint256 assets) internal view returns (uint256) {
         uint256 supply = totalSupply();
         if (supply == 0) {
-            // 1:1 for first deposit
             return assets;
         }
-        uint256 total = totalAssets();
-        if (total == 0) {
+        uint256 userClaimable = _userClaimableAssets();
+        if (userClaimable == 0) {
             return assets;
         }
-        return (assets * supply) / total;
+        return (assets * supply) / userClaimable;
     }
 
     /**
-     * @notice Convert shares to assets using current exchange rate
+     * @notice Convert shares to assets at the current user-side exchange rate.
+     * @dev Numerator is `totalAssets - pendingProtocolFee` so redeemers and view callers
+     *      see the post-fee value regardless of whether the cut has been swept yet.
      */
     function _convertToAssets(uint256 shares) internal view returns (uint256) {
         uint256 supply = totalSupply();
         if (supply == 0) {
             return shares;
         }
-        return (shares * totalAssets()) / supply;
+        return (shares * _userClaimableAssets()) / supply;
+    }
+
+    /// @dev Spoke balance minus the protocol's currently-pending fee claim.
+    function _userClaimableAssets() internal view returns (uint256) {
+        uint256 total = totalAssets();
+        uint256 pending = _pendingProtocolFee();
+        return pending >= total ? 0 : total - pending;
     }
 }
