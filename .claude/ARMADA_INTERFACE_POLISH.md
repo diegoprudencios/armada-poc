@@ -58,8 +58,7 @@ _(no open items)_
 
 | Item | Size | Notes |
 |---|---|---|
-| `rateToApy()` actual APY computation | S | `lib/yield.ts` returns 0. Need to derive APY from the spoke's `annualYieldBps` or sample rate-over-time. |
-| Slippage protection on withdraw | S | Modal computes shares from a locally-cached rate; if the rate moves between quote and execution, the user gets slightly more/less than requested. Add a min-out check at the adapter call or surface the slippage on the Review step. |
+| Contract-enforced min-out on withdraw | S–M | Frontend now refreshes the vault rate immediately before submit and recomputes `shares` from the freshest value, reducing the slippage window to ~1 block. For belt-and-braces protection against a same-block rate move, the `ArmadaYieldAdapter.redeemAndShield` entry point would need a `minUsdcOut` parameter the proof binds to. Out of scope for v1; track as a follow-up if observed slippage exceeds tolerance. |
 
 ## Fees & relayer integration
 
@@ -77,7 +76,6 @@ _(no open items)_
 | Item | Size | Notes |
 |---|---|---|
 | Real telemetry sink | S | Console-only today (`lib/telemetry.ts`). Swap with PostHog / Statsig / etc. when product analytics is needed. The EventRegistry contract should remain the privacy gate. |
-| Visibility-gated polling + cadence tightening | S | Three polls today burn RPC quota unnecessarily: (1) `useUsdcBalances` and `useShieldedBalanceSync` poll regardless of `tabVisibleAtom` — gate on visibility; (2) `useYieldRate` polls every 30s, but at 500% APY a 30s tick changes a $100 balance by ~$0.0005 (invisible at USDC's 2-decimal UI precision) — bump to 5 min poll + refresh on EarnModal open + invalidate after the user's own yield tx confirms; (3) optionally gate yield polling entirely on `openModalAtom`. |
 
 ## Sepolia / real-network mode
 
