@@ -80,6 +80,17 @@ export class PendingStateStore {
     processed: Set<string>,
   ): Promise<void> {
     const sortedProcessed = Array.from(processed).sort();
+    // Defensive size signal — fires when the processed-hash set grows past a level that
+    // suggests either real volume scale-up or a dedup bug. At the relayer's intended POC
+    // volume (handful per hour) we expect <100 entries even after months of uptime; crossing
+    // 10k means either we should ship the Phase 3 prune logic OR something is wrong (e.g. the
+    // dedup short-circuit in enqueueMessage broke and we're re-adding hashes that should have
+    // been caught). Either way operators should investigate.
+    if (sortedProcessed.length > PROCESSED_SET_WARN_THRESHOLD) {
+      console.warn(
+        `[pending-store] ${chainName}: processed-hash set has grown to ${sortedProcessed.length} entries (warn threshold ${PROCESSED_SET_WARN_THRESHOLD}). At current volume this is unexpected — investigate or ship Phase 3 prune logic.`,
+      );
+    }
     await this.inner.write(chainName, {
       pending,
       processed: sortedProcessed,
@@ -88,6 +99,9 @@ export class PendingStateStore {
     });
   }
 }
+
+/** Loud-log threshold for the processed-set size — see comment in PendingStateStore.write. */
+const PROCESSED_SET_WARN_THRESHOLD = 10_000;
 
 function validate(
   parsed: unknown,

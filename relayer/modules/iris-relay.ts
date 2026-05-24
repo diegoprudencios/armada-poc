@@ -972,7 +972,22 @@ export class IrisRelayModule {
         //    the Promise (allSettled is belt + braces for the unexpected). One slow chain (e.g.
         //    a stuck Iris attestation lookup) no longer delays every other chain's tick.
         const chainStates = Array.from(this.chains.values());
-        await Promise.allSettled(chainStates.map((state) => this.pollChain(state)));
+        const pollResults = await Promise.allSettled(
+          chainStates.map((state) => this.pollChain(state)),
+        );
+        // Defensive: pollChain's own catch should swallow + log everything into state.lastError,
+        // so a rejection here means an unexpected throw BEFORE pollChain entered its try (impossible
+        // under normal code paths, but the test harness or a future refactor could regress this).
+        // Log loudly so the operator sees it instead of a silent allSettled swallow.
+        for (let i = 0; i < pollResults.length; i++) {
+          const r = pollResults[i];
+          if (r?.status === "rejected") {
+            const chainName = chainStates[i]?.config.name ?? "unknown";
+            console.error(
+              `[iris-relay] ${chainName}: pollChain rejected unexpectedly (bypassed inner try/catch): ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+            );
+          }
+        }
 
         if (!this.isRunning) break;
 

@@ -47,6 +47,9 @@ export class CursorStore {
   }
 }
 
+// JsonStateStore's validator signature uses `key`; we name it `chainName` here because the
+// cursor-store's only consumers are per-chain — the semantic name reads better in error
+// messages. Same position, same type — just contextual naming.
 function validate(parsed: unknown, chainName: string, path: string): CursorData {
   const candidate = parsed as { lastProcessedBlock?: unknown; updatedAt?: unknown };
   if (typeof candidate.lastProcessedBlock !== "number") {
