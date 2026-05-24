@@ -89,7 +89,26 @@ function makeCommitSchema(positions: HopPosition[], balance: bigint) {
       for (const pos of positions) {
         const raw = data.amounts[String(pos.hop)] ?? ''
         if (!raw.trim()) continue
-        const parsed = parseUsdcInput(raw)
+        const { value: parsed, error: parseError } = parseUsdcInput(raw)
+        // Surface parser errors as their own issue — without this, a too-many-decimals input
+        // would silently parse as 0n and fall through the `continue` below, leaving the user
+        // with no feedback about why their typed amount was ignored.
+        if (parseError === 'too-many-decimals') {
+          ctx.addIssue({
+            path: ['amounts', String(pos.hop)],
+            code: 'custom',
+            message: 'Maximum 6 decimal places.',
+          })
+          continue
+        }
+        if (parseError === 'invalid' || parseError === 'negative') {
+          ctx.addIssue({
+            path: ['amounts', String(pos.hop)],
+            code: 'custom',
+            message: 'Enter a valid positive amount.',
+          })
+          continue
+        }
         if (parsed === 0n) continue
         if (parsed < CROWDFUND_CONSTANTS.MIN_COMMIT) {
           ctx.addIssue({
@@ -214,7 +233,7 @@ export function CommitTab(props: CommitTabProps) {
     const m = new Map<number, bigint>()
     for (const pos of positions) {
       const raw = amountsValues?.[String(pos.hop)] ?? ''
-      const parsed = parseUsdcInput(raw)
+      const { value: parsed } = parseUsdcInput(raw)
       if (parsed > 0n) m.set(pos.hop, parsed)
     }
     return m

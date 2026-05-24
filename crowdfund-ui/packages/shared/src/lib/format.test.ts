@@ -47,25 +47,41 @@ describe('formatUsdcPlain', () => {
 })
 
 describe('parseUsdcInput', () => {
+  // New result-type API kept in lockstep with apps/armada-interface/src/lib/format.ts.
+  // See that file's tests for the full rationale; cases here mirror the same matrix so any
+  // future divergence is caught immediately.
+
   it('parses whole numbers', () => {
-    expect(parseUsdcInput('15000')).toBe(15_000n * 10n ** 6n)
+    expect(parseUsdcInput('15000')).toEqual({ value: 15_000n * 10n ** 6n })
   })
 
   it('parses decimal amounts', () => {
-    expect(parseUsdcInput('15000.50')).toBe(15_000_500_000n)
+    expect(parseUsdcInput('15000.50')).toEqual({ value: 15_000_500_000n })
   })
 
-  it('returns 0n for invalid input', () => {
-    expect(parseUsdcInput('abc')).toBe(0n)
-    expect(parseUsdcInput('')).toBe(0n)
+  it('returns no error for empty / whitespace (user hasn\'t typed yet)', () => {
+    expect(parseUsdcInput('')).toEqual({ value: 0n })
+    expect(parseUsdcInput('   ')).toEqual({ value: 0n })
   })
 
-  it('returns 0n for negative input', () => {
-    expect(parseUsdcInput('-100')).toBe(0n)
+  it('reports invalid for non-numeric input', () => {
+    expect(parseUsdcInput('abc')).toEqual({ value: 0n, error: 'invalid' })
+  })
+
+  it('reports negative for negative numbers', () => {
+    expect(parseUsdcInput('-100')).toEqual({ value: 0n, error: 'negative' })
+  })
+
+  it('reports too-many-decimals before silent truncation would lose precision', () => {
+    expect(parseUsdcInput('1.1234567')).toEqual({ value: 0n, error: 'too-many-decimals' })
+  })
+
+  it('accepts exactly 6 decimal places (boundary)', () => {
+    expect(parseUsdcInput('1.123456')).toEqual({ value: 1_123_456n })
   })
 
   it('parses zero', () => {
-    expect(parseUsdcInput('0')).toBe(0n)
+    expect(parseUsdcInput('0')).toEqual({ value: 0n })
   })
 })
 

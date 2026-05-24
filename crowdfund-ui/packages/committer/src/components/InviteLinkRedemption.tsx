@@ -76,8 +76,16 @@ function makeRedeemSchema(opts: { hopCap: bigint; balance: bigint; targetHop: nu
         })
         return
       }
-      const parsed = parseUsdcInput(raw)
-      if (parsed <= 0n) {
+      const { value: parsed, error: parseError } = parseUsdcInput(raw)
+      if (parseError === 'too-many-decimals') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['amount'],
+          message: 'Maximum 6 decimal places.',
+        })
+        return
+      }
+      if (parseError === 'invalid' || parseError === 'negative' || parsed <= 0n) {
         ctx.addIssue({
           code: 'custom',
           path: ['amount'],
@@ -155,7 +163,7 @@ export function InviteLinkRedemption() {
   })
 
   const amountValue = form.watch('amount')
-  const parsedAmount = useMemo(() => parseUsdcInput(amountValue ?? ''), [amountValue])
+  const parsedAmount = useMemo(() => parseUsdcInput(amountValue ?? '').value, [amountValue])
 
   // Load deployment + provider
   useEffect(() => {
@@ -265,7 +273,7 @@ export function InviteLinkRedemption() {
   const onSubmit = useCallback(
     async (values: RedeemFormValues) => {
       if (!inviteData || !deployment) return
-      const amount = parseUsdcInput(values.amount.trim())
+      const { value: amount } = parseUsdcInput(values.amount.trim())
       if (amount === 0n) return
 
       // Step 1: Approve if needed
