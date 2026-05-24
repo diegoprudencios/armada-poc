@@ -13,7 +13,14 @@ const PENDING_SCHEMA_VERSION = 1 as const;
 /**
  * Persisted shape of a pending CCTP message. Mirrors the iris-relay `PendingMessage` interface
  * with two NEW fields for Phase 2 (`retryAttempts`, `nextRetryAt`) that support per-message
- * retry/backoff on relayWithHook failures.
+ * retry/backoff on relayWithHook failures, plus two NEW fields for Phase 2B
+ * (`submittedTxHash`, `submittedAt`) that turn the relay loop into a state machine — the
+ * presence of `submittedTxHash` means "broadcast happened, waiting for destination receipt"
+ * (handled by `processInflightRelays`); absence means "still waiting on Iris attestation"
+ * (handled by `processPendingMessages`).
+ *
+ * Both Phase 2B fields are OPTIONAL — a v1 file written by the prior version (which had
+ * neither) loads cleanly. The state machine treats absent fields as "awaiting Iris."
  */
 export interface PersistedPendingMessage {
   messageBytes: string;
@@ -30,6 +37,18 @@ export interface PersistedPendingMessage {
   retryAttempts: number;
   /** Unix ms — relay attempts before this time are blocked by the backoff scheduler. 0 = no wait. */
   nextRetryAt: number;
+  /**
+   * Destination-chain tx hash once we've broadcast `hookRouter.relayWithHook(...)`. Presence
+   * is the state-machine flag: set → awaiting receipt confirmation (processInflightRelays);
+   * absent → still awaiting Iris attestation (processPendingMessages).
+   */
+  submittedTxHash?: string;
+  /**
+   * Unix ms of the broadcast. Used by processInflightRelays to detect stuck/dropped txs —
+   * if the receipt hasn't arrived within `STUCK_TX_THRESHOLD_MS` of this timestamp, the
+   * message is force-re-submitted with a fresh nonce.
+   */
+  submittedAt?: number;
 }
 
 export interface PendingStateData {
@@ -190,6 +209,20 @@ function validatePending(
     if (typeof m[field] !== "number" || !Number.isFinite(m[field] as number)) {
       throw new Error(
         `pending-store: pending[${idx}].${String(field)} for chain '${chainName}' at ${path} is not a finite number.`,
+      );
+    }
+  }
+  // Optional fields — validate ONLY if present. submittedTxHash + submittedAt MUST be present
+  // together; one without the other indicates corruption that downstream logic would mishandle.
+  if (m.submittedTxHash !== undefined || m.submittedAt !== undefined) {
+    if (typeof m.submittedTxHash !== "string") {
+      throw new Error(
+        `pending-store: pending[${idx}].submittedTxHash for chain '${chainName}' at ${path} is set but not a string.`,
+      );
+    }
+    if (typeof m.submittedAt !== "number" || !Number.isFinite(m.submittedAt)) {
+      throw new Error(
+        `pending-store: pending[${idx}].submittedAt for chain '${chainName}' at ${path} is set but not a finite number.`,
       );
     }
   }

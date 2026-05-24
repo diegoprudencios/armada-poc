@@ -161,6 +161,100 @@ describe("PendingStateStore", function () {
         expect((err as Error).message).to.match(/unsupported version 99/);
       }
     });
+
+    it("accepts Phase 2B submittedTxHash + submittedAt optional fields", async function () {
+      // WHY: the v1 schema added two optional fields for the non-blocking state machine. A
+      // round-trip with them set must preserve both. Without this test a serialiser bug that
+      // dropped optional fields could silently lose the "awaiting receipt" marker — the
+      // message would re-submit on next tick (gas waste) instead of being recognised as
+      // already in-flight.
+      const store = new PendingStateStore(dir);
+      const pending = [
+        samplePending({
+          messageHash: "0xinflight",
+          submittedTxHash: "0xdesttx123",
+          submittedAt: 1_700_000_500_000,
+        }),
+      ];
+      await store.write("hub", pending, new Set());
+      const got = await store.read("hub");
+      expect(got?.pending[0]?.submittedTxHash).to.equal("0xdesttx123");
+      expect(got?.pending[0]?.submittedAt).to.equal(1_700_000_500_000);
+    });
+
+    it("a v1 file written before Phase 2B (no submittedTxHash) loads cleanly", async function () {
+      // WHY: backward-compat invariant. Phase 2 deployments wrote v1 files without the new
+      // fields; the Phase 2B reader MUST accept them as "awaiting Iris" (no submittedTxHash).
+      // Without this, the first restart after the Phase 2B upgrade would fail to load any
+      // existing pending state — losing every in-flight message in the wild.
+      const store = new PendingStateStore(dir);
+      const path = join(dir, "pending-hub.json");
+      const legacyPending = {
+        messageBytes: "0xabcd",
+        messageHash: "0xa",
+        sourceDomain: 6,
+        destinationDomain: 0,
+        nonce: "0xn",
+        sourceTxHash: "0xtx",
+        sourceBlock: 1,
+        detectedAt: 1,
+        pollAttempts: 0,
+        lastStatus: "new",
+        retryAttempts: 0,
+        nextRetryAt: 0,
+        // submittedTxHash + submittedAt absent — pre-Phase-2B file
+      };
+      await writeFile(
+        path,
+        JSON.stringify({
+          pending: [legacyPending],
+          processed: [],
+          updatedAt: 1,
+          version: 1,
+        }),
+        "utf8",
+      );
+      const got = await store.read("hub");
+      expect(got?.pending).to.have.lengthOf(1);
+      expect(got?.pending[0]?.submittedTxHash).to.equal(undefined);
+      expect(got?.pending[0]?.submittedAt).to.equal(undefined);
+    });
+
+    it("rejects a half-populated submittedTxHash/submittedAt pair (corruption)", async function () {
+      // WHY: the two fields MUST be set together. submittedTxHash without submittedAt would
+      // skip processInflightRelays's stuck-tx detection (no timestamp to compare against);
+      // submittedAt without submittedTxHash would have no hash to look up. Both indicate
+      // corruption; loud failure forces operator investigation.
+      const store = new PendingStateStore(dir);
+      const path = join(dir, "pending-hub.json");
+      const halfPopulated = {
+        messageBytes: "0xabcd",
+        messageHash: "0xa",
+        sourceDomain: 6,
+        destinationDomain: 0,
+        nonce: "0xn",
+        sourceTxHash: "0xtx",
+        sourceBlock: 1,
+        detectedAt: 1,
+        pollAttempts: 0,
+        lastStatus: "new",
+        retryAttempts: 0,
+        nextRetryAt: 0,
+        submittedTxHash: "0xhash",
+        // submittedAt missing — corruption
+      };
+      await writeFile(
+        path,
+        JSON.stringify({ pending: [halfPopulated], processed: [], updatedAt: 1, version: 1 }),
+        "utf8",
+      );
+      try {
+        await store.read("hub");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.match(/submittedAt/);
+      }
+    });
   });
 
   describe("per-chain isolation", function () {

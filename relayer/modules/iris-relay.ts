@@ -69,6 +69,18 @@ interface PendingMessage {
    * `processPendingMessages` skips entries with `nextRetryAt > now`. 0 = no backoff active.
    */
   nextRetryAt: number;
+  /**
+   * Destination-chain tx hash once `hookRouter.relayWithHook` has broadcast successfully.
+   * Presence drives the state machine: set → awaiting confirmation (handled by
+   * processInflightRelays); absent → still awaiting Iris attestation (handled by
+   * processPendingMessages). The two phases are mutually exclusive per message per tick.
+   */
+  submittedTxHash?: string;
+  /**
+   * Unix ms of the broadcast. processInflightRelays uses (now - submittedAt) to detect
+   * stuck/dropped txs — past STUCK_TX_THRESHOLD_MS we force a re-submit with a fresh nonce.
+   */
+  submittedAt?: number;
 }
 
 interface IrisMessageResponse {
@@ -204,6 +216,28 @@ const MAX_ATTESTATION_AGE_MS = (() => {
  */
 const MAX_RELAY_RETRIES = 5;
 const RELAY_RETRY_BASE_DELAY_MS = 2_000;
+
+/**
+ * How long an in-flight broadcast can sit without a receipt before we treat it as stuck/dropped
+ * and re-submit with a fresh nonce. Default 10 min — Ethereum L1 finality is ~12s under normal
+ * conditions, so 50× headroom for genuinely-dropped txs (mempool eviction, replacement-fee
+ * loss, etc.). Configurable via `RELAYER_STUCK_TX_THRESHOLD_MS` env var.
+ *
+ * Re-submit goes through the normal retry/backoff machinery — the message gets
+ * `submittedTxHash` cleared so it re-enters processPendingMessages → submitRelay with
+ * `retryAttempts` bumped.
+ */
+const STUCK_TX_THRESHOLD_MS = (() => {
+  const raw = process.env.RELAYER_STUCK_TX_THRESHOLD_MS;
+  if (raw === undefined || raw === "") return 10 * 60 * 1000;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 60_000) {
+    throw new Error(
+      `Invalid RELAYER_STUCK_TX_THRESHOLD_MS=${raw} — expected a number ≥ 60000 (1 minute floor).`,
+    );
+  }
+  return parsed;
+})();
 
 // ============ Helpers ============
 
@@ -766,6 +800,13 @@ export class IrisRelayModule {
         continue;
       }
 
+      // Skip if this message has already been broadcast and is waiting for receipt
+      // confirmation — that's processInflightRelays's domain, not ours. The state-machine
+      // marker is `submittedTxHash`.
+      if (msg.submittedTxHash) {
+        continue;
+      }
+
       // Skip if we're inside a backoff window from a prior relay failure. The scanner keeps
       // the message in pendingMessages so it's surfaced again on the next tick after the
       // backoff expires.
@@ -801,23 +842,30 @@ export class IrisRelayModule {
         continue;
       }
 
-      // Attestation ready — relay it
+      // Attestation ready — submit to destination chain (non-blocking — receipt polled later).
       console.log(
         `\n[iris-relay] ATTESTATION READY for ${hash.slice(0, 18)}... after ${elapsed(msg.detectedAt)} (${msg.pollAttempts} polls)`
       );
 
-      const relayed = await this.relayMessage(msg, result.attestation, result.message);
-      if (relayed) {
-        // Mark as processed on the source chain state + remove from pending. Persist below.
+      const outcome = await this.submitRelay(msg, result.attestation, result.message);
+      if (outcome === "submitted") {
+        // submitRelay set msg.submittedTxHash + msg.submittedAt. Keep the message in pending —
+        // processInflightRelays will pick it up next tick to confirm. Mark the source chain
+        // dirty so the persist below captures the new submittedTxHash.
+        if (sourceState) dirtyChains.add(sourceState);
+      } else if (outcome === "already-processed") {
+        // The destination contract reports we (or someone) already delivered this. Treat as
+        // success — mark processed and remove from pending. Common after a crash mid-submit.
         if (sourceState) sourceState.processedMessages.add(hash);
         this.pendingMessages.delete(hash);
         if (sourceState) dirtyChains.add(sourceState);
       } else {
-        // Relay failed — schedule a retry per backoff or give up if cap reached.
+        // outcome === "failed" — broadcast rejected (revert, RPC error, nonce drift). Bump
+        // retry counter and schedule backoff, or give up at cap.
         msg.retryAttempts++;
         if (msg.retryAttempts >= MAX_RELAY_RETRIES) {
           console.error(
-            `[iris-relay] GAVE UP on relayMessage for ${hash.slice(0, 18)}... after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
+            `[iris-relay] GAVE UP on submitRelay for ${hash.slice(0, 18)}... after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
           );
           this.pendingMessages.delete(hash);
           if (sourceState) dirtyChains.add(sourceState);
@@ -826,7 +874,7 @@ export class IrisRelayModule {
           const backoffMs = RELAY_RETRY_BASE_DELAY_MS * Math.pow(2, msg.retryAttempts - 1);
           msg.nextRetryAt = Date.now() + backoffMs;
           console.log(
-            `  [iris-relay] relayMessage retry ${msg.retryAttempts}/${MAX_RELAY_RETRIES} for ${hash.slice(0, 18)}... in ${backoffMs}ms`,
+            `  [iris-relay] submitRelay retry ${msg.retryAttempts}/${MAX_RELAY_RETRIES} for ${hash.slice(0, 18)}... in ${backoffMs}ms`,
           );
           if (sourceState) dirtyChains.add(sourceState);
         }
@@ -840,17 +888,174 @@ export class IrisRelayModule {
   }
 
   /**
-   * Submit receiveMessage on the destination chain.
+   * Phase 2B: receipt polling for in-flight relays. Runs once per poll tick per chain — checks
+   * each pending message whose `submittedTxHash` is set (broadcast happened, awaiting receipt).
+   *
+   * Three outcomes per message:
+   *  1. Receipt arrived, status=success → mark processed, remove from pending. Done.
+   *  2. Receipt arrived, status=reverted → bump retryAttempts, clear submittedTxHash so the
+   *     message re-enters submitRelay next cycle. Existing backoff applies.
+   *  3. No receipt yet AND time since submit > STUCK_TX_THRESHOLD_MS → assume mempool eviction
+   *     or dropped tx, force re-submit (same path as revert above).
+   *
+   * Otherwise (no receipt, within threshold) just continue waiting.
+   *
+   * Receipts are fetched in parallel via Promise.allSettled — a single chain's RPC can
+   * typically handle a handful of getTransactionReceipt calls in flight.
    */
-  private async relayMessage(
+  private async processInflightRelays(state: ChainState): Promise<void> {
+    // Collect in-flight messages for THIS chain. We use the message's destinationDomain since
+    // submittedTxHash is on the destination chain — that's where we poll for receipts.
+    const inflight: Array<{ hash: string; msg: PendingMessage }> = [];
+    for (const [hash, msg] of this.pendingMessages.entries()) {
+      if (msg.submittedTxHash && msg.destinationDomain === state.domain) {
+        inflight.push({ hash, msg });
+      }
+    }
+    if (inflight.length === 0) return;
+
+    const { rpcTimeoutMs } = state.config.scanner;
+    const now = Date.now();
+
+    // Fetch receipts in parallel. Each lookup wraps in withTimeout — a stuck RPC on one tx
+    // can't pin the whole loop.
+    const receipts = await Promise.allSettled(
+      inflight.map(({ msg }) =>
+        withTimeout(
+          state.provider.getTransactionReceipt(msg.submittedTxHash!),
+          rpcTimeoutMs,
+          `getTransactionReceipt ${state.config.name} ${msg.submittedTxHash!.slice(0, 12)}`,
+        ),
+      ),
+    );
+
+    let mutated = false;
+    for (let i = 0; i < inflight.length; i++) {
+      const { hash, msg } = inflight[i]!;
+      const result = receipts[i]!;
+
+      if (result.status === "rejected") {
+        // RPC error / timeout while checking. Don't mutate state — next tick retries the same
+        // receipt lookup. Log once per N attempts to avoid spamming for persistent issues.
+        const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+        console.warn(
+          `  [iris-relay] ${state.config.name}: getTransactionReceipt ${msg.submittedTxHash!.slice(0, 18)}... failed (${reason}). Will retry next tick.`,
+        );
+        continue;
+      }
+
+      const receipt = result.value;
+      if (receipt === null) {
+        // Still pending. Check stuck threshold.
+        const sinceSubmit = now - (msg.submittedAt ?? now);
+        if (sinceSubmit > STUCK_TX_THRESHOLD_MS) {
+          console.error(
+            `[iris-relay] STUCK TX: ${msg.submittedTxHash!.slice(0, 18)}... has no receipt after ${Math.round(sinceSubmit / 1000)}s (>${Math.round(STUCK_TX_THRESHOLD_MS / 1000)}s threshold). Re-submitting with fresh nonce on next cycle.`,
+          );
+          this.scheduleResubmit(msg, state.config.name);
+          mutated = true;
+        }
+        continue;
+      }
+
+      if (receipt.status === 1) {
+        // Success — mark processed and remove from pending.
+        const sourceState = this.getChainByDomain(msg.sourceDomain);
+        if (sourceState) sourceState.processedMessages.add(hash);
+        this.pendingMessages.delete(hash);
+        console.log(
+          `[iris-relay] ${state.config.name}: confirmed ${msg.submittedTxHash!.slice(0, 18)}... in block ${receipt.blockNumber} (${msg.retryAttempts} retries, ${Math.round((now - (msg.submittedAt ?? now)) / 1000)}s submit→confirm)`,
+        );
+        // Persist BOTH chains: the source chain (for processedMessages add + pending delete)
+        // AND the destination chain (no state mutation but conceptually relevant). We only
+        // mark the source dirty here; the destination's pending state for this message
+        // already ran through the source's persistChain since pendingMessages is keyed by
+        // messageHash globally.
+        if (sourceState) await this.persistChain(sourceState);
+        mutated = true;
+      } else {
+        // Reverted on chain — re-submit through the retry/backoff path. The nonce was consumed
+        // by the reverted tx, so we don't reset destState.pendingNonce — the next submit gets
+        // the next nonce.
+        console.error(
+          `[iris-relay] REVERTED on chain: ${msg.submittedTxHash!.slice(0, 18)}... (tx mined but receipt.status=0). Will re-submit through retry/backoff.`,
+        );
+        this.scheduleResubmit(msg, state.config.name);
+        mutated = true;
+      }
+    }
+
+    // Persist any source chain whose state changed (stuck/revert clears submittedTxHash, success
+    // already persisted inline above to minimise the crash-recovery window).
+    if (mutated) {
+      const dirtySourceChains = new Set<ChainState>();
+      for (const { msg } of inflight) {
+        const sourceState = this.getChainByDomain(msg.sourceDomain);
+        if (sourceState) dirtySourceChains.add(sourceState);
+      }
+      for (const dirtyState of dirtySourceChains) {
+        await this.persistChain(dirtyState);
+      }
+    }
+  }
+
+  /**
+   * Move a message from "awaiting confirmation" back into "needs submit" — clears
+   * submittedTxHash + submittedAt, bumps retryAttempts + schedules backoff. The next
+   * processPendingMessages tick will re-submit with a fresh nonce (since destState.pendingNonce
+   * already advanced past the failed/stuck tx's nonce).
+   *
+   * Shared between revert + stuck-tx paths since both want the same outcome.
+   */
+  private scheduleResubmit(msg: PendingMessage, chainLabel: string): void {
+    msg.submittedTxHash = undefined;
+    msg.submittedAt = undefined;
+    msg.retryAttempts++;
+    if (msg.retryAttempts >= MAX_RELAY_RETRIES) {
+      console.error(
+        `[iris-relay] ${chainLabel}: GAVE UP on ${msg.messageHash.slice(0, 18)}... after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
+      );
+      this.pendingMessages.delete(msg.messageHash);
+    } else {
+      const backoffMs = RELAY_RETRY_BASE_DELAY_MS * Math.pow(2, msg.retryAttempts - 1);
+      msg.nextRetryAt = Date.now() + backoffMs;
+      console.log(
+        `  [iris-relay] ${chainLabel}: re-submit retry ${msg.retryAttempts}/${MAX_RELAY_RETRIES} for ${msg.messageHash.slice(0, 18)}... in ${backoffMs}ms`,
+      );
+    }
+  }
+
+  /**
+   * Submit `receiveMessage` / `relayWithHook` on the destination chain — broadcast only.
+   *
+   * NON-BLOCKING by design (Phase 2B). The function returns as soon as the broadcast resolves
+   * (typically <1s), NOT after on-chain confirmation. The destination receipt is checked
+   * later by `processInflightRelays` on subsequent poll ticks. This frees the relay loop
+   * from per-message ~12s confirmation latency that previously serialised everything.
+   *
+   * On `'submitted'`: the caller MUST persist `msg.submittedTxHash` + `msg.submittedAt`
+   * before yielding to the event loop, otherwise a crash between broadcast and persist
+   * loses the txHash and the message would be re-submitted on restart (recovered via the
+   * destination contract's "already processed" check, but at gas cost).
+   *
+   * Returns:
+   *  - `'submitted'`  — tx broadcast, hash captured in `msg.submittedTxHash`. Caller keeps the
+   *                     message in pending state for receipt polling.
+   *  - `'already-processed'` — destination contract reports this message was already delivered
+   *                     (likely by a prior submit-then-crash that we lost track of). Caller
+   *                     marks as processed and removes from pending.
+   *  - `'failed'`     — broadcast rejected (revert, RPC error, nonce drift). Caller bumps
+   *                     retryAttempts and schedules backoff via the existing Phase 2 machinery.
+   */
+  private async submitRelay(
     msg: PendingMessage,
     attestation: string,
-    irisMessage: string
-  ): Promise<boolean> {
+    irisMessage: string,
+  ): Promise<"submitted" | "already-processed" | "failed"> {
     const destState = this.getChainByDomain(msg.destinationDomain);
     if (!destState) {
       console.error(`  [iris-relay] No chain for destination domain ${msg.destinationDomain}`);
-      return false;
+      return "failed";
     }
 
     try {
@@ -898,23 +1103,23 @@ export class IrisRelayModule {
         tx = await messageTransmitter.receiveMessage(msgToRelay, attestation, { nonce: txNonce });
       }
 
-      // Bump immediately — even if .wait() throws below, the next relay attempt should use
-      // nonce+1 (the broadcast already happened). The catch's nonce-reset only fires for
-      // errors that happen BEFORE the send returns.
+      // Bump the nonce now — broadcast happened, the chain's mempool has reserved this nonce.
+      // Even if the message later reverts on receipt, the nonce is consumed.
       destState.pendingNonce = txNonce + 1;
 
-      console.log(`  Tx hash: ${tx.hash}`);
-      const receipt = await tx.wait();
-      console.log(`  Confirmed in block ${receipt?.blockNumber}`);
-      console.log(`  Relay successful`);
-      return true;
+      // Mutate the message so the caller can persist + transition to "awaiting receipt" state.
+      msg.submittedTxHash = tx.hash;
+      msg.submittedAt = Date.now();
+
+      console.log(`  Tx submitted: ${tx.hash} (awaiting confirmation, non-blocking)`);
+      return "submitted";
     } catch (e: any) {
       if (
         e.message?.includes("already processed") ||
         e.message?.includes("Nonce already used")
       ) {
         console.log(`  Already processed on-chain, marking as done`);
-        return true;
+        return "already-processed";
       }
       // Nonce-class errors (Sepolia load-balancer drift, replacement underpriced, etc.) — reset
       // the local cache so the next attempt re-reads from the provider. Don't surface as a
@@ -928,8 +1133,8 @@ export class IrisRelayModule {
         console.log(`  Nonce error detected, refreshing on next attempt`);
         destState.pendingNonce = null;
       }
-      console.error(`  [iris-relay] Relay failed: ${e.message || e}`);
-      return false;
+      console.error(`  [iris-relay] Submit failed: ${e.message || e}`);
+      return "failed";
     }
   }
 
@@ -991,12 +1196,31 @@ export class IrisRelayModule {
 
         if (!this.isRunning) break;
 
-        // 2. Check pending messages for attestations and relay
+        // 2. Check pending messages for attestations and submit relays (non-blocking — the
+        //    submit returns after broadcast, NOT after destination-chain confirmation).
         await this.processPendingMessages();
 
         if (!this.isRunning) break;
 
-        // 3. Sleep before next cycle — abort early if stop() fires.
+        // 3. Phase 2B: poll destination chains for receipts of in-flight submitted relays.
+        //    Per-chain parallel — one slow chain doesn't delay others. Same defensive-logging
+        //    pattern as pollChain (Promise.allSettled + per-rejection error log).
+        const inflightResults = await Promise.allSettled(
+          chainStates.map((state) => this.processInflightRelays(state)),
+        );
+        for (let i = 0; i < inflightResults.length; i++) {
+          const r = inflightResults[i];
+          if (r?.status === "rejected") {
+            const chainName = chainStates[i]?.config.name ?? "unknown";
+            console.error(
+              `[iris-relay] ${chainName}: processInflightRelays rejected unexpectedly: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+            );
+          }
+        }
+
+        if (!this.isRunning) break;
+
+        // 4. Sleep before next cycle — abort early if stop() fires.
         await this.sleepCancellable(this.pollIntervalMs);
       }
     } finally {
