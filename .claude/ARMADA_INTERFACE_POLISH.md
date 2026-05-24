@@ -92,6 +92,12 @@ _(no open items)_
 | Cross-tab leader election test | S | Only one tab runs the executor; un-tested in the multi-tab path. Would catch the `JotaiProvider` store-mismatch class of bugs again. |
 | End-to-end test against a live relayer | M | Integration test running against `npm run chains` + `npm run armada-relayer` + the new app. Validates shield → unshield round-trips. |
 
+## Shared lib / package extraction
+
+| Item | Size | Notes |
+|---|---|---|
+| Extract `parseUsdcInput` / `formatUsdc` / `formatUsdcPlain` / `truncateAddress` to `@armada/eth-utils` | M | These four helpers are currently kept in **lockstep** between `apps/armada-interface/src/lib/format.ts` and `crowdfund-ui/packages/shared/src/lib/format.ts` — any change must land in both files in the same PR (see headers in both files). The `parseUsdcInput` hardening (categorised `UsdcInputError`, no silent truncation) was done in lockstep. The right end state per Plan §19 is to extract to a shared `@armada/eth-utils` package — turning the silent-divergence risk into a typecheck-enforced single source of truth. Trigger this when a third consumer needs these helpers OR when the apps need them to diverge in non-trivial ways. Until then, the lockstep contract is documented in both file headers. |
+
 ## UI polish
 
 _(no open items)_
