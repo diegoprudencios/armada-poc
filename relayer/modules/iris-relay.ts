@@ -448,13 +448,15 @@ export class IrisRelayModule {
    * Poll a chain for new MessageSent events from real CCTP. Resilient against the failure modes
    * that produced the original silent-stall incident:
    *
-   *  - **Bounded chunking**: every `getLogs` call spans at most `maxLogRange` blocks. After any
-   *    pause/outage, the catch-up window is processed in chunks so we never trip the public
-   *    RPC's range cap (~500 on Alchemy, ~1024 on drpc).
+   *  - **Cursor-checkpointed scanning**: the scan window is split into chunks of `maxLogRange`
+   *    blocks (1000 by default — the checkpoint cadence, NOT a per-call RPC cap). After each
+   *    chunk completes, the cursor is persisted to disk via `onChunk`. A failure mid-window
+   *    loses at most one chunk's worth of replay on the next tick.
    *
-   *  - **Per-chunk cursor persistence**: each successful chunk writes the cursor to disk via
-   *    `onChunk`. A failure mid-range loses at most ONE chunk of work on the next tick, never
-   *    the whole window.
+   *  - **Per-call RPC cap adaptation**: the eth_getLogs prototype patch (`lib/rpc-bisecting.ts`,
+   *    installed once at startup) intercepts every getLogs call and recursively halves on
+   *    "range too large" errors. Means we don't need to know the provider's cap (Alchemy free
+   *    = 10 blocks, drpc varies, Infura = 10k) — bisection adapts at call time.
    *
    *  - **Confirmation depth**: scans only up to `currentBlock - confirmationDepth` so a reorg
    *    between detection and `relayWithHook` can't have us submitting attestations for vanished

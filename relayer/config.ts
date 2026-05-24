@@ -41,9 +41,12 @@ export interface ChainConfig {
      */
     confirmationDepth: number;
     /**
-     * Inclusive cap on blocks per `eth_getLogs` request. The 500 default holds across the
-     * tightest public RPC caps (Alchemy 500, drpc 1024). Anvil has no cap so we use 10k there
-     * to keep the chunk count low for fast tests.
+     * Cursor-checkpoint cadence — how many blocks the scanner attempts per outer chunk before
+     * persisting the cursor + ingesting that chunk's logs. NOT an RPC cap: the bisecting patch
+     * (`lib/rpc-bisecting.ts`) handles per-call provider caps automatically by halving on
+     * "range too large" errors (Alchemy free tier = 10 blocks, drpc varies, Infura = 10k). The
+     * value here controls how much progress is lost if a tick fails mid-window: 1000 blocks =
+     * ~33 min of replay on Sepolia, ~33 min on Base Sepolia, ~4 min on Arbitrum Sepolia.
      */
     maxLogRange: number;
     /**
@@ -112,7 +115,10 @@ function scannerConfigForChain(chainName: string, env: string): ChainConfig["sca
 
   return {
     confirmationDepth: envIntForChain("CONFIRMATION_DEPTH", chainName, defaultConfirmation),
-    maxLogRange: envIntForChain("MAX_LOG_RANGE", chainName, 500),
+    // 1000 blocks is the checkpoint cadence — see RelayerChainConfig.scanner.maxLogRange doc.
+    // The bisecting patch handles whatever per-call cap the RPC actually enforces; this value
+    // is purely about "how much replay do we accept on a mid-tick failure."
+    maxLogRange: envIntForChain("MAX_LOG_RANGE", chainName, 1000),
     bootLookbackBlocks: envIntForChain("BOOT_LOOKBACK_BLOCKS", chainName, defaultLookback),
     maxBootLookbackBlocks: envIntForChain("MAX_BOOT_LOOKBACK_BLOCKS", chainName, defaultMaxLookback),
     rpcTimeoutMs: envIntForChain("RPC_TIMEOUT_MS", chainName, 10_000),

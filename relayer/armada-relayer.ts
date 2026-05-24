@@ -23,6 +23,14 @@ import { CCTPRelayModule } from "./modules/cctp-relay";
 import { IrisRelayModule } from "./modules/iris-relay";
 import type { PrivacyPoolDeployment, CCTPDeployment } from "./types";
 import { getNetworkConfig } from "../config/networks";
+import { installBisectingGetLogs } from "./lib/rpc-bisecting";
+
+// Install the eth_getLogs bisecting patch at module load — before ANY JsonRpcProvider is
+// constructed (the patch is at the prototype level so this is technically order-independent,
+// but placing it here makes the intent obvious to anyone reading top-to-bottom). Adapts to
+// whatever per-call cap the configured RPC enforces (Alchemy free = 10 blocks, Infura = 10k,
+// etc.) without per-provider configuration.
+installBisectingGetLogs();
 
 // ============ Deployment Loading ============
 

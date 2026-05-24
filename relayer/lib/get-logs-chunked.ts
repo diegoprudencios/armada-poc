@@ -1,6 +1,9 @@
 /**
- * ABOUTME: Bounded-window getLogs helper. Splits a block range into max-size chunks so a single
- * query never exceeds public RPC caps (Alchemy ~500, drpc ~1024, publicnode ~10k).
+ * ABOUTME: Cursor-checkpointed scan helper. Splits a block range into chunks so the per-chunk
+ * `onChunk` callback can ingest + persist mid-flight — a failure mid-window loses at most one
+ * chunk of replay, not the whole window. Per-RPC-call range caps (Alchemy free 10 blocks,
+ * Infura 10k, drpc varies) are handled separately by `rpc-bisecting.ts` which intercepts
+ * eth_getLogs and recursively halves on the relevant error patterns.
  * ABOUTME: Adapted from apps/armada-interface/src/lib/events/getLogsChunked.ts — kept in
  * lockstep with the frontend version. Update both files in the same PR or extract to a shared
  * package per Plan §19 when a third consumer appears.
