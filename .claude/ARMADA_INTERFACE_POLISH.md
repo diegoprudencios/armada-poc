@@ -4,6 +4,8 @@ Running list of deferred work / known gaps across the `@armada/interface` build.
 Updated as we ship more features. Items are tagged by area and rough size
 (XS = <1 hr, S = <½ day, M = ~1 day, L = multi-day).
 
+**Related**: server-side relayer reliability gaps (cold-start scan window, silent `getLogs` failures, missing health endpoint, etc.) live in [`RELAYER_HARDENING.md`](./RELAYER_HARDENING.md). Frontend issues are here; relayer issues are there.
+
 ## How to use this doc
 
 - **Adding an item**: append to the relevant section with a one-line description, the
@@ -30,6 +32,7 @@ Updated as we ship more features. Items are tagged by area and rough size
 | Item | Size | Notes |
 |---|---|---|
 | Cross-tab follower live-sync | M | v1 has only the leader executor running. Other tabs see records but lifecycles freeze. Out of scope per Plan §7a; revisit when it bites. |
+| Rename `'submit-relayer'` stage to something honest | S–M | The stage exists in every kind's lifecycle but no kind currently uses relayer-mediated submit — every handler submits via the user's own wallet. The misleading name has tripped up reviewers (me, audit bot). `lib/tx/CLAUDE.md` documents the gotcha as a stop-gap. Real rename touches the `TxStage` union, every lifecycle entry, all 7 handler dispatch switches, stage-copy mapping, AND requires a backward-compat alias / IDB migration for in-flight records on users' devices (their persisted records have `stage: 'submit-relayer'`). Defer until either submitRelay actually lands (good moment to rename) or another reviewer trips on it. |
 
 ## Shield flow
 
@@ -45,8 +48,9 @@ _(no open items)_
 
 | Item | Size | Notes |
 |---|---|---|
-| Iris attestation polling for finer stage transitions | M | Today we collapse `iris-attestation-ready` / `client-mint-pending` / `client-mint-confirmed` into one detection. Real CCTP mode (Sepolia) needs Iris polling to split these. `lib/cctp.ts::pollIrisOnce` is stubbed. |
+| Iris attestation polling for finer stage transitions | M | Today we collapse `iris-attestation-ready` / `client-mint-pending` / `client-mint-confirmed` into one detection. Real CCTP mode (Sepolia) needs Iris polling to split these. `lib/cctp.ts::pollIrisOnce` is stubbed. **Privacy cost**: client-side Iris queries would correlate the user's IP with their xchain tx — defer unless the UX gain clearly outweighs. |
 | Real CCTP (Sepolia) end-to-end test | S | Handler is mode-agnostic by design but unverified on real CCTP. |
+| Parallel same-recipient disambiguation — [issue #287](https://github.com/ship-armada/armada-poc/issues/287) | M | `UnshieldData` hookData encodes only `recipient`, so two parallel unshields to the same address have bit-identical content — frontend cannot distinguish them from chain state alone. Result: out-of-order CCTP delivery can swap which record gets credited with which `destTxHash`. Funds arrive correctly; only the display attribution is confused. Cleanest fix is contract-side: add `uniqueNonce: bytes32` to `UnshieldData` struct. Very unlikely to bite typical use. |
 
 ## Transfer-shielded
 
@@ -83,7 +87,7 @@ _(no open items)_
 |---|---|---|
 | Full end-to-end testing | M | Onboarding works in either mode; tx flows untested on Sepolia. |
 | Per-chain gas estimation (becomes load-bearing with `submitRelay`) | S | `lib/railgun/unshield.ts` + `transfer.ts` hardcode EIP-1559 values appropriate for Anvil. Today these are inert — our wrappers strip the gas fields off the SDK's returned tx and wagmi estimates fresh per-chain. The hardcoded values only matter once the relayer-submit path is wired (the relayer consumes the SDK's returned gas fields to budget native-token outlay). Fold into the `submitRelay()` work. |
-| Real Iris API integration | M | `lib/cctp.ts::pollIrisOnce` is stubbed. Needed for cross-chain flows on real CCTP. |
+| Real Iris API integration (client-side) | M | `lib/cctp.ts::pollIrisOnce` and `useCctpAttestation` are stubbed. **NOT needed for current xchain flows** — shield-xchain + unshield-xchain detect delivery by polling the destination chain's `MessageReceived` event directly, server-side Iris polling lives in the relayer. Only needed if/when we want client-side Iris features (e.g. the "Iris attestation polling for finer stage transitions" item above). Privacy cost: client IP correlated with xchain txs. |
 
 ## Tests
 
