@@ -204,17 +204,36 @@ async function main() {
     walletManager.cleanDedupCache();
   }, 5 * 60 * 1000);
 
-  // Handle graceful shutdown
-  const shutdown = () => {
+  // Handle graceful shutdown. CRITICAL: await `cctpRelayModule.stop()` BEFORE process.exit so
+  // the in-flight poll tick completes and its cursor write lands on disk. Previously this was
+  // fire-and-forget + immediate exit, which meant a SIGTERM mid-scan could kill the process
+  // between the cursor advance and the cursor write — defeating the whole point of persistent
+  // cursors. Re-entrancy guarded so a second signal during shutdown doesn't double-fire.
+  let isShuttingDown = false;
+  const shutdown = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     console.log("\n[armada] Shutting down...");
     clearInterval(cleanupInterval);
-    cctpRelayModule.stop();
-    httpApi.stop();
+    try {
+      await cctpRelayModule.stop();
+    } catch (err) {
+      console.error("[armada] Error during CCTP relay shutdown:", err);
+    }
+    try {
+      httpApi.stop();
+    } catch (err) {
+      console.error("[armada] Error during HTTP API shutdown:", err);
+    }
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+  process.on("SIGTERM", () => {
+    void shutdown();
+  });
 }
 
 main().catch((e) => {

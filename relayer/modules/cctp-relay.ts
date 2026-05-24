@@ -17,6 +17,12 @@ import {
 } from "../config";
 import * as fs from "fs";
 import * as path from "path";
+import { CursorStore } from "../lib/cursor-store";
+import { getLogsChunked } from "../lib/get-logs-chunked";
+import { RpcTimeoutError, withTimeout } from "../lib/rpc-utils";
+
+/** Where per-chain cursor files live — shared with iris-relay. Module-relative. */
+const RELAYER_STATE_DIR = path.join(__dirname, "..", "state");
 
 // ============ Constants ============
 
@@ -50,9 +56,17 @@ interface ChainState {
   tokenMessenger: string;
   hookRouter: string | null;
   domain: number;
+  /**
+   * Highest block fully scanned (inclusive). Loaded from disk on cold start; advanced via the
+   * cursor store after every successful chunk. Restart-safe.
+   */
   lastProcessedBlock: number;
   processedMessages: Set<string>; // "sourceDomain-nonce" format
   pendingNonce: number | null;
+  /** Last scan error, or null when most recent tick succeeded. Replaces the silent catch. */
+  lastError: { message: string; at: number } | null;
+  /** Unix ms of the last successful scan tick (for the future health endpoint). */
+  lastScanAt: number;
 }
 
 /** Retry queue entry for failed CCTP relay attempts */
@@ -228,6 +242,7 @@ export class CCTPRelayModule {
   private pollIntervalMs: number;
   private retryQueue: RetryEntry[] = [];
   private getMinFee: (() => Promise<bigint>) | null;
+  private cursorStore: CursorStore;
 
   /**
    * @param getMinFee Optional async function that returns the minimum acceptable
@@ -238,6 +253,7 @@ export class CCTPRelayModule {
   constructor(getMinFee?: () => Promise<bigint>) {
     this.pollIntervalMs = armadaRelayerSettings.cctpPollIntervalMs;
     this.getMinFee = getMinFee || null;
+    this.cursorStore = new CursorStore(RELAYER_STATE_DIR);
   }
 
   /**
@@ -325,10 +341,19 @@ export class CCTPRelayModule {
       const provider = new ethers.JsonRpcProvider(chainConfig.rpc);
       const wallet = new ethers.Wallet(accounts.deployer.privateKey, provider);
 
-      // Verify connection
-      await provider.getBlockNumber();
+      // Verify connection up-front with the same timeout we'll use during polling.
+      const currentBlock = Number(
+        await withTimeout(
+          provider.getBlockNumber(),
+          chainConfig.scanner.rpcTimeoutMs,
+          `initChain getBlockNumber ${chainConfig.name}`,
+        ),
+      );
 
       const domain = CHAIN_TO_DOMAIN[chainConfig.chainId] || deployment.domain;
+
+      // Load persisted cursor or bootstrap from lookback — same logic as iris-relay.
+      const lastProcessedBlock = await this.resolveBootCursor(chainConfig, currentBlock);
 
       return {
         config: chainConfig,
@@ -338,14 +363,67 @@ export class CCTPRelayModule {
         tokenMessenger,
         hookRouter,
         domain,
-        lastProcessedBlock: 0,
+        lastProcessedBlock,
         processedMessages: new Set(),
         pendingNonce: null,
+        lastError: null,
+        lastScanAt: 0,
       };
     } catch (e: any) {
       console.error(`    Connection error: ${e.message}`);
       return null;
     }
+  }
+
+  /**
+   * Decide the starting `lastProcessedBlock` for a chain on cold boot. Mirrors the iris-relay
+   * implementation — see `iris-relay.ts::resolveBootCursor` for the full rationale. We keep the
+   * two copies in lockstep rather than extracting to a shared helper because cctp-relay is
+   * local-mock-only and shouldn't grow a runtime dependency on iris-relay.
+   */
+  private async resolveBootCursor(
+    chainConfig: ChainConfig,
+    currentBlock: number,
+  ): Promise<number> {
+    const { bootLookbackBlocks, maxBootLookbackBlocks } = chainConfig.scanner;
+    const lookbackFloor = Math.max(0, currentBlock - bootLookbackBlocks);
+
+    let cursor;
+    try {
+      cursor = await this.cursorStore.read(chainConfig.name);
+    } catch (err: any) {
+      console.error(
+        `  [cctp-relay] ${chainConfig.name}: Cursor file unreadable (${err.message}). Bootstrapping from lookback floor.`,
+      );
+      cursor = null;
+    }
+
+    if (cursor === null) {
+      console.log(
+        `  [cctp-relay] ${chainConfig.name}: No persisted cursor — starting from block ${lookbackFloor} (currentBlock=${currentBlock}, lookback=${bootLookbackBlocks})`,
+      );
+      return lookbackFloor;
+    }
+
+    const gap = currentBlock - cursor.lastProcessedBlock;
+    if (gap <= 0) {
+      console.warn(
+        `  [cctp-relay] ${chainConfig.name}: Cursor ${cursor.lastProcessedBlock} ≥ currentBlock ${currentBlock}. Resetting to currentBlock.`,
+      );
+      return currentBlock;
+    }
+
+    if (gap > maxBootLookbackBlocks) {
+      console.warn(
+        `  [cctp-relay] ${chainConfig.name}: Cursor gap (${gap} blocks) exceeds maxBootLookbackBlocks (${maxBootLookbackBlocks}). Capping resume at block ${lookbackFloor}.`,
+      );
+      return lookbackFloor;
+    }
+
+    console.log(
+      `  [cctp-relay] ${chainConfig.name}: Resuming from persisted cursor at block ${cursor.lastProcessedBlock} (gap=${gap} blocks)`,
+    );
+    return cursor.lastProcessedBlock;
   }
 
   /**
@@ -641,56 +719,80 @@ export class CCTPRelayModule {
    * Poll a chain for new MessageSent events
    */
   private async pollChain(state: ChainState): Promise<void> {
+    const { config } = state;
+    const { confirmationDepth, maxLogRange, rpcTimeoutMs } = config.scanner;
+
     try {
-      const currentBlock = await state.provider.getBlockNumber();
+      const currentBlock = Number(
+        await withTimeout(
+          state.provider.getBlockNumber(),
+          rpcTimeoutMs,
+          `getBlockNumber ${config.name}`,
+        ),
+      );
 
-      // On first run, start from current block
-      if (state.lastProcessedBlock === 0) {
-        state.lastProcessedBlock = currentBlock;
-        console.log(
-          `  [cctp-relay] ${state.config.name}: Starting from block ${currentBlock}`
-        );
-        return;
-      }
-
-      if (currentBlock <= state.lastProcessedBlock) {
+      // Apply confirmation depth — on Anvil this is 0 so behaviour matches the old code; on
+      // any real chain we won't scan reorg-vulnerable tip blocks.
+      const effectiveHead = currentBlock - confirmationDepth;
+      if (effectiveHead <= state.lastProcessedBlock) {
+        state.lastError = null;
+        state.lastScanAt = Date.now();
         return;
       }
 
       const fromBlock = state.lastProcessedBlock + 1;
-      const toBlock = currentBlock;
+      const toBlock = effectiveHead;
 
       const iface = new ethers.Interface(MESSAGE_SENT_ABI);
       const eventTopic = iface.getEvent("MessageSent")?.topicHash;
-
       if (!eventTopic) {
         console.error("[cctp-relay] Failed to get MessageSent event topic");
         return;
       }
 
-      const logs = await state.provider.getLogs({
-        address: state.messageTransmitter,
-        topics: [eventTopic],
+      await getLogsChunked(state.provider, {
         fromBlock,
         toBlock,
+        maxRange: maxLogRange,
+        filter: {
+          address: state.messageTransmitter,
+          topics: [eventTopic],
+        },
+        // Ingest + cursor-advance happen INSIDE the per-chunk callback so the on-disk cursor
+        // is always ≤ what's been processed. relayMessage is async and we await it inside the
+        // chunk so a relay failure on chunk N stops the scan there with the cursor pointing at
+        // chunk N-1's end — next tick re-attempts chunk N from the start.
+        onChunk: async ({ fromBlock: chunkFrom, toBlockInclusive, logs }) => {
+          if (logs.length > 0) {
+            console.log(
+              `\n[cctp-relay] ${config.name}: Found ${logs.length} message(s) in blocks ${chunkFrom}-${toBlockInclusive}`,
+            );
+          }
+          for (const log of logs) {
+            const event = parseMessageEvent(log);
+            if (event) {
+              await this.relayMessage(event, state);
+            }
+          }
+          state.lastProcessedBlock = toBlockInclusive;
+          await this.cursorStore.write(config.name, {
+            lastProcessedBlock: toBlockInclusive,
+            updatedAt: Date.now(),
+          });
+        },
       });
 
-      if (logs.length > 0) {
-        console.log(
-          `\n[cctp-relay] ${state.config.name}: Found ${logs.length} message(s) in blocks ${fromBlock}-${toBlock}`
-        );
-      }
-
-      for (const log of logs) {
-        const event = parseMessageEvent(log);
-        if (event) {
-          await this.relayMessage(event, state);
-        }
-      }
-
-      state.lastProcessedBlock = currentBlock;
-    } catch (e) {
-      // Silently ignore connection errors during polling (chain may be down)
+      state.lastError = null;
+      state.lastScanAt = Date.now();
+    } catch (err: any) {
+      // No longer silent. Cursor stays put → next tick retries from the same fromBlock.
+      const message = err instanceof RpcTimeoutError
+        ? `RPC timeout: ${err.label}`
+        : err?.message ?? "unknown error";
+      state.lastError = { message, at: Date.now() };
+      console.error(
+        `[cctp-relay] ${config.name}: Scan tick failed: ${message}. Cursor stays at ${state.lastProcessedBlock}; will retry next tick.`,
+      );
     }
   }
 
@@ -720,35 +822,64 @@ export class CCTPRelayModule {
     this.runPollLoop();
   }
 
+  /** Resolved by `runPollLoop` when it observes isRunning=false and exits. `stop()` awaits it. */
+  private loopExited: Promise<void> | null = null;
+  private resolveLoopExited: (() => void) | null = null;
+
   /**
-   * Internal polling loop (runs in background via setTimeout)
+   * Internal polling loop. Yields to `isRunning` between every step so a `stop()` request
+   * is honoured promptly without forcing the loop to wait out a full pollInterval first.
    */
   private async runPollLoop(): Promise<void> {
-    while (this.isRunning) {
-      // Poll all chains for new messages
-      for (const state of this.chains.values()) {
-        await this.pollChain(state);
-      }
+    this.loopExited = new Promise((resolve) => {
+      this.resolveLoopExited = resolve;
+    });
+    try {
+      while (this.isRunning) {
+        // Poll all chains for new messages
+        for (const state of this.chains.values()) {
+          if (!this.isRunning) break;
+          await this.pollChain(state);
+        }
 
-      // Process retry queue
-      if (this.retryQueue.length > 0) {
-        await this.processRetryQueue();
-      }
+        if (!this.isRunning) break;
 
+        // Process retry queue
+        if (this.retryQueue.length > 0) {
+          await this.processRetryQueue();
+        }
+
+        if (!this.isRunning) break;
+
+        await this.sleepCancellable(this.pollIntervalMs);
+      }
+    } finally {
+      this.resolveLoopExited?.();
+    }
+  }
+
+  /** See iris-relay::sleepCancellable — same shape, kept lockstep. */
+  private async sleepCancellable(totalMs: number): Promise<void> {
+    const start = Date.now();
+    const step = 100;
+    while (this.isRunning && Date.now() - start < totalMs) {
       await new Promise((resolve) =>
-        setTimeout(resolve, this.pollIntervalMs)
+        setTimeout(resolve, Math.min(step, totalMs - (Date.now() - start))),
       );
     }
   }
 
   /**
-   * Stop the polling loop
+   * Async, awaitable shutdown. Same contract as iris-relay::stop — wait for the current poll
+   * tick to complete so its cursor write lands before we let the caller `process.exit`.
+   * Idempotent.
    */
-  stop(): void {
-    if (this.isRunning) {
-      console.log("[cctp-relay] Stopping...");
-      this.isRunning = false;
-    }
+  async stop(): Promise<void> {
+    if (!this.isRunning) return;
+    console.log("[cctp-relay] Stopping — waiting for in-flight scan tick to complete...");
+    this.isRunning = false;
+    if (this.loopExited) await this.loopExited;
+    console.log("[cctp-relay] Stopped cleanly.");
   }
 
   /**

@@ -25,6 +25,47 @@ export interface ChainConfig {
   deploymentFile: string;
   privacyPoolDeploymentFile: string;
   cctpDomain: number;
+  /**
+   * Relayer-only knobs for the CCTP scan loop. Defaults below come from the chain's
+   * characteristics — finality depth (reorg risk), public-RPC range caps, etc.
+   *
+   * Per-knob env overrides honour the pattern `RELAYER_<KNOB>_<CHAIN_NAME_UPPER>` (e.g.
+   * `RELAYER_MAX_LOG_RANGE_ETHEREUM_SEPOLIA=200`). When unset, the default for the chain wins.
+   */
+  scanner: {
+    /**
+     * Reorg buffer — we scan only up to `currentBlock - confirmationDepth` so a reorg that
+     * drops a MessageSent event between our detection and our relayWithHook call can't leave
+     * us submitting an attestation for a vanished message. Defaults: 6 for Ethereum L1, 2 for
+     * L2s (Base/Arbitrum), 0 for Anvil (no reorgs).
+     */
+    confirmationDepth: number;
+    /**
+     * Inclusive cap on blocks per `eth_getLogs` request. The 500 default holds across the
+     * tightest public RPC caps (Alchemy 500, drpc 1024). Anvil has no cap so we use 10k there
+     * to keep the chunk count low for fast tests.
+     */
+    maxLogRange: number;
+    /**
+     * On cold boot WITHOUT a persisted cursor, how far back to start scanning. Recovers
+     * messages submitted during the relayer's downtime / before its first boot. Default
+     * derived from the chain's block time × ~30 min: Sepolia ~150 blk, Base 900 blk, Anvil 0.
+     */
+    bootLookbackBlocks: number;
+    /**
+     * On cold boot WITH a persisted cursor, the maximum gap between the cursor and chain head
+     * we'll attempt to backfill. If the cursor is older than this — typically because the
+     * relayer was offline for hours — we cap the backfill at `bootLookbackBlocks` and emit a
+     * loud warning. Without the cap, a multi-day-old cursor would attempt a multi-day backfill,
+     * blowing through RPC quota.
+     */
+    maxBootLookbackBlocks: number;
+    /**
+     * Per-RPC-call timeout in ms. Every provider call goes through `withTimeout(...)` so a
+     * dead socket / hung connection cannot pin the poll loop.
+     */
+    rpcTimeoutMs: number;
+  };
 }
 
 function toChainConfig(net: NetChainConfig, env: string): ChainConfig {
@@ -36,7 +77,58 @@ function toChainConfig(net: NetChainConfig, env: string): ChainConfig {
     deploymentFile: `${net.deploymentPrefix}${suffix}-v3.json`,
     privacyPoolDeploymentFile: `privacy-pool-${net.deploymentPrefix}${suffix}.json`,
     cctpDomain: net.cctpDomain,
+    scanner: scannerConfigForChain(net.name, env),
   };
+}
+
+/**
+ * Per-chain scanner defaults. Each value can be overridden by an env var of the form
+ * `RELAYER_<KNOB>_<CHAIN>` — e.g. `RELAYER_MAX_LOG_RANGE_ETHEREUM_SEPOLIA=200`. The chain
+ * suffix is the chain name uppercased with spaces/dashes → underscores.
+ */
+function scannerConfigForChain(chainName: string, env: string): ChainConfig["scanner"] {
+  // Anvil has no reorgs and no public-RPC caps — chunking would just slow tests down.
+  if (env === "local") {
+    return {
+      confirmationDepth: envIntForChain("CONFIRMATION_DEPTH", chainName, 0),
+      maxLogRange: envIntForChain("MAX_LOG_RANGE", chainName, 10_000),
+      bootLookbackBlocks: envIntForChain("BOOT_LOOKBACK_BLOCKS", chainName, 0),
+      maxBootLookbackBlocks: envIntForChain("MAX_BOOT_LOOKBACK_BLOCKS", chainName, 100_000),
+      rpcTimeoutMs: envIntForChain("RPC_TIMEOUT_MS", chainName, 10_000),
+    };
+  }
+
+  // Sepolia / testnet defaults. Per-chain block-time tuned bootLookback:
+  //   Ethereum Sepolia: ~12s blocks → 150 blocks ≈ 30 min
+  //   Base Sepolia:     ~2s blocks  → 900 blocks ≈ 30 min
+  //   Arbitrum Sepolia: ~0.25s      → 7200 blocks ≈ 30 min
+  const isL1 = /ethereum|mainnet|sepolia/i.test(chainName) && !/base|arb|op|optimism/i.test(chainName);
+  const isBaseLike = /base|optimism|op/i.test(chainName);
+  const isArbLike = /arbitrum|arb/i.test(chainName);
+
+  const defaultLookback = isL1 ? 150 : isBaseLike ? 900 : isArbLike ? 7_200 : 300;
+  const defaultMaxLookback = defaultLookback * 10; // 5 hours of headroom at most
+  const defaultConfirmation = isL1 ? 6 : 2;
+
+  return {
+    confirmationDepth: envIntForChain("CONFIRMATION_DEPTH", chainName, defaultConfirmation),
+    maxLogRange: envIntForChain("MAX_LOG_RANGE", chainName, 500),
+    bootLookbackBlocks: envIntForChain("BOOT_LOOKBACK_BLOCKS", chainName, defaultLookback),
+    maxBootLookbackBlocks: envIntForChain("MAX_BOOT_LOOKBACK_BLOCKS", chainName, defaultMaxLookback),
+    rpcTimeoutMs: envIntForChain("RPC_TIMEOUT_MS", chainName, 10_000),
+  };
+}
+
+function envIntForChain(knob: string, chainName: string, fallback: number): number {
+  const suffix = chainName.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const key = `RELAYER_${knob}_${suffix}`;
+  const raw = process.env[key];
+  if (raw === undefined || raw === "") return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid env var ${key}=${raw} — expected non-negative integer`);
+  }
+  return parsed;
 }
 
 const netConfig = getNetworkConfig();
