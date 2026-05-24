@@ -29,6 +29,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { CursorStore } from "../lib/cursor-store";
 import { getLogsChunked } from "../lib/get-logs-chunked";
+import { PendingStateStore, type PersistedPendingMessage } from "../lib/pending-state-store";
 import { RpcTimeoutError, withTimeout } from "../lib/rpc-utils";
 
 /** Where per-chain cursor files live. Module-relative so the relayer is location-independent. */
@@ -57,6 +58,17 @@ interface PendingMessage {
   pollAttempts: number;
   /** Last Iris status seen */
   lastStatus: string;
+  /**
+   * Number of relayWithHook attempts that FAILED (not counting "already processed" — that's
+   * success-equivalent). Capped at MAX_RELAY_RETRIES; on cap we expire the message with a
+   * loud log so the operator can manually investigate.
+   */
+  retryAttempts: number;
+  /**
+   * Unix ms — when the next relay attempt is allowed. Set to `now + backoffMs` on each failure;
+   * `processPendingMessages` skips entries with `nextRetryAt > now`. 0 = no backoff active.
+   */
+  nextRetryAt: number;
 }
 
 interface IrisMessageResponse {
@@ -83,7 +95,11 @@ interface ChainState {
    * at most one chunk of replay, never the entire scan window.
    */
   lastProcessedBlock: number;
-  /** Set of canonical message hashes we've enqueued. In-memory only — dedup across restarts comes from the contract's "already processed" check. */
+  /**
+   * Set of canonical message hashes we've enqueued + completed (relayed OR "already processed"
+   * on the destination). Restart-safe via PendingStateStore — survives so we don't burn gas
+   * re-relaying messages already delivered before the restart.
+   */
   processedMessages: Set<string>;
   /**
    * Last scan error for this chain, or null when the most recent tick succeeded. Surfaces in
@@ -93,6 +109,15 @@ interface ChainState {
   lastError: { message: string; at: number } | null;
   /** Unix ms of the last successful scan tick. Used by the future health endpoint. */
   lastScanAt: number;
+  /**
+   * Locally-tracked pending nonce for transactions THIS relayer sends to this chain. Refreshed
+   * from `eth_getTransactionCount(addr, 'pending')` on first use or after a nonce error. Without
+   * this, the production CCTP relay is vulnerable to the Sepolia load-balancer nonce drift that
+   * project memory documents: a fresh request lands on a backend that hasn't seen the prior
+   * submit's nonce yet, ethers picks a stale "pending" → "nonce too low" rejection. The
+   * mock cctp-relay has done this for a while; production iris-relay was the gap.
+   */
+  pendingNonce: number | null;
 }
 
 // ============ Constants ============
@@ -154,8 +179,31 @@ const BURN_MSG_MINT_RECIPIENT_OFFSET = 36;
 const MINT_RECIPIENT_ABSOLUTE_OFFSET = MSG_BODY_OFFSET + BURN_MSG_MINT_RECIPIENT_OFFSET;
 const MINT_RECIPIENT_LENGTH = 32;
 
-/** Max time to keep polling for an attestation before giving up (ms) */
-const MAX_ATTESTATION_AGE_MS = 30 * 60 * 1000; // 30 minutes
+/**
+ * Max time to keep polling for an attestation before giving up (ms). Default 60 min, configurable
+ * via `RELAYER_ATTESTATION_AGE_MS` env var. The previous 30-min default was thin for mainnet —
+ * Ethereum standard-finality CCTP attestations land at 15-19 min and occasionally take longer.
+ */
+const MAX_ATTESTATION_AGE_MS = (() => {
+  const raw = process.env.RELAYER_ATTESTATION_AGE_MS;
+  if (raw === undefined || raw === "") return 60 * 60 * 1000;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 60_000) {
+    throw new Error(
+      `Invalid RELAYER_ATTESTATION_AGE_MS=${raw} — expected a number ≥ 60000 (1 minute floor).`,
+    );
+  }
+  return parsed;
+})();
+
+/**
+ * Per-message retry policy for failed relayWithHook submissions. Mirrors cctp-relay's
+ * RetryEntry constants. 5 attempts with exponential backoff (2s/4s/8s/16s/32s) — total ~62s
+ * before giving up, which is enough to ride out a brief destination-chain RPC blip without
+ * pinning the loop on a permanently-failing tx.
+ */
+const MAX_RELAY_RETRIES = 5;
+const RELAY_RETRY_BASE_DELAY_MS = 2_000;
 
 // ============ Helpers ============
 
@@ -270,12 +318,14 @@ export class IrisRelayModule {
   private irisClient: IrisClient;
   private pendingMessages: Map<string, PendingMessage> = new Map();
   private cursorStore: CursorStore;
+  private pendingStateStore: PendingStateStore;
 
   constructor() {
     const { iris } = armadaRelayerSettings;
     this.pollIntervalMs = armadaRelayerSettings.cctpPollIntervalMs;
     this.irisClient = new IrisClient(iris.apiUrl);
     this.cursorStore = new CursorStore(RELAYER_STATE_DIR);
+    this.pendingStateStore = new PendingStateStore(RELAYER_STATE_DIR);
   }
 
   async initialize(): Promise<boolean> {
@@ -354,6 +404,38 @@ export class IrisRelayModule {
       // MessageSent emitted before the relayer started OR during a restart window.
       const lastProcessedBlock = await this.resolveBootCursor(chainConfig, currentBlock);
 
+      // Load persisted pendingMessages + processedMessages — restart-safe. Without this, any
+      // message that was mid-attestation when the relayer stopped would have to be
+      // re-discovered by the scanner (works because cursor is persisted), but messages already
+      // successfully relayed before restart would be re-relayed and burn gas on the contract's
+      // "already processed" check.
+      const processedMessages = new Set<string>();
+      try {
+        const persisted = await this.pendingStateStore.read(chainConfig.name);
+        if (persisted) {
+          // Re-hydrate pendingMessages from disk. Keyed by messageHash in the module-level
+          // Map; entries from THIS source chain get added back so processPendingMessages can
+          // continue waiting on Iris where we left off (preserving pollAttempts / retry state).
+          let restored = 0;
+          for (const p of persisted.pending) {
+            this.pendingMessages.set(p.messageHash, p);
+            restored++;
+          }
+          for (const hash of persisted.processed) {
+            processedMessages.add(hash);
+          }
+          if (restored > 0 || persisted.processed.length > 0) {
+            console.log(
+              `  [iris-relay] ${chainConfig.name}: Restored ${restored} pending + ${persisted.processed.length} processed message(s) from disk`,
+            );
+          }
+        }
+      } catch (err: any) {
+        console.error(
+          `  [iris-relay] ${chainConfig.name}: Pending-state file unreadable (${err.message}). Starting with empty pending state — Iris will re-attest any in-flight message and the next scan will re-discover them via the cursor.`,
+        );
+      }
+
       return {
         config: chainConfig,
         provider,
@@ -363,9 +445,10 @@ export class IrisRelayModule {
         knownRecipients,
         domain: chainConfig.cctpDomain,
         lastProcessedBlock,
-        processedMessages: new Set(),
+        processedMessages,
         lastError: null,
         lastScanAt: 0,
+        pendingNonce: null,
       };
     } catch (e: any) {
       console.error(`    Connection error: ${e.message}`);
@@ -440,6 +523,36 @@ export class IrisRelayModule {
 
   private getChainByDomain(domain: number): ChainState | undefined {
     return this.chains.get(domain);
+  }
+
+  /**
+   * Snapshot this chain's pending + processed state to disk. Called from every mutation site
+   * (enqueueMessage, processPendingMessages success/failure/expiry). One write per chain per
+   * mutation batch — bounded by chain count, not by message count.
+   *
+   * Errors are logged but NOT propagated. The next mutation will retry the write; in the
+   * meantime the in-memory state is correct and the relay loop continues. Persistence is
+   * best-effort within a tick but eventually-consistent (we'd lose at most one tick's worth
+   * of state if the disk goes away entirely).
+   */
+  private async persistChain(state: ChainState): Promise<void> {
+    try {
+      const pendingForChain: PersistedPendingMessage[] = [];
+      for (const msg of this.pendingMessages.values()) {
+        if (msg.sourceDomain === state.domain) {
+          pendingForChain.push(msg);
+        }
+      }
+      await this.pendingStateStore.write(
+        state.config.name,
+        pendingForChain,
+        state.processedMessages,
+      );
+    } catch (err: any) {
+      console.error(
+        `  [iris-relay] ${state.config.name}: Failed to persist pending state (${err.message}). In-memory state is correct; next mutation will retry.`,
+      );
+    }
   }
 
   // ========== Event Scanning ==========
@@ -594,9 +707,15 @@ export class IrisRelayModule {
       detectedAt: Date.now(),
       pollAttempts: 0,
       lastStatus: "new",
+      retryAttempts: 0,
+      nextRetryAt: 0,
     };
 
     this.pendingMessages.set(messageHash, pending);
+    // Persist immediately so a crash between enqueue and the first Iris poll doesn't lose
+    // this entry — the cursor has already advanced past sourceBlock, so without persistence
+    // the scanner wouldn't re-discover it.
+    void this.persistChain(sourceState);
 
     const irisUrl = this.irisClient.getUrl(sourceDomain, log.transactionHash);
 
@@ -623,17 +742,34 @@ export class IrisRelayModule {
     if (this.pendingMessages.size === 0) return;
 
     const entries = Array.from(this.pendingMessages.entries());
+    // Track which source chains had any state mutation this tick so we persist them ONCE at
+    // the end rather than per-message — keeps disk write count linear in chains, not messages.
+    const dirtyChains = new Set<ChainState>();
+
     for (const [hash, msg] of entries) {
+      const sourceState = this.getChainByDomain(msg.sourceDomain);
+
       // Check if expired
       const age = Date.now() - msg.detectedAt;
       if (age > MAX_ATTESTATION_AGE_MS) {
-        console.log(
+        // Loud expiry log — distinct from steady-state console.log so operators monitoring for
+        // EXPIRED have an actionable signal before the message is dropped from memory + disk.
+        console.error(
           `\n[iris-relay] EXPIRED: message ${hash.slice(0, 18)}... after ${elapsed(msg.detectedAt)} ` +
-          `(${msg.pollAttempts} polls, last status: ${msg.lastStatus})`
+          `(${msg.pollAttempts} polls, ${msg.retryAttempts} relay retries, last status: ${msg.lastStatus})`
         );
-        console.log(`  Source Tx: ${msg.sourceTxHash}`);
-        console.log(`  Iris URL:  ${this.irisClient.getUrl(msg.sourceDomain, msg.sourceTxHash)}`);
+        console.error(`  Source Tx: ${msg.sourceTxHash}`);
+        console.error(`  Iris URL:  ${this.irisClient.getUrl(msg.sourceDomain, msg.sourceTxHash)}`);
+        console.error(`  Manual recovery: fetch attestation from Iris + call hookRouter.relayWithHook on destination chain.`);
         this.pendingMessages.delete(hash);
+        if (sourceState) dirtyChains.add(sourceState);
+        continue;
+      }
+
+      // Skip if we're inside a backoff window from a prior relay failure. The scanner keeps
+      // the message in pendingMessages so it's surfaced again on the next tick after the
+      // backoff expires.
+      if (msg.nextRetryAt > Date.now()) {
         continue;
       }
 
@@ -672,11 +808,34 @@ export class IrisRelayModule {
 
       const relayed = await this.relayMessage(msg, result.attestation, result.message);
       if (relayed) {
-        // Mark as processed on the source chain state
-        const sourceState = this.getChainByDomain(msg.sourceDomain);
+        // Mark as processed on the source chain state + remove from pending. Persist below.
         if (sourceState) sourceState.processedMessages.add(hash);
+        this.pendingMessages.delete(hash);
+        if (sourceState) dirtyChains.add(sourceState);
+      } else {
+        // Relay failed — schedule a retry per backoff or give up if cap reached.
+        msg.retryAttempts++;
+        if (msg.retryAttempts >= MAX_RELAY_RETRIES) {
+          console.error(
+            `[iris-relay] GAVE UP on relayMessage for ${hash.slice(0, 18)}... after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
+          );
+          this.pendingMessages.delete(hash);
+          if (sourceState) dirtyChains.add(sourceState);
+        } else {
+          // Exponential backoff: 2s, 4s, 8s, 16s, 32s for attempts 1-5.
+          const backoffMs = RELAY_RETRY_BASE_DELAY_MS * Math.pow(2, msg.retryAttempts - 1);
+          msg.nextRetryAt = Date.now() + backoffMs;
+          console.log(
+            `  [iris-relay] relayMessage retry ${msg.retryAttempts}/${MAX_RELAY_RETRIES} for ${hash.slice(0, 18)}... in ${backoffMs}ms`,
+          );
+          if (sourceState) dirtyChains.add(sourceState);
+        }
       }
-      this.pendingMessages.delete(hash);
+    }
+
+    // One disk write per dirty chain at end-of-tick — bounded by chain count, not message count.
+    for (const state of dirtyChains) {
+      await this.persistChain(state);
     }
   }
 
@@ -700,6 +859,21 @@ export class IrisRelayModule {
 
       console.log(`  Source Tx: ${msg.sourceTxHash}`);
 
+      // Initialise / refresh explicit nonce tracking for this destination chain. The provider's
+      // `getTransactionCount('pending')` is the source of truth on first use; we then bump
+      // locally to avoid round-tripping for every relay. Resets to null on nonce errors so the
+      // catch block below can recover.
+      if (destState.pendingNonce === null) {
+        destState.pendingNonce = await destState.provider.getTransactionCount(
+          destState.wallet.address,
+          "pending",
+        );
+        console.log(
+          `  Initialized tx nonce for ${destState.config.name}: ${destState.pendingNonce}`,
+        );
+      }
+      const txNonce = destState.pendingNonce;
+
       // Use hookRouter.relayWithHook() to atomically call receiveMessage + hook dispatch
       let tx: ethers.ContractTransactionResponse;
       if (destState.hookRouter) {
@@ -708,19 +882,28 @@ export class IrisRelayModule {
           HOOK_ROUTER_ABI,
           destState.wallet
         );
-        console.log(`  Sending relayWithHook to ${destState.config.name} via CCTPHookRouter...`);
-        tx = await hookRouter.relayWithHook(msgToRelay, attestation);
+        console.log(
+          `  Sending relayWithHook to ${destState.config.name} via CCTPHookRouter (tx nonce: ${txNonce})...`,
+        );
+        tx = await hookRouter.relayWithHook(msgToRelay, attestation, { nonce: txNonce });
       } else {
         const messageTransmitter = new ethers.Contract(
           destState.messageTransmitter,
           REAL_MESSAGE_TRANSMITTER_ABI,
           destState.wallet
         );
-        console.log(`  Sending receiveMessage to ${destState.config.name}...`);
-        tx = await messageTransmitter.receiveMessage(msgToRelay, attestation);
+        console.log(
+          `  Sending receiveMessage to ${destState.config.name} (tx nonce: ${txNonce})...`,
+        );
+        tx = await messageTransmitter.receiveMessage(msgToRelay, attestation, { nonce: txNonce });
       }
-      console.log(`  Tx hash: ${tx.hash}`);
 
+      // Bump immediately — even if .wait() throws below, the next relay attempt should use
+      // nonce+1 (the broadcast already happened). The catch's nonce-reset only fires for
+      // errors that happen BEFORE the send returns.
+      destState.pendingNonce = txNonce + 1;
+
+      console.log(`  Tx hash: ${tx.hash}`);
       const receipt = await tx.wait();
       console.log(`  Confirmed in block ${receipt?.blockNumber}`);
       console.log(`  Relay successful`);
@@ -732,6 +915,18 @@ export class IrisRelayModule {
       ) {
         console.log(`  Already processed on-chain, marking as done`);
         return true;
+      }
+      // Nonce-class errors (Sepolia load-balancer drift, replacement underpriced, etc.) — reset
+      // the local cache so the next attempt re-reads from the provider. Don't surface as a
+      // hard failure since the underlying state may already be correct on chain.
+      if (
+        e.message?.includes("nonce") ||
+        e.message?.includes("NONCE") ||
+        e.code === "NONCE_EXPIRED" ||
+        e.code === "REPLACEMENT_UNDERPRICED"
+      ) {
+        console.log(`  Nonce error detected, refreshing on next attempt`);
+        destState.pendingNonce = null;
       }
       console.error(`  [iris-relay] Relay failed: ${e.message || e}`);
       return false;
@@ -772,12 +967,12 @@ export class IrisRelayModule {
     });
     try {
       while (this.isRunning) {
-        // 1. Scan all chains for new MessageSent events
+        // 1. Scan all chains for new MessageSent events — in PARALLEL. pollChain has its own
+        //    try/catch that writes to state.lastError, so a failure on one chain doesn't reject
+        //    the Promise (allSettled is belt + braces for the unexpected). One slow chain (e.g.
+        //    a stuck Iris attestation lookup) no longer delays every other chain's tick.
         const chainStates = Array.from(this.chains.values());
-        for (const state of chainStates) {
-          if (!this.isRunning) break;
-          await this.pollChain(state);
-        }
+        await Promise.allSettled(chainStates.map((state) => this.pollChain(state)));
 
         if (!this.isRunning) break;
 

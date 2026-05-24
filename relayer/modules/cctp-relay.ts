@@ -836,11 +836,11 @@ export class CCTPRelayModule {
     });
     try {
       while (this.isRunning) {
-        // Poll all chains for new messages
-        for (const state of this.chains.values()) {
-          if (!this.isRunning) break;
-          await this.pollChain(state);
-        }
+        // Poll all chains for new messages — in PARALLEL. pollChain has its own try/catch that
+        // writes to state.lastError, so a failure on one chain doesn't reject the Promise
+        // (allSettled is belt + braces). One slow chain no longer delays others.
+        const chainStates = Array.from(this.chains.values());
+        await Promise.allSettled(chainStates.map((state) => this.pollChain(state)));
 
         if (!this.isRunning) break;
 

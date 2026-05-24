@@ -2,14 +2,13 @@
  * ABOUTME: Per-chain scan cursor persistence — atomic JSON write so a restart resumes from the
  * last successfully-scanned block instead of jumping to the chain head and silently dropping any
  * MessageSent events in the gap.
- * ABOUTME: Mirrors the pattern in crowdfund-ui/packages/indexer/src/db/fileStore.ts (tmpfile +
- * rename) but simpler — single field per file, no migrations beyond the version stamp.
+ * ABOUTME: Thin wrapper over JsonStateStore — the atomic-write + schema-version machinery lives
+ * there. This file just defines the cursor's shape + validation.
  */
 
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { JsonStateStore } from "./json-state-store";
 
-/** Schema version. Bump and add a migration when the shape changes. */
+/** Schema version. Bump and add a migration in the JsonStateStore call below when the shape changes. */
 const CURSOR_SCHEMA_VERSION = 1 as const;
 
 export interface CursorData {
@@ -22,98 +21,44 @@ export interface CursorData {
 }
 
 /**
- * Filesystem-backed per-chain cursor store. One file per chain at
- * `<baseDir>/cursor-{chainName}.json`. Atomic writes via tmpfile + rename so a power loss
- * mid-flush cannot corrupt the canonical file.
- *
- * The store is intentionally NOT a cache — every `write` hits the disk synchronously (from the
- * caller's perspective). The polling loop runs at multi-second cadence; the I/O cost is
- * irrelevant relative to the RPC calls themselves, and durability is more valuable than speed.
+ * Filesystem-backed per-chain cursor store. Delegates to `JsonStateStore` for atomic writes +
+ * schema versioning; supplies cursor-specific validation. See JsonStateStore for the on-disk
+ * layout, atomic-rename behaviour, and ENOENT-as-null read contract.
  */
 export class CursorStore {
-  constructor(private readonly baseDir: string) {}
+  private readonly inner: JsonStateStore<CursorData>;
 
-  /**
-   * Read the cursor for a chain. Returns null when the file does not exist (cold start case) —
-   * the caller decides whether to bootstrap from chain-head-minus-lookback or from a configured
-   * floor. Throws on malformed JSON or unexpected shape: don't silently start scanning from
-   * block 0 because a manual edit corrupted the file.
-   */
+  constructor(baseDir: string) {
+    this.inner = new JsonStateStore<CursorData>({
+      baseDir,
+      filenamePrefix: "cursor",
+      expectedVersion: CURSOR_SCHEMA_VERSION,
+      validate,
+    });
+  }
+
   async read(chainName: string): Promise<CursorData | null> {
-    const path = this.pathFor(chainName);
-    try {
-      const raw = await readFile(path, "utf8");
-      const parsed = JSON.parse(raw);
-      return validate(parsed, path, chainName);
-    } catch (err) {
-      if (isENOENT(err)) return null;
-      throw err;
-    }
+    return this.inner.read(chainName);
   }
 
-  /**
-   * Atomically persist a cursor. Writes to `<path>.<pid>.tmp` then renames over the canonical
-   * path — rename is atomic at the filesystem level on POSIX, so even a kill -9 mid-flush leaves
-   * either the old cursor intact or the new one fully present, never a torn write.
-   */
   async write(chainName: string, data: Omit<CursorData, "version">): Promise<void> {
-    const path = this.pathFor(chainName);
-    await mkdir(dirname(path), { recursive: true });
-    const payload: CursorData = {
-      ...data,
-      version: CURSOR_SCHEMA_VERSION,
-    };
-    const tmpPath = `${path}.${process.pid}.tmp`;
-    await writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-    try {
-      await rename(tmpPath, path);
-    } catch (err) {
-      // Rare on POSIX but possible (cross-filesystem move, perms change). Clean up the tmp so
-      // it doesn't sit around as orphaned half-state. Swallow the unlink failure so the caller
-      // sees the ORIGINAL rename error (the actionable one) — leaking an orphan is strictly
-      // less bad than masking the root cause.
-      try {
-        await unlink(tmpPath);
-      } catch {
-        // ignored — orphan tmp on next write attempt will overwrite this anyway (PID-suffixed)
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Cursor file path for a chain. Sanitises the name (slashes, whitespace) so a config-driven
-   * chain name can never escape the baseDir. We don't expect adversarial input — every chain
-   * name comes from our own `config/networks.ts` — but cheap to lock down anyway.
-   */
-  private pathFor(chainName: string): string {
-    const safe = chainName.toLowerCase().replace(/[^a-z0-9_-]/g, "-");
-    return join(this.baseDir, `cursor-${safe}.json`);
+    // Inner store stamps version automatically — caller supplies just the payload fields.
+    return this.inner.write(chainName, { ...data, version: CURSOR_SCHEMA_VERSION });
   }
 }
 
-function isENOENT(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: string }).code === "ENOENT"
-  );
-}
-
-function validate(parsed: unknown, path: string, chainName: string): CursorData {
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    typeof (parsed as { lastProcessedBlock?: unknown }).lastProcessedBlock !== "number" ||
-    typeof (parsed as { updatedAt?: unknown }).updatedAt !== "number" ||
-    typeof (parsed as { version?: unknown }).version !== "number"
-  ) {
+function validate(parsed: unknown, chainName: string, path: string): CursorData {
+  const candidate = parsed as { lastProcessedBlock?: unknown; updatedAt?: unknown };
+  if (typeof candidate.lastProcessedBlock !== "number") {
     throw new Error(
-      `cursor-store: malformed cursor file for chain '${chainName}' at ${path}. Delete it to reset to lookback boot.`,
+      `cursor-store: malformed cursor file for chain '${chainName}' at ${path}. Missing or non-numeric lastProcessedBlock. Delete it to reset to lookback boot.`,
     );
   }
-  const candidate = parsed as { lastProcessedBlock: number; updatedAt: number; version: number };
+  if (typeof candidate.updatedAt !== "number") {
+    throw new Error(
+      `cursor-store: malformed cursor file for chain '${chainName}' at ${path}. Missing or non-numeric updatedAt. Delete it to reset.`,
+    );
+  }
   // Range checks. The typeof guard above accepts -Infinity, NaN, Infinity, fractional numbers —
   // none of which are valid block numbers or timestamps. Catch them here so they don't reach
   // the scanner's `Number(...)` casts and turn into silent NaN propagations downstream.
@@ -125,11 +70,6 @@ function validate(parsed: unknown, path: string, chainName: string): CursorData 
   if (!Number.isInteger(candidate.updatedAt) || candidate.updatedAt < 0) {
     throw new Error(
       `cursor-store: invalid updatedAt (${candidate.updatedAt}) for chain '${chainName}' at ${path}. Expected a non-negative integer (Unix ms). Delete to reset.`,
-    );
-  }
-  if (candidate.version !== CURSOR_SCHEMA_VERSION) {
-    throw new Error(
-      `cursor-store: cursor file for chain '${chainName}' at ${path} has unsupported version ${candidate.version} (expected ${CURSOR_SCHEMA_VERSION}). Delete it or add a migration.`,
     );
   }
   return {
