@@ -836,10 +836,23 @@ export class CCTPRelayModule {
     });
     try {
       while (this.isRunning) {
-        // Poll all chains for new messages
-        for (const state of this.chains.values()) {
-          if (!this.isRunning) break;
-          await this.pollChain(state);
+        // Poll all chains for new messages — in PARALLEL. pollChain has its own try/catch that
+        // writes to state.lastError, so a failure on one chain doesn't reject the Promise
+        // (allSettled is belt + braces). One slow chain no longer delays others.
+        const chainStates = Array.from(this.chains.values());
+        const pollResults = await Promise.allSettled(
+          chainStates.map((state) => this.pollChain(state)),
+        );
+        // Defensive: see iris-relay's runPollLoop for the rationale — log any rejection that
+        // somehow slipped past pollChain's inner try/catch.
+        for (let i = 0; i < pollResults.length; i++) {
+          const r = pollResults[i];
+          if (r?.status === "rejected") {
+            const chainName = chainStates[i]?.config.name ?? "unknown";
+            console.error(
+              `[cctp-relay] ${chainName}: pollChain rejected unexpectedly (bypassed inner try/catch): ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+            );
+          }
         }
 
         if (!this.isRunning) break;

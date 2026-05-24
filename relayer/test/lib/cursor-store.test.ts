@@ -53,7 +53,11 @@ describe("CursorStore", function () {
       }
     });
 
-    it("throws on unexpected shape (missing required fields)", async function () {
+    it("throws on unexpected shape — missing version field caught by inner store", async function () {
+      // WHY: a payload without a version stamp fails at the JsonStateStore layer (which checks
+      // version before delegating to the cursor-specific validator). The error message includes
+      // "missing or invalid version" — more actionable than a generic "malformed" since it
+      // points at the specific field operators need to fix.
       const store = new CursorStore(dir);
       const path = join(dir, "cursor-hub.json");
       await writeFile(path, JSON.stringify({ foo: "bar" }), "utf8");
@@ -61,7 +65,22 @@ describe("CursorStore", function () {
         await store.read("hub");
         expect.fail("should have thrown");
       } catch (err) {
-        expect((err as Error).message).to.match(/malformed cursor/);
+        expect((err as Error).message).to.match(/missing or invalid version|malformed cursor/);
+      }
+    });
+
+    it("throws on cursor-specific shape errors when version IS present but other fields are missing", async function () {
+      // WHY: when version is valid but lastProcessedBlock/updatedAt are absent or wrong type,
+      // the cursor-specific validator (downstream of the version check) catches it with a
+      // message that identifies the chain by name.
+      const store = new CursorStore(dir);
+      const path = join(dir, "cursor-hub.json");
+      await writeFile(path, JSON.stringify({ version: 1, foo: "bar" }), "utf8");
+      try {
+        await store.read("hub");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.match(/malformed cursor file for chain 'hub'/);
       }
     });
 
