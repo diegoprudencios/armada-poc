@@ -83,6 +83,72 @@ describe("CursorStore", function () {
         expect((err as Error).message).to.match(/unsupported version/);
       }
     });
+
+    it("rejects negative lastProcessedBlock — would propagate as silent garbage downstream", async function () {
+      // WHY: the typeof check alone accepts -1, NaN as garbage. The scanner's `Number(...)`
+      // casts would silently produce bad fromBlock values (negative block scan = obscure error
+      // OR scan the wrong range = silent message loss). Range-check at the boundary.
+      const store = new CursorStore(dir);
+      const path = join(dir, "cursor-hub.json");
+      await writeFile(
+        path,
+        JSON.stringify({ lastProcessedBlock: -1, updatedAt: 1, version: 1 }),
+        "utf8",
+      );
+      try {
+        await store.read("hub");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.match(/invalid lastProcessedBlock/);
+      }
+    });
+
+    it("rejects non-integer lastProcessedBlock (e.g. 3.14)", async function () {
+      // WHY: typeof passes for fractional. Block numbers are integers; anything else is corruption.
+      const store = new CursorStore(dir);
+      const path = join(dir, "cursor-hub.json");
+      await writeFile(
+        path,
+        JSON.stringify({ lastProcessedBlock: 3.14, updatedAt: 1, version: 1 }),
+        "utf8",
+      );
+      try {
+        await store.read("hub");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.match(/invalid lastProcessedBlock/);
+      }
+    });
+
+    it("rejects negative updatedAt", async function () {
+      const store = new CursorStore(dir);
+      const path = join(dir, "cursor-hub.json");
+      await writeFile(
+        path,
+        JSON.stringify({ lastProcessedBlock: 100, updatedAt: -1, version: 1 }),
+        "utf8",
+      );
+      try {
+        await store.read("hub");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.match(/invalid updatedAt/);
+      }
+    });
+
+    it("includes the chain name in malformed-file errors for debug clarity", async function () {
+      // WHY: with N chains, an operator seeing "malformed cursor" needs to know which chain
+      // to investigate. The path alone is a clue; the chain name is the actionable id.
+      const store = new CursorStore(dir);
+      const path = join(dir, "cursor-base-sepolia.json");
+      await writeFile(path, JSON.stringify({ foo: "bar" }), "utf8");
+      try {
+        await store.read("base-sepolia");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.include("base-sepolia");
+      }
+    });
   });
 
   describe("write", function () {
@@ -149,6 +215,32 @@ describe("CursorStore", function () {
       const got = await store.read("hub");
       expect(got?.lastProcessedBlock).to.equal(200);
       expect(got?.updatedAt).to.equal(2);
+    });
+
+    it("cleans up the .tmp file when rename fails (does not leak orphan tmpfiles)", async function () {
+      // WHY: rename() on POSIX is usually atomic, but cross-filesystem moves or pathological
+      // race conditions can fail. If the .tmp persists after the failed rename, repeated
+      // failures could fill the state directory with orphans. We trigger the failure by
+      // pre-creating the canonical path AS A DIRECTORY — rename(file, dir) fails with EISDIR
+      // on Linux / EEXIST on macOS, which exercises the catch branch.
+      const store = new CursorStore(dir);
+      const { mkdir, readdir } = await import("node:fs/promises");
+      const canonicalPath = join(dir, "cursor-hub.json");
+      // Make the canonical path a directory containing a file so it can't be silently replaced.
+      await mkdir(canonicalPath, { recursive: true });
+      await writeFile(join(canonicalPath, "blocker"), "x", "utf8");
+
+      try {
+        await store.write("hub", { lastProcessedBlock: 100, updatedAt: 1 });
+        expect.fail("should have thrown — destination is a non-empty directory");
+      } catch {
+        // expected — rename fails
+      }
+
+      // The .tmp file MUST be gone (catch branch unlinked it).
+      const entries = await readdir(dir);
+      const orphanTmps = entries.filter((e) => e.includes(".tmp"));
+      expect(orphanTmps, `unexpected tmp files: ${orphanTmps.join(", ")}`).to.deep.equal([]);
     });
   });
 

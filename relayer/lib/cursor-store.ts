@@ -6,7 +6,7 @@
  * rename) but simpler — single field per file, no migrations beyond the version stamp.
  */
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 /** Schema version. Bump and add a migration when the shape changes. */
@@ -44,7 +44,7 @@ export class CursorStore {
     try {
       const raw = await readFile(path, "utf8");
       const parsed = JSON.parse(raw);
-      return validate(parsed, path);
+      return validate(parsed, path, chainName);
     } catch (err) {
       if (isENOENT(err)) return null;
       throw err;
@@ -65,7 +65,20 @@ export class CursorStore {
     };
     const tmpPath = `${path}.${process.pid}.tmp`;
     await writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-    await rename(tmpPath, path);
+    try {
+      await rename(tmpPath, path);
+    } catch (err) {
+      // Rare on POSIX but possible (cross-filesystem move, perms change). Clean up the tmp so
+      // it doesn't sit around as orphaned half-state. Swallow the unlink failure so the caller
+      // sees the ORIGINAL rename error (the actionable one) — leaking an orphan is strictly
+      // less bad than masking the root cause.
+      try {
+        await unlink(tmpPath);
+      } catch {
+        // ignored — orphan tmp on next write attempt will overwrite this anyway (PID-suffixed)
+      }
+      throw err;
+    }
   }
 
   /**
@@ -88,7 +101,7 @@ function isENOENT(err: unknown): boolean {
   );
 }
 
-function validate(parsed: unknown, path: string): CursorData {
+function validate(parsed: unknown, path: string, chainName: string): CursorData {
   if (
     typeof parsed !== "object" ||
     parsed === null ||
@@ -97,13 +110,26 @@ function validate(parsed: unknown, path: string): CursorData {
     typeof (parsed as { version?: unknown }).version !== "number"
   ) {
     throw new Error(
-      `cursor-store: malformed cursor file at ${path}. Delete it to reset to lookback boot.`,
+      `cursor-store: malformed cursor file for chain '${chainName}' at ${path}. Delete it to reset to lookback boot.`,
     );
   }
   const candidate = parsed as { lastProcessedBlock: number; updatedAt: number; version: number };
+  // Range checks. The typeof guard above accepts -Infinity, NaN, Infinity, fractional numbers —
+  // none of which are valid block numbers or timestamps. Catch them here so they don't reach
+  // the scanner's `Number(...)` casts and turn into silent NaN propagations downstream.
+  if (!Number.isInteger(candidate.lastProcessedBlock) || candidate.lastProcessedBlock < 0) {
+    throw new Error(
+      `cursor-store: invalid lastProcessedBlock (${candidate.lastProcessedBlock}) for chain '${chainName}' at ${path}. Expected a non-negative integer. Delete to reset.`,
+    );
+  }
+  if (!Number.isInteger(candidate.updatedAt) || candidate.updatedAt < 0) {
+    throw new Error(
+      `cursor-store: invalid updatedAt (${candidate.updatedAt}) for chain '${chainName}' at ${path}. Expected a non-negative integer (Unix ms). Delete to reset.`,
+    );
+  }
   if (candidate.version !== CURSOR_SCHEMA_VERSION) {
     throw new Error(
-      `cursor-store: cursor file ${path} has unsupported version ${candidate.version} (expected ${CURSOR_SCHEMA_VERSION}). Delete it or add a migration.`,
+      `cursor-store: cursor file for chain '${chainName}' at ${path} has unsupported version ${candidate.version} (expected ${CURSOR_SCHEMA_VERSION}). Delete it or add a migration.`,
     );
   }
   return {

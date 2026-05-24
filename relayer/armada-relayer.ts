@@ -209,11 +209,26 @@ async function main() {
   // fire-and-forget + immediate exit, which meant a SIGTERM mid-scan could kill the process
   // between the cursor advance and the cursor write — defeating the whole point of persistent
   // cursors. Re-entrancy guarded so a second signal during shutdown doesn't double-fire.
+  //
+  // Safety timeout (`SHUTDOWN_FORCE_EXIT_MS`): if `stop()` itself hangs — wedged RPC mid-poll
+  // with no timeout configured, infinite loop in a cleanup path, etc. — the process would
+  // otherwise be unkillable without `kill -9`. The force-exit guard fires unconditionally
+  // after the budget and exits with code 1 so monitoring (systemd, k8s) treats it as failure.
+  const SHUTDOWN_FORCE_EXIT_MS = 60_000;
   let isShuttingDown = false;
   const shutdown = async () => {
     if (isShuttingDown) return;
     isShuttingDown = true;
     console.log("\n[armada] Shutting down...");
+    const forceExit = setTimeout(() => {
+      console.error(
+        `[armada] Shutdown exceeded ${SHUTDOWN_FORCE_EXIT_MS}ms — forcing exit. Some state may not have been flushed.`,
+      );
+      process.exit(1);
+    }, SHUTDOWN_FORCE_EXIT_MS);
+    // `unref` so the timer itself doesn't keep the event loop alive if shutdown completes
+    // quickly. Otherwise a happy-path shutdown would wait the full 60s for the timer.
+    forceExit.unref();
     clearInterval(cleanupInterval);
     try {
       await cctpRelayModule.stop();
@@ -225,6 +240,7 @@ async function main() {
     } catch (err) {
       console.error("[armada] Error during HTTP API shutdown:", err);
     }
+    clearTimeout(forceExit);
     process.exit(0);
   };
 
