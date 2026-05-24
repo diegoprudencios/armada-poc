@@ -27,6 +27,12 @@ import {
 } from "../config";
 import * as fs from "fs";
 import * as path from "path";
+import { CursorStore } from "../lib/cursor-store";
+import { getLogsChunked } from "../lib/get-logs-chunked";
+import { RpcTimeoutError, withTimeout } from "../lib/rpc-utils";
+
+/** Where per-chain cursor files live. Module-relative so the relayer is location-independent. */
+const RELAYER_STATE_DIR = path.join(__dirname, "..", "state");
 
 // ============ Types ============
 
@@ -71,8 +77,22 @@ interface ChainState {
   /** Known contract addresses that can receive CCTP messages on this chain (lowercase, zero-padded bytes32) */
   knownRecipients: Set<string>;
   domain: number;
+  /**
+   * Highest block we have FULLY scanned (inclusive). Loaded from disk on cold start; advanced
+   * after every successful chunk via the cursor store. Restart-safe: a kill -9 mid-poll loses
+   * at most one chunk of replay, never the entire scan window.
+   */
   lastProcessedBlock: number;
+  /** Set of canonical message hashes we've enqueued. In-memory only — dedup across restarts comes from the contract's "already processed" check. */
   processedMessages: Set<string>;
+  /**
+   * Last scan error for this chain, or null when the most recent tick succeeded. Surfaces in
+   * future health endpoint + immediately makes "scanner stuck" visible to operators. Replaces
+   * the silent catch that hid the original Sepolia incident.
+   */
+  lastError: { message: string; at: number } | null;
+  /** Unix ms of the last successful scan tick. Used by the future health endpoint. */
+  lastScanAt: number;
 }
 
 // ============ Constants ============
@@ -249,11 +269,13 @@ export class IrisRelayModule {
   private pollIntervalMs: number;
   private irisClient: IrisClient;
   private pendingMessages: Map<string, PendingMessage> = new Map();
+  private cursorStore: CursorStore;
 
   constructor() {
     const { iris } = armadaRelayerSettings;
     this.pollIntervalMs = armadaRelayerSettings.cctpPollIntervalMs;
     this.irisClient = new IrisClient(iris.apiUrl);
+    this.cursorStore = new CursorStore(RELAYER_STATE_DIR);
   }
 
   async initialize(): Promise<boolean> {
@@ -318,8 +340,19 @@ export class IrisRelayModule {
       const provider = new ethers.JsonRpcProvider(chainConfig.rpc);
       const wallet = new ethers.Wallet(accounts.deployer.privateKey, provider);
 
-      // Verify connection
-      await provider.getBlockNumber();
+      // Verify connection up-front with the same timeout we'll use during polling.
+      const currentBlock = Number(
+        await withTimeout(
+          provider.getBlockNumber(),
+          chainConfig.scanner.rpcTimeoutMs,
+          `initChain getBlockNumber ${chainConfig.name}`,
+        ),
+      );
+
+      // Load persisted cursor or bootstrap from lookback. This is the fix for the cold-start
+      // hole: the prior code set lastProcessedBlock = currentBlock and silently skipped any
+      // MessageSent emitted before the relayer started OR during a restart window.
+      const lastProcessedBlock = await this.resolveBootCursor(chainConfig, currentBlock);
 
       return {
         config: chainConfig,
@@ -329,13 +362,80 @@ export class IrisRelayModule {
         hookRouter,
         knownRecipients,
         domain: chainConfig.cctpDomain,
-        lastProcessedBlock: 0,
+        lastProcessedBlock,
         processedMessages: new Set(),
+        lastError: null,
+        lastScanAt: 0,
       };
     } catch (e: any) {
       console.error(`    Connection error: ${e.message}`);
       return null;
     }
+  }
+
+  /**
+   * Decide the starting `lastProcessedBlock` for a chain on cold boot. Three cases:
+   *
+   *   1. A valid cursor file exists AND the gap to chain head is reasonable → resume from it.
+   *      We replay anything between the persisted cursor and the current head. The contract's
+   *      "already processed" check absorbs any duplicate relays at a small gas cost.
+   *
+   *   2. A cursor file exists BUT the gap exceeds `maxBootLookbackBlocks` → the relayer was
+   *      offline for so long that a full backfill would burn through RPC quota for messages
+   *      Iris has long since expired anyway. Cap at `currentBlock - bootLookbackBlocks` and
+   *      emit a loud warning so the operator knows historical messages were skipped.
+   *
+   *   3. No cursor file (true cold start / fresh deployment) → bootstrap from
+   *      `currentBlock - bootLookbackBlocks` so we recover any MessageSent in the recent past.
+   *      Previously this branch set lastProcessed = currentBlock, dropping in-flight messages.
+   */
+  private async resolveBootCursor(
+    chainConfig: ChainConfig,
+    currentBlock: number,
+  ): Promise<number> {
+    const { bootLookbackBlocks, maxBootLookbackBlocks } = chainConfig.scanner;
+    const lookbackFloor = Math.max(0, currentBlock - bootLookbackBlocks);
+
+    let cursor;
+    try {
+      cursor = await this.cursorStore.read(chainConfig.name);
+    } catch (err: any) {
+      // A malformed cursor file is operator-actionable but we must not crash the relayer on
+      // startup. Log loudly and fall through to lookback bootstrap.
+      console.error(
+        `  [iris-relay] ${chainConfig.name}: Cursor file unreadable (${err.message}). Bootstrapping from lookback floor — DELETE the cursor file at relayer/state/cursor-${chainConfig.name.toLowerCase().replace(/[^a-z0-9_-]/g, "-")}.json after investigating.`,
+      );
+      cursor = null;
+    }
+
+    if (cursor === null) {
+      console.log(
+        `  [iris-relay] ${chainConfig.name}: No persisted cursor — starting from block ${lookbackFloor} (currentBlock=${currentBlock}, lookback=${bootLookbackBlocks})`,
+      );
+      return lookbackFloor;
+    }
+
+    const gap = currentBlock - cursor.lastProcessedBlock;
+    if (gap <= 0) {
+      // Cursor is at or ahead of chain head (chain reorg? cursor written then chain reset?).
+      // Reset to current head to avoid scanning the future.
+      console.warn(
+        `  [iris-relay] ${chainConfig.name}: Cursor ${cursor.lastProcessedBlock} ≥ currentBlock ${currentBlock}. Resetting to currentBlock.`,
+      );
+      return currentBlock;
+    }
+
+    if (gap > maxBootLookbackBlocks) {
+      console.warn(
+        `  [iris-relay] ${chainConfig.name}: Cursor gap (${gap} blocks) exceeds maxBootLookbackBlocks (${maxBootLookbackBlocks}). Capping resume at block ${lookbackFloor}. Messages between ${cursor.lastProcessedBlock} and ${lookbackFloor} will NOT be relayed — Iris will have expired their attestations anyway. Manual recovery via Iris API + relayWithHook if needed.`,
+      );
+      return lookbackFloor;
+    }
+
+    console.log(
+      `  [iris-relay] ${chainConfig.name}: Resuming from persisted cursor at block ${cursor.lastProcessedBlock} (gap=${gap} blocks)`,
+    );
+    return cursor.lastProcessedBlock;
   }
 
   private getChainByDomain(domain: number): ChainState | undefined {
@@ -345,51 +445,100 @@ export class IrisRelayModule {
   // ========== Event Scanning ==========
 
   /**
-   * Poll a chain for new MessageSent events from real CCTP.
-   * New messages are queued as pending — no blocking on Iris.
+   * Poll a chain for new MessageSent events from real CCTP. Resilient against the failure modes
+   * that produced the original silent-stall incident:
+   *
+   *  - **Cursor-checkpointed scanning**: the scan window is split into chunks of `maxLogRange`
+   *    blocks (1000 by default — the checkpoint cadence, NOT a per-call RPC cap). After each
+   *    chunk completes, the cursor is persisted to disk via `onChunk`. A failure mid-window
+   *    loses at most one chunk's worth of replay on the next tick.
+   *
+   *  - **Per-call RPC cap adaptation**: the eth_getLogs prototype patch (`lib/rpc-bisecting.ts`,
+   *    installed once at startup) intercepts every getLogs call and recursively halves on
+   *    "range too large" errors. Means we don't need to know the provider's cap (Alchemy free
+   *    = 10 blocks, drpc varies, Infura = 10k) — bisection adapts at call time.
+   *
+   *  - **Confirmation depth**: scans only up to `currentBlock - confirmationDepth` so a reorg
+   *    between detection and `relayWithHook` can't have us submitting attestations for vanished
+   *    messages.
+   *
+   *  - **RPC timeouts**: every provider call is wrapped in `withTimeout`, so a dead socket
+   *    can't pin the poll loop indefinitely.
+   *
+   *  - **Loud errors**: replaces the swallow-everything `catch {}` with structured logging and
+   *    a `lastError` field on chain state. The cursor does NOT advance on error — next tick
+   *    retries from the same fromBlock, with the chunker shrinking the window if needed.
    */
   private async pollChain(state: ChainState): Promise<void> {
-    try {
-      const currentBlock = await state.provider.getBlockNumber();
+    const { config } = state;
+    const { confirmationDepth, maxLogRange, rpcTimeoutMs } = config.scanner;
 
-      if (state.lastProcessedBlock === 0) {
-        state.lastProcessedBlock = currentBlock;
-        console.log(
-          `  [iris-relay] ${state.config.name}: Starting from block ${currentBlock}`
-        );
+    try {
+      const currentBlock = Number(
+        await withTimeout(
+          state.provider.getBlockNumber(),
+          rpcTimeoutMs,
+          `getBlockNumber ${config.name}`,
+        ),
+      );
+
+      // Apply confirmation depth — don't scan tip-of-chain blocks that might be reorg'd out.
+      const effectiveHead = currentBlock - confirmationDepth;
+      if (effectiveHead <= state.lastProcessedBlock) {
+        // No new "safe" blocks since last scan; common steady-state path.
+        state.lastError = null;
+        state.lastScanAt = Date.now();
         return;
       }
 
-      if (currentBlock <= state.lastProcessedBlock) return;
-
       const fromBlock = state.lastProcessedBlock + 1;
-      const toBlock = currentBlock;
+      const toBlock = effectiveHead;
 
       // Real CCTP emits: event MessageSent(bytes message)
       const iface = new ethers.Interface(REAL_MESSAGE_SENT_ABI);
       const eventTopic = iface.getEvent("MessageSent")?.topicHash;
       if (!eventTopic) return;
 
-      const logs = await state.provider.getLogs({
-        address: state.messageTransmitter,
-        topics: [eventTopic],
+      await getLogsChunked(state.provider, {
         fromBlock,
         toBlock,
+        maxRange: maxLogRange,
+        filter: {
+          address: state.messageTransmitter,
+          topics: [eventTopic],
+        },
+        // Ingest + cursor-advance happen INSIDE the per-chunk callback so the on-disk cursor
+        // is always ≤ what's been enqueued. A crash between chunks loses zero un-ingested
+        // logs: the cursor reflects the last fully-ingested chunk.
+        onChunk: async ({ fromBlock: chunkFrom, toBlockInclusive, logs }) => {
+          if (logs.length > 0) {
+            console.log(
+              `\n[iris-relay] ${config.name}: Found ${logs.length} message(s) in blocks ${chunkFrom}-${toBlockInclusive}`,
+            );
+          }
+          for (const log of logs) {
+            this.enqueueMessage(log, state);
+          }
+          state.lastProcessedBlock = toBlockInclusive;
+          await this.cursorStore.write(config.name, {
+            lastProcessedBlock: toBlockInclusive,
+            updatedAt: Date.now(),
+          });
+        },
       });
 
-      if (logs.length > 0) {
-        console.log(
-          `\n[iris-relay] ${state.config.name}: Found ${logs.length} message(s) in blocks ${fromBlock}-${toBlock}`
-        );
-      }
-
-      for (const log of logs) {
-        this.enqueueMessage(log, state);
-      }
-
-      state.lastProcessedBlock = currentBlock;
-    } catch (e) {
-      // Silently ignore connection errors during polling
+      state.lastError = null;
+      state.lastScanAt = Date.now();
+    } catch (err: any) {
+      // NO LONGER SILENT. Structured error log + state.lastError so the future health endpoint
+      // can surface a stuck scanner. Cursor stays put so the next tick retries the same window.
+      const message = err instanceof RpcTimeoutError
+        ? `RPC timeout: ${err.label}`
+        : err?.message ?? "unknown error";
+      state.lastError = { message, at: Date.now() };
+      console.error(
+        `[iris-relay] ${state.config.name}: Scan tick failed: ${message}. Cursor stays at ${state.lastProcessedBlock}; will retry next tick.`,
+      );
     }
   }
 
@@ -613,32 +762,69 @@ export class IrisRelayModule {
     this.runPollLoop();
   }
 
+  /** Resolved by `runPollLoop` when it observes isRunning=false and exits. `stop()` awaits it. */
+  private loopExited: Promise<void> | null = null;
+  private resolveLoopExited: (() => void) | null = null;
+
   private async runPollLoop(): Promise<void> {
-    while (this.isRunning) {
-      // 1. Scan all chains for new MessageSent events
-      const chainStates = Array.from(this.chains.values());
-      for (const state of chainStates) {
-        await this.pollChain(state);
+    this.loopExited = new Promise((resolve) => {
+      this.resolveLoopExited = resolve;
+    });
+    try {
+      while (this.isRunning) {
+        // 1. Scan all chains for new MessageSent events
+        const chainStates = Array.from(this.chains.values());
+        for (const state of chainStates) {
+          if (!this.isRunning) break;
+          await this.pollChain(state);
+        }
+
+        if (!this.isRunning) break;
+
+        // 2. Check pending messages for attestations and relay
+        await this.processPendingMessages();
+
+        if (!this.isRunning) break;
+
+        // 3. Sleep before next cycle — abort early if stop() fires.
+        await this.sleepCancellable(this.pollIntervalMs);
       }
-
-      // 2. Check pending messages for attestations and relay
-      await this.processPendingMessages();
-
-      // 3. Sleep before next cycle
-      await new Promise((resolve) =>
-        setTimeout(resolve, this.pollIntervalMs)
-      );
+    } finally {
+      this.resolveLoopExited?.();
     }
   }
 
-  stop(): void {
-    if (this.isRunning) {
-      console.log("[iris-relay] Stopping...");
-      if (this.pendingMessages.size > 0) {
-        console.log(`[iris-relay] ${this.pendingMessages.size} pending message(s) will be abandoned`);
-      }
-      this.isRunning = false;
+  /**
+   * Like `setTimeout` but resolves immediately when `isRunning` flips to false, so a shutdown
+   * doesn't have to wait out the full poll interval before flushing. Checks every 100ms — small
+   * enough to be unnoticeable on shutdown latency, large enough not to busy-loop.
+   */
+  private async sleepCancellable(totalMs: number): Promise<void> {
+    const start = Date.now();
+    const step = 100;
+    while (this.isRunning && Date.now() - start < totalMs) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(step, totalMs - (Date.now() - start))));
     }
+  }
+
+  /**
+   * Async, awaitable shutdown. Flips the run flag, waits for the current poll tick to complete
+   * (so an in-flight `getLogs` finishes and its cursor write lands), then resolves. The caller
+   * in `armada-relayer.ts` MUST await this before `process.exit` — otherwise a kill-9 mid-poll
+   * could happen between the on-disk cursor write and the in-memory advance, defeating the
+   * crash-safety guarantee.
+   *
+   * Idempotent — calling twice is a no-op on the second call.
+   */
+  async stop(): Promise<void> {
+    if (!this.isRunning) return;
+    console.log("[iris-relay] Stopping — waiting for in-flight scan tick to complete...");
+    if (this.pendingMessages.size > 0) {
+      console.log(`[iris-relay] ${this.pendingMessages.size} pending message(s) will be abandoned`);
+    }
+    this.isRunning = false;
+    if (this.loopExited) await this.loopExited;
+    console.log("[iris-relay] Stopped cleanly.");
   }
 
   get chainCount(): number {

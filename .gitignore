@@ -42,6 +42,12 @@ usdc-v2-frontend/public/masp/
 # Railgun SDK database
 data/
 
+# Relayer per-chain scan cursors (file-backed state for crash recovery). Ignore the cursor
+# files themselves but keep the directory + its README in version control so a fresh clone
+# has the docs explaining the cursor format.
+relayer/state/*
+!relayer/state/README.md
+
 # Logs
 *.log
 

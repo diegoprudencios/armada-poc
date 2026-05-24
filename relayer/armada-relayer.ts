@@ -23,6 +23,14 @@ import { CCTPRelayModule } from "./modules/cctp-relay";
 import { IrisRelayModule } from "./modules/iris-relay";
 import type { PrivacyPoolDeployment, CCTPDeployment } from "./types";
 import { getNetworkConfig } from "../config/networks";
+import { installBisectingGetLogs } from "./lib/rpc-bisecting";
+
+// Install the eth_getLogs bisecting patch at module load — before ANY JsonRpcProvider is
+// constructed (the patch is at the prototype level so this is technically order-independent,
+// but placing it here makes the intent obvious to anyone reading top-to-bottom). Adapts to
+// whatever per-call cap the configured RPC enforces (Alchemy free = 10 blocks, Infura = 10k,
+// etc.) without per-provider configuration.
+installBisectingGetLogs();
 
 // ============ Deployment Loading ============
 
@@ -204,17 +212,52 @@ async function main() {
     walletManager.cleanDedupCache();
   }, 5 * 60 * 1000);
 
-  // Handle graceful shutdown
-  const shutdown = () => {
+  // Handle graceful shutdown. CRITICAL: await `cctpRelayModule.stop()` BEFORE process.exit so
+  // the in-flight poll tick completes and its cursor write lands on disk. Previously this was
+  // fire-and-forget + immediate exit, which meant a SIGTERM mid-scan could kill the process
+  // between the cursor advance and the cursor write — defeating the whole point of persistent
+  // cursors. Re-entrancy guarded so a second signal during shutdown doesn't double-fire.
+  //
+  // Safety timeout (`SHUTDOWN_FORCE_EXIT_MS`): if `stop()` itself hangs — wedged RPC mid-poll
+  // with no timeout configured, infinite loop in a cleanup path, etc. — the process would
+  // otherwise be unkillable without `kill -9`. The force-exit guard fires unconditionally
+  // after the budget and exits with code 1 so monitoring (systemd, k8s) treats it as failure.
+  const SHUTDOWN_FORCE_EXIT_MS = 60_000;
+  let isShuttingDown = false;
+  const shutdown = async () => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     console.log("\n[armada] Shutting down...");
+    const forceExit = setTimeout(() => {
+      console.error(
+        `[armada] Shutdown exceeded ${SHUTDOWN_FORCE_EXIT_MS}ms — forcing exit. Some state may not have been flushed.`,
+      );
+      process.exit(1);
+    }, SHUTDOWN_FORCE_EXIT_MS);
+    // `unref` so the timer itself doesn't keep the event loop alive if shutdown completes
+    // quickly. Otherwise a happy-path shutdown would wait the full 60s for the timer.
+    forceExit.unref();
     clearInterval(cleanupInterval);
-    cctpRelayModule.stop();
-    httpApi.stop();
+    try {
+      await cctpRelayModule.stop();
+    } catch (err) {
+      console.error("[armada] Error during CCTP relay shutdown:", err);
+    }
+    try {
+      httpApi.stop();
+    } catch (err) {
+      console.error("[armada] Error during HTTP API shutdown:", err);
+    }
+    clearTimeout(forceExit);
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => {
+    void shutdown();
+  });
+  process.on("SIGTERM", () => {
+    void shutdown();
+  });
 }
 
 main().catch((e) => {
