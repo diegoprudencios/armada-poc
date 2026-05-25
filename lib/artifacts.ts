@@ -46,15 +46,58 @@ export interface SolidityVerifyingKey {
 }
 
 /**
- * Testing subset of circuit configurations
- * These cover the most common use cases for shield/transfer/unshield
+ * Circuit configurations the deployment script registers on PrivacyPool.
+ *
+ * Railgun's `transact()` proof shape is `(nullifiers, commitments)` — how many input notes
+ * the proof spends, and how many output commitments it produces. The contract stores one
+ * verification key per (N, M) pair (see VerifierModule); a proof with a shape that isn't
+ * registered reverts with `"PrivacyPool: Verification key not set"`.
+ *
+ * What's needed in practice:
+ *  - SHIELD always emits `(1, 2)` — preimage + dummy padding.
+ *  - LEND/REDEEM (cross-contract) emits `(1, 1)` — one nullifier, one change.
+ *  - TRANSFER with change emits `(N, 2)` — N spent + recipient + change.
+ *  - UNSHIELD WITH CONSOLIDATION emits `(N, 1)` — N spent + change (no zero-output shapes
+ *    exist in Railgun's circuit set, even when the unshield consumes the exact amount).
+ *  - MULTI-RECIPIENT transfer emits `(N, 3)` — uncommon today, cheap insurance to register.
+ *
+ * The grouping comments below mirror the operation each pair enables. If a user op generates
+ * a shape that isn't here, they'll hit `"Verification key not set"` and the op can't proceed
+ * without a redeploy or a one-shot register-against-the-live-contract pass (see
+ * `scripts/register_missing_vkeys.ts`).
  */
 export const TESTING_ARTIFACT_CONFIGS: ArtifactConfig[] = [
+  // Original baseline set — used by the first POC deployments.
   { nullifiers: 1, commitments: 1 },  // Cross-contract: lend/redeem (1 unshield -> 1 shield)
   { nullifiers: 1, commitments: 2 },  // Shield: 1 input -> 2 outputs
   { nullifiers: 2, commitments: 2 },  // Simple transfer
   { nullifiers: 2, commitments: 3 },  // Transfer with change
   { nullifiers: 8, commitments: 4 },  // Medium consolidation
+
+  // Consolidation unshields — (N notes spent, 1 change). Triggered whenever the SDK has to
+  // combine multiple smaller notes to satisfy a withdrawal/transfer amount. Without these,
+  // users with fragmented UTXO sets (which happens fast in normal use — every change output
+  // counts) hit "Verification key not set" the moment their largest single note can't cover
+  // the requested amount alone.
+  { nullifiers: 2, commitments: 1 },
+  { nullifiers: 3, commitments: 1 },
+  { nullifiers: 4, commitments: 1 },
+  { nullifiers: 5, commitments: 1 },
+  { nullifiers: 6, commitments: 1 },
+  { nullifiers: 7, commitments: 1 },
+  { nullifiers: 8, commitments: 1 },
+
+  // Transfer with change variants — (N notes spent, 1 recipient + 1 change).
+  { nullifiers: 3, commitments: 2 },
+  { nullifiers: 4, commitments: 2 },
+  { nullifiers: 5, commitments: 2 },
+  { nullifiers: 6, commitments: 2 },
+
+  // Fan-out / multi-recipient cases — (N, 3). Less common but trivially cheap to register
+  // alongside the rest; saves a future redeploy if the SDK ever emits one of these.
+  { nullifiers: 1, commitments: 3 },
+  { nullifiers: 3, commitments: 3 },
+  { nullifiers: 4, commitments: 3 },
 ];
 
 /**
