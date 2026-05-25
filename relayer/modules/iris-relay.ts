@@ -720,7 +720,16 @@ export class IrisRelayModule {
   private enqueueMessage(log: ethers.Log, sourceState: ChainState): void {
     const iface = new ethers.Interface(REAL_MESSAGE_SENT_ABI);
     const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
-    if (!parsed) return;
+    if (!parsed) {
+      // Topic matched MessageSent but the ABI decoder couldn't parse the payload — almost
+      // certainly an ABI mismatch (event signature drift on chain, or non-CCTP contract reusing
+      // the same topic on the same address). Loud-log so operators can investigate; without
+      // this the scanner would silently swallow valid-looking messages.
+      console.warn(
+        `[iris-relay] ${sourceState.config.name}: MessageSent ABI parse failed for tx ${log.transactionHash} log index ${log.index}. Skipping.`,
+      );
+      return;
+    }
 
     const messageBytes: string = parsed.args[0];
     const messageHash = ethers.keccak256(messageBytes);
@@ -732,9 +741,24 @@ export class IrisRelayModule {
     // canonical EVM identifier for a log emission and cannot collide between distinct burns.
     const dedupKey = `${log.transactionHash}:${log.index}`;
 
-    // Already processed or already queued
-    if (sourceState.processedMessages.has(dedupKey)) return;
-    if (this.pendingMessages.has(dedupKey)) return;
+    // Already processed (delivered + persisted) — short-circuit to avoid re-relay. Logged so
+    // a re-discovery (cursor rewind, restart with stale state) is visible to operators rather
+    // than disappearing silently. Steady-state scanning shouldn't re-discover the same log
+    // because the cursor advances past it.
+    if (sourceState.processedMessages.has(dedupKey)) {
+      console.log(
+        `  [iris-relay] ${sourceState.config.name}: skip ${dedupKey} — already in processedMessages (previously delivered).`,
+      );
+      return;
+    }
+    // Already queued in this process — re-discovery of an in-flight message (also non-steady
+    // state). Same diagnostic value as the processed-set check.
+    if (this.pendingMessages.has(dedupKey)) {
+      console.log(
+        `  [iris-relay] ${sourceState.config.name}: skip ${dedupKey} — already in pendingMessages (in-flight).`,
+      );
+      return;
+    }
 
     const { sourceDomain, destinationDomain, nonce, mintRecipient, destinationCaller } = parseMessageFields(messageBytes);
 
@@ -748,7 +772,14 @@ export class IrisRelayModule {
     // On real CCTP V2, the MessageV2.recipient is always the dest TokenMessenger (shared),
     // so we check mintRecipient (the actual contract that receives minted tokens).
     if (destState.knownRecipients.size > 0 && mintRecipient && !destState.knownRecipients.has(mintRecipient)) {
-      // Not our message — someone else's CCTP transfer on the shared MessageTransmitter
+      // Not our message — someone else's CCTP transfer on the shared MessageTransmitter. Log
+      // it so a misconfigured knownRecipients set (stale deployment file, address typo) doesn't
+      // present as "the relayer silently dropped my message." Includes both the rejected
+      // mintRecipient and the expected set so operators can diff them.
+      console.log(
+        `  [iris-relay] ${sourceState.config.name}: skip ${dedupKey} — mintRecipient ${mintRecipient} not in ${destState.config.name}'s knownRecipients ` +
+          `[${Array.from(destState.knownRecipients).join(", ")}]. Either a foreign CCTP transfer on the shared MessageTransmitter OR a deployment-address drift.`,
+      );
       return;
     }
 
