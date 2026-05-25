@@ -21,7 +21,7 @@ import { PrivacyRelay } from "./modules/privacy-relay";
 import { HttpApi } from "./modules/http-api";
 import { CCTPRelayModule } from "./modules/cctp-relay";
 import { IrisRelayModule } from "./modules/iris-relay";
-import type { PrivacyPoolDeployment, CCTPDeployment } from "./types";
+import type { PrivacyPoolDeployment, CCTPDeployment, RelayerHealth } from "./types";
 import { getNetworkConfig } from "../config/networks";
 import { installBisectingGetLogs } from "./lib/rpc-bisecting";
 
@@ -155,15 +155,14 @@ async function main() {
     armadaYieldAdapter: contracts.armadaYieldAdapter,
   });
 
-  // Initialize HTTP API
-  const httpApi = new HttpApi(
-    armadaRelayerSettings.port,
-    privacyRelay,
-    feeCalculator
-  );
-
-  // Initialize CCTP relay module — select based on CCTP mode
-  let cctpRelayModule: { start: () => void; stop: () => void; chainCount: number };
+  // Initialize CCTP relay module — select based on CCTP mode. `getHealth` is the contract
+  // surfaced to http-api for the /health endpoint; both iris and cctp modules implement it.
+  let cctpRelayModule: {
+    start: () => void;
+    stop: () => void;
+    chainCount: number;
+    getHealth: () => RelayerHealth;
+  };
 
   if (armadaRelayerSettings.cctpReal) {
     console.log("[armada] Initializing REAL CCTP relay (Iris attestation)...");
@@ -188,6 +187,15 @@ async function main() {
     cctpRelayModule = cctpRelay;
   }
   console.log();
+
+  // Initialize HTTP API — constructed AFTER cctpRelayModule so the /health closure can bind to
+  // it directly. No lazy-getter indirection, no init-order race window.
+  const httpApi = new HttpApi(
+    armadaRelayerSettings.port,
+    privacyRelay,
+    feeCalculator,
+    () => cctpRelayModule.getHealth(),
+  );
 
   // Start HTTP server
   await httpApi.start();

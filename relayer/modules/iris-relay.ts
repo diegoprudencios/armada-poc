@@ -31,6 +31,8 @@ import { CursorStore } from "../lib/cursor-store";
 import { getLogsChunked } from "../lib/get-logs-chunked";
 import { PendingStateStore, type PersistedPendingMessage } from "../lib/pending-state-store";
 import { RpcTimeoutError, withTimeout } from "../lib/rpc-utils";
+import { classifyChainHealth, rollupStatus } from "../lib/health-classifier";
+import type { ChainHealth, RelayerHealth } from "../types";
 
 /** Where per-chain cursor files live. Module-relative so the relayer is location-independent. */
 const RELAYER_STATE_DIR = path.join(__dirname, "..", "state");
@@ -119,8 +121,14 @@ interface ChainState {
    * the silent catch that hid the original Sepolia incident.
    */
   lastError: { message: string; at: number } | null;
-  /** Unix ms of the last successful scan tick. Used by the future health endpoint. */
+  /** Unix ms of the last successful scan tick. Used by the /health endpoint. */
   lastScanAt: number;
+  /**
+   * Chain head observed during the most recent successful tick. Captured here (rather than
+   * fetched fresh on each /health request) so the endpoint is cheap and rate-limit-safe.
+   * `chainHead - lastProcessedBlock` is the cursor lag operators care about. 0 = never scanned.
+   */
+  lastChainHead: number;
   /**
    * Locally-tracked pending nonce for transactions THIS relayer sends to this chain. Refreshed
    * from `eth_getTransactionCount(addr, 'pending')` on first use or after a nonce error. Without
@@ -482,6 +490,7 @@ export class IrisRelayModule {
         processedMessages,
         lastError: null,
         lastScanAt: 0,
+        lastChainHead: 0,
         pendingNonce: null,
       };
     } catch (e: any) {
@@ -628,6 +637,10 @@ export class IrisRelayModule {
           `getBlockNumber ${config.name}`,
         ),
       );
+
+      // Capture the freshly-observed head BEFORE applying confirmationDepth so /health reports
+      // raw chain head (operators want "where's the tip" not "what's the last finalised block").
+      state.lastChainHead = currentBlock;
 
       // Apply confirmation depth — don't scan tip-of-chain blocks that might be reorg'd out.
       const effectiveHead = currentBlock - confirmationDepth;
@@ -1263,5 +1276,51 @@ export class IrisRelayModule {
 
   get chainCount(): number {
     return this.chains.size;
+  }
+
+  /**
+   * Snapshot per-chain scanner state for the /health endpoint. Pure data extraction — no RPC
+   * calls, no mutation. Counts pending messages by SOURCE chain since that's how
+   * PendingStateStore keys state and how operators reason about "messages stuck originating
+   * from chain X."
+   */
+  getHealth(): RelayerHealth {
+    const now = Date.now();
+
+    // Pre-bucket pending counts by source domain to avoid an O(chains × pending) loop below.
+    const pendingBySource = new Map<number, number>();
+    for (const msg of this.pendingMessages.values()) {
+      pendingBySource.set(msg.sourceDomain, (pendingBySource.get(msg.sourceDomain) ?? 0) + 1);
+    }
+
+    const chains: ChainHealth[] = [];
+    for (const state of this.chains.values()) {
+      const lagBlocks =
+        state.lastChainHead > 0 ? state.lastChainHead - state.lastProcessedBlock : 0;
+      const status = classifyChainHealth({
+        lastError: state.lastError,
+        lastScanAt: state.lastScanAt,
+        pollIntervalMs: this.pollIntervalMs,
+        lagBlocks,
+        now,
+      });
+      chains.push({
+        chainName: state.config.name,
+        domain: state.domain,
+        status,
+        lastProcessedBlock: state.lastProcessedBlock,
+        chainHead: state.lastChainHead,
+        lagBlocks,
+        lastScanAt: state.lastScanAt,
+        lastError: state.lastError,
+        pendingCount: pendingBySource.get(state.domain) ?? 0,
+      });
+    }
+
+    return {
+      status: rollupStatus(chains.map((c) => c.status)),
+      chains,
+      generatedAt: now,
+    };
   }
 }
