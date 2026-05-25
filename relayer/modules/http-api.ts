@@ -10,7 +10,7 @@
 import express from "express";
 import cors from "cors";
 import { RelayError } from "../types";
-import type { RelayRequest } from "../types";
+import type { RelayRequest, RelayerHealth } from "../types";
 import type { PrivacyRelay } from "./privacy-relay";
 import type { FeeCalculator } from "./fee-calculator";
 
@@ -21,16 +21,19 @@ export class HttpApi {
   private port: number;
   private privacyRelay: PrivacyRelay;
   private feeCalculator: FeeCalculator;
+  private getHealth: () => RelayerHealth;
   private server: ReturnType<express.Application["listen"]> | null = null;
 
   constructor(
     port: number,
     privacyRelay: PrivacyRelay,
-    feeCalculator: FeeCalculator
+    feeCalculator: FeeCalculator,
+    getHealth: () => RelayerHealth,
   ) {
     this.port = port;
     this.privacyRelay = privacyRelay;
     this.feeCalculator = feeCalculator;
+    this.getHealth = getHealth;
 
     this.app = express();
     this.app.use(cors());
@@ -113,13 +116,46 @@ export class HttpApi {
       }
     });
 
-    // GET / — Health check
+    // GET / — Service banner. Intentionally distinct from /health; this is the cheap
+    // "is the process alive" check, /health is the "is the scanner working" check.
     this.app.get("/", (_req, res) => {
       res.json({
         service: "armada-relayer",
         status: "running",
-        endpoints: ["GET /fees", "POST /relay", "GET /status/:txHash"],
+        endpoints: [
+          "GET /fees",
+          "POST /relay",
+          "GET /status/:txHash",
+          "GET /health",
+        ],
       });
+    });
+
+    // GET /health — Per-chain scanner state. Mirrors the indexer's IndexerHealth shape
+    // (`crowdfund-ui/packages/shared/src/lib/indexer.ts`) so a future operator dashboard can
+    // share status-pill UX.
+    //
+    // HTTP status reflects the rollup status so load balancers / monitoring (k8s liveness
+    // probes, uptime-kuma, etc.) can act on it without parsing JSON:
+    //   healthy   → 200
+    //   degraded  → 200 (still alive, surfacing transient issues in the body)
+    //   stale     → 503 (scanner wedged but process up; restart needed)
+    //   unhealthy → 503 (init failure or long-stale)
+    this.app.get("/health", (_req, res) => {
+      try {
+        const health = this.getHealth();
+        const code =
+          health.status === "healthy" || health.status === "degraded" ? 200 : 503;
+        res.status(code).json(health);
+      } catch (e: any) {
+        // getHealth itself throwing means a wiring bug (e.g. health provider not yet
+        // initialised). Log loudly and return 503 — operators should never see this in steady
+        // state, but the alternative (silent 500 with no body) is worse.
+        console.error("[http-api] /health threw:", e);
+        res
+          .status(503)
+          .json({ status: "unhealthy", error: e?.message ?? "unknown", chains: [] });
+      }
     });
   }
 
@@ -159,6 +195,7 @@ export class HttpApi {
         console.log(`  GET  http://localhost:${this.port}/fees`);
         console.log(`  POST http://localhost:${this.port}/relay`);
         console.log(`  GET  http://localhost:${this.port}/status/:txHash`);
+        console.log(`  GET  http://localhost:${this.port}/health`);
         resolve();
       });
     });

@@ -15,21 +15,43 @@ Sizing: XS (<1 hr), S (<½ day), M (~1 day), L (multi-day).
 | Phase 1 | Stop the silent stalls — persistent cursor + chunked/bisected getLogs + RPC timeouts + non-silent errors + confirmation depth + async shutdown | ✅ shipped in PR #292 |
 | Phase 2 | Recoverability — persistent pending+processed, per-message retry/backoff, explicit nonce tracking, parallel polling, configurable attestation TTL | ✅ shipped in PR #293 |
 | Phase 2B | Non-blocking relay loop — fire-and-track receipts, stuck-tx detection, state-machine separation | ✅ shipped in PR #294 |
-| **Phase 3** | **Observability — health endpoint, structured logs, metrics** | **open** |
+| Phase 3A | Observability part 1 — `/health` endpoint with per-chain status + rollup | ✅ shipped in PR #295 |
+| **Phase 3B** | **Structured JSON logs (pino migration)** | **open** |
+| **Phase 3C** | **Prometheus `/metrics` endpoint** | **open** |
 
 ---
 
-## Phase 3 — open items
+## Phase 3B — Structured JSON logs (open)
 
-### Iris CCTP relay — `modules/iris-relay.ts`
+Migrate `console.log` / `console.error` across the relayer to `pino` so production logs are parseable by Loki / Datadog / etc. Today everything is free-form prefixed strings — fine for `tail -f`, fragile for any ingestion pipeline.
 
 | Item | Size | Notes |
 |---|---|---|
-| **`/health` endpoint** | S | Surface per-chain `{ lastProcessedBlock, chainHead, lagBlocks, lastScanAt, lastError, pendingCount }`. Mirror the indexer's `IndexerHealth` shape (`crowdfund-ui/packages/shared/src/lib/indexer.ts:29-48`). Status field: `healthy \| degraded \| stale \| unhealthy`. Gives operators a positive signal that the scanner is actually working — currently the only signal is logs. |
-| **Structured JSON logs** | S | Migrate `console.log`/`console.error` to `pino` (already a transitive dep via @railgun-community/wallet). Production logs are currently fragile to parse — Loki/Datadog ingestion needs structured shape. Keep the existing log content; just change the serialiser. |
-| **Prometheus `/metrics` endpoint** | M | Counters: messages-enqueued, attestations-polled, submits-successful, submits-failed, reverts, stuck-txs, expired-messages. Histograms: end-to-end delivery latency (detectedAt → confirmed), Iris attestation latency. Gauges: per-chain `lagBlocks`, `pendingCount`, `processedCount`. Existing `lastError` field is the natural place to wire counters from. |
+| **Pino setup + child loggers per module** | S | Add `pino` as a direct dep (currently transitive via `@railgun-community/wallet`). Create a root logger in `armada-relayer.ts`; pass child loggers (`logger.child({ module: 'iris-relay' })`) into each module's constructor. |
+| **Log statement migration** | S | Rewrite every `console.*` call to use the module logger. Preserve current log CONTENT — chain names, message hashes, block numbers, error stacks. Adopt log levels: `debug` for per-tick chatter (skip-stale-message decisions), `info` for state transitions (attestation ready, tx submitted, confirmation received), `warn` for retry/backoff scheduling, `error` for gave-up cases + scan failures. |
+| **Local dev pretty-printer** | XS | Local dev (CCTP_MODE=mock) should still produce human-readable output. Use `pino-pretty` as a dev dep, wire via env: `LOG_PRETTY=1 npm run armada-relayer` pipes through it. |
 
-### Privacy relay — `modules/privacy-relay.ts`
+WHY: production logs are currently fragile to parse. The hardening so far is invisible to operators unless they `tail -f` the process. Structured logs unlock dashboards, alerting on specific error codes, and queryable history.
+
+---
+
+## Phase 3C — Prometheus `/metrics` endpoint (open)
+
+Adds a `/metrics` endpoint scrapable by Prometheus / VictoriaMetrics / Grafana Agent. Complementary to `/health` (which is a point-in-time snapshot) — metrics give the time-series view that lets operators distinguish "we always have 2 pending messages" from "pending count has been growing for 30 minutes."
+
+| Item | Size | Notes |
+|---|---|---|
+| **Prometheus client setup** | XS | Add `prom-client` dep. Register the default Node.js process metrics (event loop lag, GC, heap). |
+| **Counters** | S | `relayer_messages_enqueued_total{source_chain}`, `relayer_attestations_polled_total{source_chain,outcome}`, `relayer_submits_total{dest_chain,outcome}`, `relayer_reverts_total{dest_chain}`, `relayer_stuck_txs_total{dest_chain}`, `relayer_expired_messages_total{source_chain}`. |
+| **Histograms** | S | `relayer_delivery_latency_seconds{source,dest}` — from `detectedAt` (source MessageSent) → confirmed receipt on destination. `relayer_iris_attestation_latency_seconds{source}` — from `detectedAt` → Iris returns the attestation. Buckets: tuned for Sepolia (10s, 30s, 1m, 2m, 5m, 10m, 30m, 1h). |
+| **Gauges** | S | `relayer_lag_blocks{chain}`, `relayer_pending_count{chain}`, `relayer_processed_count{chain}`, `relayer_inflight_count{chain}`. Updated each poll tick. |
+| **Route in http-api** | XS | `GET /metrics` returning `register.metrics()` with the Prometheus text content-type. |
+
+WHY: `/health` answers "is it broken right now?" Metrics answer "is it getting worse?" Both are needed — the former pages, the latter explains.
+
+---
+
+## Privacy relay — `modules/privacy-relay.ts`
 
 Out of scope for POC, tracked for production-readiness:
 
@@ -83,6 +105,18 @@ Non-blocking relay loop:
 - Stuck/dropped tx detection — `STUCK_TX_THRESHOLD_MS` (10 min default, env-configurable) triggers re-submit with fresh nonce
 - Revert handling — receipt with `status=0` routes through the existing retry/backoff machinery
 - Backward-compatible schema: `submittedTxHash` + `submittedAt` are optional, v1 files from Phase 2 load cleanly
+
+### Phase 3A (PR #295)
+
+`/health` endpoint — gives operators a positive signal that the scanner is alive (previously only signal was log tailing):
+
+- `RelayerHealth` + `ChainHealth` types in `relayer/types.ts` mirror the indexer's `IndexerHealth` shape
+- Pure `classifyChainHealth()` classifier in `relayer/lib/health-classifier.ts` — multipliers tied to pollInterval (3× = stale, 10× = unhealthy) + 100-block lag threshold for degraded
+- Worst-wins `rollupStatus()` aggregator
+- `lastChainHead` field on `ChainState` (both iris-relay + cctp-relay) — captured each tick, used to compute `lagBlocks` cheaply at request time
+- `getHealth()` on `IrisRelayModule` + `CCTPRelayModule` — both implement the same contract, surfaced through `cctpRelayModule` in armada-relayer
+- `GET /health` route in http-api — HTTP 200 for healthy/degraded, 503 for stale/unhealthy so k8s/uptime-kuma can act without parsing JSON
+- 16 unit tests for the classifier pin severity ordering + boundary thresholds
 
 ---
 

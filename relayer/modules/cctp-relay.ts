@@ -20,6 +20,8 @@ import * as path from "path";
 import { CursorStore } from "../lib/cursor-store";
 import { getLogsChunked } from "../lib/get-logs-chunked";
 import { RpcTimeoutError, withTimeout } from "../lib/rpc-utils";
+import { classifyChainHealth, rollupStatus } from "../lib/health-classifier";
+import type { ChainHealth, RelayerHealth } from "../types";
 
 /** Where per-chain cursor files live — shared with iris-relay. Module-relative. */
 const RELAYER_STATE_DIR = path.join(__dirname, "..", "state");
@@ -65,8 +67,14 @@ interface ChainState {
   pendingNonce: number | null;
   /** Last scan error, or null when most recent tick succeeded. Replaces the silent catch. */
   lastError: { message: string; at: number } | null;
-  /** Unix ms of the last successful scan tick (for the future health endpoint). */
+  /** Unix ms of the last successful scan tick. Used by the /health endpoint. */
   lastScanAt: number;
+  /**
+   * Chain head observed during the most recent successful tick. Captured here (rather than
+   * fetched fresh on each /health request) so the endpoint is cheap and rate-limit-safe.
+   * `chainHead - lastProcessedBlock` is the cursor lag operators care about. 0 = never scanned.
+   */
+  lastChainHead: number;
 }
 
 /** Retry queue entry for failed CCTP relay attempts */
@@ -368,6 +376,7 @@ export class CCTPRelayModule {
         pendingNonce: null,
         lastError: null,
         lastScanAt: 0,
+        lastChainHead: 0,
       };
     } catch (e: any) {
       console.error(`    Connection error: ${e.message}`);
@@ -731,6 +740,9 @@ export class CCTPRelayModule {
         ),
       );
 
+      // Capture the freshly-observed head for /health (raw tip, NOT confirmation-adjusted).
+      state.lastChainHead = currentBlock;
+
       // Apply confirmation depth — on Anvil this is 0 so behaviour matches the old code; on
       // any real chain we won't scan reorg-vulnerable tip blocks.
       const effectiveHead = currentBlock - confirmationDepth;
@@ -900,5 +912,51 @@ export class CCTPRelayModule {
    */
   get chainCount(): number {
     return this.chains.size;
+  }
+
+  /**
+   * Snapshot per-chain scanner state for the /health endpoint. Same shape as IrisRelayModule
+   * so the http-api consumer is mode-agnostic. `pendingCount` here reflects the retry queue
+   * (failed relays awaiting backoff) — the cctp-relay's only "in-flight" state, since
+   * successful relays complete inline within the poll tick.
+   */
+  getHealth(): RelayerHealth {
+    const now = Date.now();
+
+    const pendingBySource = new Map<number, number>();
+    for (const entry of this.retryQueue) {
+      const domain = entry.sourceState.domain;
+      pendingBySource.set(domain, (pendingBySource.get(domain) ?? 0) + 1);
+    }
+
+    const chains: ChainHealth[] = [];
+    for (const state of this.chains.values()) {
+      const lagBlocks =
+        state.lastChainHead > 0 ? state.lastChainHead - state.lastProcessedBlock : 0;
+      const status = classifyChainHealth({
+        lastError: state.lastError,
+        lastScanAt: state.lastScanAt,
+        pollIntervalMs: this.pollIntervalMs,
+        lagBlocks,
+        now,
+      });
+      chains.push({
+        chainName: state.config.name,
+        domain: state.domain,
+        status,
+        lastProcessedBlock: state.lastProcessedBlock,
+        chainHead: state.lastChainHead,
+        lagBlocks,
+        lastScanAt: state.lastScanAt,
+        lastError: state.lastError,
+        pendingCount: pendingBySource.get(state.domain) ?? 0,
+      });
+    }
+
+    return {
+      status: rollupStatus(chains.map((c) => c.status)),
+      chains,
+      generatedAt: now,
+    };
   }
 }

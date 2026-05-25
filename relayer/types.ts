@@ -90,6 +90,52 @@ export interface ArmadaRelayerConfig {
   };
 }
 
+// ============ Health Types ============
+
+/**
+ * Operational status of a single chain's scanner. Mirrors the indexer's status semantics
+ * (`crowdfund-ui/packages/shared/src/lib/indexer.ts::IndexerHealthStatus`) so frontends can
+ * adopt the same status-pill UX once a relayer dashboard exists.
+ *
+ *  - `healthy`   — scanner ticked recently AND no error from the most recent tick.
+ *  - `degraded`  — recent tick failed (lastError set) OR lagBlocks above the configured ceiling.
+ *                  Scanner still alive; investigate but no immediate action required.
+ *  - `stale`     — no successful scan tick for >3× pollInterval. Scanner likely wedged.
+ *  - `unhealthy` — never scanned successfully (init failure) OR no tick for >10× pollInterval.
+ *                  Operator action required.
+ */
+export type ChainHealthStatus = "healthy" | "degraded" | "stale" | "unhealthy";
+
+/** Per-chain health snapshot. Surfaced by `GET /health` so operators have a positive signal that the scanner is alive. */
+export interface ChainHealth {
+  /** Chain name (matches the deployments and CCTP_NETWORKS config). */
+  chainName: string;
+  /** CCTP domain ID of this chain. */
+  domain: number;
+  status: ChainHealthStatus;
+  /** Highest block fully scanned (inclusive). Loaded from cursor on cold start. */
+  lastProcessedBlock: number;
+  /** Chain head observed during the most recent tick. May be stale — see `lastScanAt`. 0 if never scanned. */
+  chainHead: number;
+  /** `chainHead - lastProcessedBlock`. Negative would mean the cursor is ahead of head — shouldn't happen, surfaced if it does. */
+  lagBlocks: number;
+  /** Unix ms of the last successful scan tick. 0 if never scanned. */
+  lastScanAt: number;
+  /** Last scan error, or null when the most recent tick succeeded. */
+  lastError: { message: string; at: number } | null;
+  /** Number of in-flight messages awaiting Iris attestation OR destination confirmation (iris-relay only; cctp-relay reports 0). */
+  pendingCount: number;
+}
+
+export interface RelayerHealth {
+  /** Worst-status across all chains — overall green/yellow/red signal for monitoring. */
+  status: ChainHealthStatus;
+  /** Per-chain breakdown. */
+  chains: ChainHealth[];
+  /** Unix ms when this health snapshot was generated (server side, not cached). */
+  generatedAt: number;
+}
+
 // ============ Deployment Types ============
 
 export interface PrivacyPoolDeployment {
