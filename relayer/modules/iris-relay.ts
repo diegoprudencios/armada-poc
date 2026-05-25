@@ -42,8 +42,20 @@ const RELAYER_STATE_DIR = path.join(__dirname, "..", "state");
 interface PendingMessage {
   /** Raw message bytes from MessageSent event */
   messageBytes: string;
-  /** keccak256 hash of the message bytes */
+  /**
+   * keccak256(messageBytes) — used as the Iris attestation lookup key. NOT used for dedup:
+   * CCTP V2's source-side messageBytes have no per-tx-unique field (nonce slot is bytes32(0)),
+   * so two identical-amount/recipient burns produce the SAME messageHash. Use `dedupKey` for
+   * Map keying + processed-set membership.
+   */
   messageHash: string;
+  /**
+   * Globally-unique-per-log dedup key, format `${sourceTxHash}:${logIndex}`. The canonical EVM
+   * identifier for a log emission — guaranteed unique within a chain, immune to message-bytes
+   * collisions between two byte-identical burns. Used as the Map key in `pendingMessages` and
+   * the entry in `ChainState.processedMessages`.
+   */
+  dedupKey: string;
   /** Source chain CCTP domain */
   sourceDomain: number;
   /** Destination chain CCTP domain */
@@ -455,12 +467,12 @@ export class IrisRelayModule {
       try {
         const persisted = await this.pendingStateStore.read(chainConfig.name);
         if (persisted) {
-          // Re-hydrate pendingMessages from disk. Keyed by messageHash in the module-level
-          // Map; entries from THIS source chain get added back so processPendingMessages can
-          // continue waiting on Iris where we left off (preserving pollAttempts / retry state).
+          // Re-hydrate pendingMessages from disk. Keyed by dedupKey in the module-level Map;
+          // entries from THIS source chain get added back so processPendingMessages can continue
+          // waiting on Iris where we left off (preserving pollAttempts / retry state).
           let restored = 0;
           for (const p of persisted.pending) {
-            this.pendingMessages.set(p.messageHash, p);
+            this.pendingMessages.set(p.dedupKey, p);
             restored++;
           }
           for (const hash of persisted.processed) {
@@ -713,9 +725,16 @@ export class IrisRelayModule {
     const messageBytes: string = parsed.args[0];
     const messageHash = ethers.keccak256(messageBytes);
 
+    // Dedup key — `${sourceTxHash}:${logIndex}`. We deliberately do NOT dedup on messageHash:
+    // CCTP V2 leaves the source nonce slot at bytes32(0) and our burn body has no per-tx-unique
+    // field, so two unshields with the same {amount, maxFee, finalRecipient} produce
+    // byte-identical messageBytes (and thus identical hashes). (sourceTxHash, logIndex) is the
+    // canonical EVM identifier for a log emission and cannot collide between distinct burns.
+    const dedupKey = `${log.transactionHash}:${log.index}`;
+
     // Already processed or already queued
-    if (sourceState.processedMessages.has(messageHash)) return;
-    if (this.pendingMessages.has(messageHash)) return;
+    if (sourceState.processedMessages.has(dedupKey)) return;
+    if (this.pendingMessages.has(dedupKey)) return;
 
     const { sourceDomain, destinationDomain, nonce, mintRecipient, destinationCaller } = parseMessageFields(messageBytes);
 
@@ -746,6 +765,7 @@ export class IrisRelayModule {
     const pending: PendingMessage = {
       messageBytes,
       messageHash,
+      dedupKey,
       sourceDomain,
       destinationDomain,
       nonce,
@@ -758,7 +778,7 @@ export class IrisRelayModule {
       nextRetryAt: 0,
     };
 
-    this.pendingMessages.set(messageHash, pending);
+    this.pendingMessages.set(dedupKey, pending);
     // Persist immediately so a crash between enqueue and the first Iris poll doesn't lose
     // this entry — the cursor has already advanced past sourceBlock, so without persistence
     // the scanner wouldn't re-discover it.
@@ -983,7 +1003,7 @@ export class IrisRelayModule {
         // AND the destination chain (no state mutation but conceptually relevant). We only
         // mark the source dirty here; the destination's pending state for this message
         // already ran through the source's persistChain since pendingMessages is keyed by
-        // messageHash globally.
+        // dedupKey globally.
         if (sourceState) await this.persistChain(sourceState);
         mutated = true;
       } else {
@@ -1026,9 +1046,9 @@ export class IrisRelayModule {
     msg.retryAttempts++;
     if (msg.retryAttempts >= MAX_RELAY_RETRIES) {
       console.error(
-        `[iris-relay] ${chainLabel}: GAVE UP on ${msg.messageHash.slice(0, 18)}... after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
+        `[iris-relay] ${chainLabel}: GAVE UP on ${msg.dedupKey} (hash ${msg.messageHash.slice(0, 18)}...) after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
       );
-      this.pendingMessages.delete(msg.messageHash);
+      this.pendingMessages.delete(msg.dedupKey);
     } else {
       const backoffMs = RELAY_RETRY_BASE_DELAY_MS * Math.pow(2, msg.retryAttempts - 1);
       msg.nextRetryAt = Date.now() + backoffMs;

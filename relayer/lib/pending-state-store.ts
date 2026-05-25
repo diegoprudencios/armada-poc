@@ -8,7 +8,7 @@
 
 import { JsonStateStore } from "./json-state-store";
 
-const PENDING_SCHEMA_VERSION = 1 as const;
+const PENDING_SCHEMA_VERSION = 2 as const;
 
 /**
  * Persisted shape of a pending CCTP message. Mirrors the iris-relay `PendingMessage` interface
@@ -21,10 +21,24 @@ const PENDING_SCHEMA_VERSION = 1 as const;
  *
  * Both Phase 2B fields are OPTIONAL — a v1 file written by the prior version (which had
  * neither) loads cleanly. The state machine treats absent fields as "awaiting Iris."
+ *
+ * v2 added `dedupKey` — `${sourceTxHash}:${logIndex}`. The previous v1 dedup used
+ * `messageHash` (keccak256 of the source-side messageBytes), but CCTP V2 leaves the source
+ * nonce slot at bytes32(0) and our burn body has no per-tx-unique field, so two unshields
+ * with the same {amount, maxFee, finalRecipient} produce byte-identical messageBytes and
+ * collide on hash. `(sourceTxHash, logIndex)` is the canonical EVM identifier for a log and
+ * cannot collide between two distinct burns.
  */
 export interface PersistedPendingMessage {
   messageBytes: string;
   messageHash: string;
+  /**
+   * Globally-unique-per-log dedup key, format `${sourceTxHash}:${logIndex}`. Used as the key
+   * in the in-memory pendingMessages Map and the per-chain processedMessages Set. Distinct
+   * from `messageHash` (which is keccak256(messageBytes) — used for Iris attestation lookup,
+   * not dedup, because identical burns produce identical hashes in CCTP V2).
+   */
+  dedupKey: string;
   sourceDomain: number;
   destinationDomain: number;
   nonce: string;
@@ -54,12 +68,13 @@ export interface PersistedPendingMessage {
 export interface PendingStateData {
   pending: PersistedPendingMessage[];
   /**
-   * Set of messageHashes we've already delivered (relayWithHook returned success OR the contract
-   * said "already processed"). Used to short-circuit `enqueueMessage` when the scanner re-discovers
+   * Set of `dedupKey`s (format `${sourceTxHash}:${logIndex}`) for messages we've already
+   * delivered (relayWithHook returned success OR the destination contract said
+   * "already processed"). Used to short-circuit `enqueueMessage` when the scanner re-discovers
    * a message after a restart. Stored as a sorted array on disk for JSON-friendliness.
    *
    * Note: this grows without bound at the relayer's current volume (handful of messages per hour
-   * at most). At ~70 bytes per hash, 10k entries = 700KB. Future Phase 3 polish: prune entries
+   * at most). At ~80 bytes per entry, 10k entries = 800KB. Future Phase 3 polish: prune entries
    * older than MAX_ATTESTATION_AGE_MS × 2 since they're irrelevant by then.
    */
   processed: string[];
@@ -86,6 +101,7 @@ export class PendingStateStore {
       filenamePrefix: "pending",
       expectedVersion: PENDING_SCHEMA_VERSION,
       validate,
+      migrate: migrateV1ToV2,
     });
   }
 
@@ -121,6 +137,65 @@ export class PendingStateStore {
 
 /** Loud-log threshold for the processed-set size — see comment in PendingStateStore.write. */
 const PROCESSED_SET_WARN_THRESHOLD = 10_000;
+
+/**
+ * Migrate a v1 payload (pre-dedupKey, processed-keyed-by-messageHash) to v2.
+ *
+ * v1 `processed[]` entries are keccak256(messageBytes) — incompatible with v2's dedupKey
+ * (`${sourceTxHash}:${logIndex}`). There's no way to recover the dedupKey from a bare hash, so
+ * we drop the v1 processed[] entirely. Pending messages also get back-filled with a synthetic
+ * dedupKey derived from their `sourceTxHash`; logIndex is unrecoverable from the persisted
+ * payload, so we use `0` as a placeholder. The pending-message dedupKey is only used for
+ * Map keying + future dedup; the brief window where two un-confirmed messages from the same
+ * source tx could collide is acceptable — `atomicCrossChainUnshield` and `crossChainShield`
+ * each emit exactly one MessageSent per tx, so `:0` is correct in practice today.
+ *
+ * The cost of dropping v1 processed[] is one possible re-relay per previously-delivered
+ * message that the scanner re-discovers — the destination contract's "already processed"
+ * check is the safety net (submitRelay returns 'already-processed', the message is then
+ * marked processed under v2). One wasted RPC call per stale message, not a real issue.
+ */
+function migrateV1ToV2(oldPayload: unknown, oldVersion: number): PendingStateData {
+  if (oldVersion !== 1) {
+    throw new Error(
+      `pending-store: cannot migrate from version ${oldVersion} — no migrator defined for that path.`,
+    );
+  }
+  const candidate = oldPayload as {
+    pending?: unknown;
+    processed?: unknown;
+    updatedAt?: unknown;
+  };
+  if (!Array.isArray(candidate.pending)) {
+    throw new Error(`pending-store: v1 migration failed — 'pending' is not an array.`);
+  }
+  if (typeof candidate.updatedAt !== "number") {
+    throw new Error(`pending-store: v1 migration failed — 'updatedAt' is missing or non-numeric.`);
+  }
+  const migratedPending = candidate.pending.map((raw, idx) => {
+    if (typeof raw !== "object" || raw === null) {
+      throw new Error(`pending-store: v1 migration failed — pending[${idx}] is not an object.`);
+    }
+    const r = raw as Partial<PersistedPendingMessage> & { sourceTxHash?: string };
+    if (typeof r.sourceTxHash !== "string") {
+      throw new Error(
+        `pending-store: v1 migration failed — pending[${idx}].sourceTxHash missing or non-string; cannot synthesize dedupKey.`,
+      );
+    }
+    return { ...r, dedupKey: `${r.sourceTxHash}:0` } as PersistedPendingMessage;
+  });
+  console.warn(
+    `[pending-store] Migrating v1 → v2: dropping ${
+      Array.isArray(candidate.processed) ? candidate.processed.length : 0
+    } legacy processed-hash entries; back-filled dedupKey on ${migratedPending.length} pending message(s). Any previously-relayed messages re-discovered by the scanner will get a one-shot 'already processed' bounce on first re-submit.`,
+  );
+  return {
+    pending: migratedPending,
+    processed: [], // legacy keccak256(messageBytes) entries are not convertible — drop them.
+    updatedAt: candidate.updatedAt,
+    version: PENDING_SCHEMA_VERSION,
+  };
+}
 
 function validate(
   parsed: unknown,
@@ -185,6 +260,7 @@ function validatePending(
   const requiredStrings: (keyof PersistedPendingMessage)[] = [
     "messageBytes",
     "messageHash",
+    "dedupKey",
     "nonce",
     "sourceTxHash",
     "lastStatus",

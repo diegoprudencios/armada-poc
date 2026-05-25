@@ -14,6 +14,7 @@ function samplePending(overrides: Partial<PersistedPendingMessage> = {}): Persis
   return {
     messageBytes: "0xabcd",
     messageHash: "0xhash1",
+    dedupKey: "0xtx1:0",
     sourceDomain: 6,
     destinationDomain: 0,
     nonce: "0xnonce",
@@ -93,14 +94,14 @@ describe("PendingStateStore", function () {
       // operator to investigate (delete the file, restart, scanner re-discovers from chain).
       const store = new PendingStateStore(dir);
       const path = join(dir, "pending-hub.json");
-      // Manually construct corrupted JSON — version stamp valid but pending entry missing fields.
+      // Manually construct corrupted JSON — v2 version stamp, but pending entry missing fields.
       await writeFile(
         path,
         JSON.stringify({
           pending: [{ messageHash: "0xa" /* missing the rest */ }],
           processed: [],
           updatedAt: 1,
-          version: 1,
+          version: 2,
         }),
         "utf8",
       );
@@ -117,7 +118,7 @@ describe("PendingStateStore", function () {
       const path = join(dir, "pending-hub.json");
       await writeFile(
         path,
-        JSON.stringify({ pending: "oops", processed: [], updatedAt: 1, version: 1 }),
+        JSON.stringify({ pending: "oops", processed: [], updatedAt: 1, version: 2 }),
         "utf8",
       );
       try {
@@ -129,13 +130,13 @@ describe("PendingStateStore", function () {
     });
 
     it("throws when 'processed' contains a non-string", async function () {
-      // WHY: the dedup set is keyed by string hashes. A numeric or null entry would break the
-      // Set semantics and could allow re-relay of an already-processed message.
+      // WHY: the dedup set is keyed by string dedupKeys. A numeric or null entry would break
+      // the Set semantics and could allow re-relay of an already-processed message.
       const store = new PendingStateStore(dir);
       const path = join(dir, "pending-hub.json");
       await writeFile(
         path,
-        JSON.stringify({ pending: [], processed: ["0xa", 42], updatedAt: 1, version: 1 }),
+        JSON.stringify({ pending: [], processed: ["0xtx:0", 42], updatedAt: 1, version: 2 }),
         "utf8",
       );
       try {
@@ -143,6 +144,43 @@ describe("PendingStateStore", function () {
         expect.fail("should have thrown");
       } catch (err) {
         expect((err as Error).message).to.match(/processed\[1\].*not a string/);
+      }
+    });
+
+    it("throws when a v2 pending entry is missing dedupKey", async function () {
+      // WHY: dedupKey is the v2 dedup contract — switching from messageHash fixed a silent
+      // collision where two identical-amount/recipient unshields produced byte-identical
+      // messageBytes (CCTP V2 source nonce is bytes32(0)) and the second one was silently
+      // skipped forever. A v2 file missing dedupKey on a pending entry would re-introduce
+      // that collision; rejecting at the boundary forces the operator to either delete the
+      // file (scanner re-discovers from chain, computes a fresh dedupKey) or fix the writer.
+      const store = new PendingStateStore(dir);
+      const path = join(dir, "pending-hub.json");
+      const noDedupKey = {
+        messageBytes: "0xabcd",
+        messageHash: "0xa",
+        // dedupKey absent
+        sourceDomain: 6,
+        destinationDomain: 0,
+        nonce: "0xn",
+        sourceTxHash: "0xtx",
+        sourceBlock: 1,
+        detectedAt: 1,
+        pollAttempts: 0,
+        lastStatus: "new",
+        retryAttempts: 0,
+        nextRetryAt: 0,
+      };
+      await writeFile(
+        path,
+        JSON.stringify({ pending: [noDedupKey], processed: [], updatedAt: 1, version: 2 }),
+        "utf8",
+      );
+      try {
+        await store.read("hub");
+        expect.fail("should have thrown");
+      } catch (err) {
+        expect((err as Error).message).to.match(/dedupKey/);
       }
     });
 
@@ -182,44 +220,6 @@ describe("PendingStateStore", function () {
       expect(got?.pending[0]?.submittedAt).to.equal(1_700_000_500_000);
     });
 
-    it("a v1 file written before Phase 2B (no submittedTxHash) loads cleanly", async function () {
-      // WHY: backward-compat invariant. Phase 2 deployments wrote v1 files without the new
-      // fields; the Phase 2B reader MUST accept them as "awaiting Iris" (no submittedTxHash).
-      // Without this, the first restart after the Phase 2B upgrade would fail to load any
-      // existing pending state — losing every in-flight message in the wild.
-      const store = new PendingStateStore(dir);
-      const path = join(dir, "pending-hub.json");
-      const legacyPending = {
-        messageBytes: "0xabcd",
-        messageHash: "0xa",
-        sourceDomain: 6,
-        destinationDomain: 0,
-        nonce: "0xn",
-        sourceTxHash: "0xtx",
-        sourceBlock: 1,
-        detectedAt: 1,
-        pollAttempts: 0,
-        lastStatus: "new",
-        retryAttempts: 0,
-        nextRetryAt: 0,
-        // submittedTxHash + submittedAt absent — pre-Phase-2B file
-      };
-      await writeFile(
-        path,
-        JSON.stringify({
-          pending: [legacyPending],
-          processed: [],
-          updatedAt: 1,
-          version: 1,
-        }),
-        "utf8",
-      );
-      const got = await store.read("hub");
-      expect(got?.pending).to.have.lengthOf(1);
-      expect(got?.pending[0]?.submittedTxHash).to.equal(undefined);
-      expect(got?.pending[0]?.submittedAt).to.equal(undefined);
-    });
-
     it("rejects a half-populated submittedTxHash/submittedAt pair (corruption)", async function () {
       // WHY: the two fields MUST be set together. submittedTxHash without submittedAt would
       // skip processInflightRelays's stuck-tx detection (no timestamp to compare against);
@@ -230,6 +230,7 @@ describe("PendingStateStore", function () {
       const halfPopulated = {
         messageBytes: "0xabcd",
         messageHash: "0xa",
+        dedupKey: "0xtx:0",
         sourceDomain: 6,
         destinationDomain: 0,
         nonce: "0xn",
@@ -245,7 +246,7 @@ describe("PendingStateStore", function () {
       };
       await writeFile(
         path,
-        JSON.stringify({ pending: [halfPopulated], processed: [], updatedAt: 1, version: 1 }),
+        JSON.stringify({ pending: [halfPopulated], processed: [], updatedAt: 1, version: 2 }),
         "utf8",
       );
       try {
@@ -254,6 +255,95 @@ describe("PendingStateStore", function () {
       } catch (err) {
         expect((err as Error).message).to.match(/submittedAt/);
       }
+    });
+  });
+
+  describe("v1 → v2 migration", function () {
+    // WHY THIS SUITE EXISTS: v2 switched dedup from keccak256(messageBytes) to
+    // `${sourceTxHash}:${logIndex}`. The change was driven by a real silent-data-loss bug:
+    // CCTP V2 leaves the source nonce slot at bytes32(0) and our burn body has no per-tx-unique
+    // field, so two unshields with the same {amount, maxFee, finalRecipient} produced byte-
+    // identical messageBytes → identical messageHash → the second was silently skipped forever
+    // (after Phase 2 made processedMessages persistent). The migrator drops legacy processed[]
+    // entries (they're hashes incompatible with the new key shape) and back-fills dedupKey on
+    // any in-flight pending messages. These tests pin the migrator's contract so a future
+    // change can't regress the persistence path.
+
+    it("migrates a v1 file by back-filling dedupKey on pending messages and dropping legacy processed[]", async function () {
+      const store = new PendingStateStore(dir);
+      const path = join(dir, "pending-hub.json");
+      // Legacy pending — no dedupKey field (v1 didn't have it). Has the rest of the v1 shape
+      // including the pre-Phase-2B optional submittedTxHash absence.
+      const legacyPending = {
+        messageBytes: "0xabcd",
+        messageHash: "0xlegacyhash",
+        sourceDomain: 6,
+        destinationDomain: 0,
+        nonce: "0xn",
+        sourceTxHash: "0xlegacytx",
+        sourceBlock: 1,
+        detectedAt: 1,
+        pollAttempts: 0,
+        lastStatus: "new",
+        retryAttempts: 0,
+        nextRetryAt: 0,
+      };
+      await writeFile(
+        path,
+        JSON.stringify({
+          pending: [legacyPending],
+          // Two legacy processed-hash entries — both must be dropped on migration. The cost of
+          // dropping is one possible re-relay each (caught by the destination contract's
+          // "already processed" check — submitRelay returns 'already-processed' and the message
+          // is then marked processed under the v2 dedupKey scheme).
+          processed: ["0xprev_hash_a", "0xprev_hash_b"],
+          updatedAt: 1,
+          version: 1,
+        }),
+        "utf8",
+      );
+      const got = await store.read("hub");
+      expect(got?.pending).to.have.lengthOf(1);
+      // dedupKey back-filled as `${sourceTxHash}:0`. logIndex is unrecoverable from the
+      // persisted v1 payload, but our two xchain entry points each emit exactly one MessageSent
+      // per tx, so `:0` is correct in practice for migrated entries today.
+      expect(got?.pending[0]?.dedupKey).to.equal("0xlegacytx:0");
+      // Original v1 fields preserved.
+      expect(got?.pending[0]?.messageHash).to.equal("0xlegacyhash");
+      expect(got?.pending[0]?.submittedTxHash).to.equal(undefined);
+      // Legacy processed entries DROPPED — they're keyed by messageHash, incompatible with
+      // the new dedupKey shape. Re-discovered messages will get a one-shot "already processed"
+      // bounce on first re-submit.
+      expect(got?.processed).to.deep.equal([]);
+    });
+
+    it("after migration, the migrated file persists at v2 — a second read does not re-trigger the migrator", async function () {
+      // WHY: subtle contract. After a successful read+migrate, the NEXT write must stamp v2
+      // so future reads short-circuit through the v2 validator (not the v1 migrator). Without
+      // this, the migrator could be invoked repeatedly on the same file, and any non-idempotent
+      // migration logic would corrupt state.
+      const store = new PendingStateStore(dir);
+      const path = join(dir, "pending-hub.json");
+      await writeFile(
+        path,
+        JSON.stringify({
+          pending: [],
+          processed: ["0xprev_hash"],
+          updatedAt: 1,
+          version: 1,
+        }),
+        "utf8",
+      );
+      // First read: triggers migrator.
+      const firstRead = await store.read("hub");
+      expect(firstRead?.version).to.equal(2);
+      // Persist back to disk under v2.
+      await store.write("hub", firstRead!.pending, new Set(firstRead!.processed));
+      // Second read: must NOT migrate (the v1 migrator would throw on a payload without
+      // version:1, so a regression that re-triggers the migrator would surface here).
+      const secondRead = await store.read("hub");
+      expect(secondRead?.version).to.equal(2);
+      expect(secondRead?.processed).to.deep.equal([]);
     });
   });
 
