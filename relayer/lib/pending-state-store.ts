@@ -8,6 +8,19 @@
 
 import { JsonStateStore } from "./json-state-store";
 
+/**
+ * Schema version of the persisted pending-state file. Bumped 1 → 2 when dedupKey was added
+ * alongside the (sourceTxHash, logIndex)-based dedup; see `migrateV1ToV2` below for the
+ * forward path.
+ *
+ * ROLLBACK STRATEGY: there is no automatic v2 → v1 downgrade. A v2 file rejected by an older
+ * relayer would simply throw on startup. If you must roll back, delete the per-chain
+ * `relayer/state/pending-<chain>.json` files first — the scanner will re-discover any
+ * in-flight messages from chain history via its persisted cursor (the lookback covers the
+ * recent past, so no events are lost). The cost is one repeated relay attempt per
+ * previously-delivered message; the destination contract's "already processed" check is
+ * the safety net.
+ */
 const PENDING_SCHEMA_VERSION = 2 as const;
 
 /**

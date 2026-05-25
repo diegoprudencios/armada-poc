@@ -370,6 +370,18 @@ export class IrisRelayModule {
   private isRunning: boolean = false;
   private pollIntervalMs: number;
   private irisClient: IrisClient;
+  /**
+   * In-flight messages keyed by dedupKey (`${sourceTxHash}:${logIndex}`). Globally scoped
+   * across all source chains because messageHash → dedupKey routing carries the sourceDomain
+   * on each entry.
+   *
+   * CONCURRENCY: this Map is touched only from inside the single Node.js event loop. The
+   * relayer is a single-process service; `pollChain` runs sequentially per chain (no two
+   * concurrent enqueues for the same chain) and the cross-chain `Promise.allSettled` in
+   * `runPollLoop` parallelises across chains but never interleaves microtasks mid-tick within
+   * one chain's scan. JS single-threaded execution guarantees the `has(dedupKey) → set(...)`
+   * pair in `enqueueMessage` cannot be torn by another writer. No lock is required.
+   */
   private pendingMessages: Map<string, PendingMessage> = new Map();
   private cursorStore: CursorStore;
   private pendingStateStore: PendingStateStore;
