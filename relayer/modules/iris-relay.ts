@@ -42,8 +42,20 @@ const RELAYER_STATE_DIR = path.join(__dirname, "..", "state");
 interface PendingMessage {
   /** Raw message bytes from MessageSent event */
   messageBytes: string;
-  /** keccak256 hash of the message bytes */
+  /**
+   * keccak256(messageBytes) — used as the Iris attestation lookup key. NOT used for dedup:
+   * CCTP V2's source-side messageBytes have no per-tx-unique field (nonce slot is bytes32(0)),
+   * so two identical-amount/recipient burns produce the SAME messageHash. Use `dedupKey` for
+   * Map keying + processed-set membership.
+   */
   messageHash: string;
+  /**
+   * Globally-unique-per-log dedup key, format `${sourceTxHash}:${logIndex}`. The canonical EVM
+   * identifier for a log emission — guaranteed unique within a chain, immune to message-bytes
+   * collisions between two byte-identical burns. Used as the Map key in `pendingMessages` and
+   * the entry in `ChainState.processedMessages`.
+   */
+  dedupKey: string;
   /** Source chain CCTP domain */
   sourceDomain: number;
   /** Destination chain CCTP domain */
@@ -358,6 +370,18 @@ export class IrisRelayModule {
   private isRunning: boolean = false;
   private pollIntervalMs: number;
   private irisClient: IrisClient;
+  /**
+   * In-flight messages keyed by dedupKey (`${sourceTxHash}:${logIndex}`). Globally scoped
+   * across all source chains because messageHash → dedupKey routing carries the sourceDomain
+   * on each entry.
+   *
+   * CONCURRENCY: this Map is touched only from inside the single Node.js event loop. The
+   * relayer is a single-process service; `pollChain` runs sequentially per chain (no two
+   * concurrent enqueues for the same chain) and the cross-chain `Promise.allSettled` in
+   * `runPollLoop` parallelises across chains but never interleaves microtasks mid-tick within
+   * one chain's scan. JS single-threaded execution guarantees the `has(dedupKey) → set(...)`
+   * pair in `enqueueMessage` cannot be torn by another writer. No lock is required.
+   */
   private pendingMessages: Map<string, PendingMessage> = new Map();
   private cursorStore: CursorStore;
   private pendingStateStore: PendingStateStore;
@@ -455,12 +479,12 @@ export class IrisRelayModule {
       try {
         const persisted = await this.pendingStateStore.read(chainConfig.name);
         if (persisted) {
-          // Re-hydrate pendingMessages from disk. Keyed by messageHash in the module-level
-          // Map; entries from THIS source chain get added back so processPendingMessages can
-          // continue waiting on Iris where we left off (preserving pollAttempts / retry state).
+          // Re-hydrate pendingMessages from disk. Keyed by dedupKey in the module-level Map;
+          // entries from THIS source chain get added back so processPendingMessages can continue
+          // waiting on Iris where we left off (preserving pollAttempts / retry state).
           let restored = 0;
           for (const p of persisted.pending) {
-            this.pendingMessages.set(p.messageHash, p);
+            this.pendingMessages.set(p.dedupKey, p);
             restored++;
           }
           for (const hash of persisted.processed) {
@@ -708,14 +732,45 @@ export class IrisRelayModule {
   private enqueueMessage(log: ethers.Log, sourceState: ChainState): void {
     const iface = new ethers.Interface(REAL_MESSAGE_SENT_ABI);
     const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
-    if (!parsed) return;
+    if (!parsed) {
+      // Topic matched MessageSent but the ABI decoder couldn't parse the payload — almost
+      // certainly an ABI mismatch (event signature drift on chain, or non-CCTP contract reusing
+      // the same topic on the same address). Loud-log so operators can investigate; without
+      // this the scanner would silently swallow valid-looking messages.
+      console.warn(
+        `[iris-relay] ${sourceState.config.name}: MessageSent ABI parse failed for tx ${log.transactionHash} log index ${log.index}. Skipping.`,
+      );
+      return;
+    }
 
     const messageBytes: string = parsed.args[0];
     const messageHash = ethers.keccak256(messageBytes);
 
-    // Already processed or already queued
-    if (sourceState.processedMessages.has(messageHash)) return;
-    if (this.pendingMessages.has(messageHash)) return;
+    // Dedup key — `${sourceTxHash}:${logIndex}`. We deliberately do NOT dedup on messageHash:
+    // CCTP V2 leaves the source nonce slot at bytes32(0) and our burn body has no per-tx-unique
+    // field, so two unshields with the same {amount, maxFee, finalRecipient} produce
+    // byte-identical messageBytes (and thus identical hashes). (sourceTxHash, logIndex) is the
+    // canonical EVM identifier for a log emission and cannot collide between distinct burns.
+    const dedupKey = `${log.transactionHash}:${log.index}`;
+
+    // Already processed (delivered + persisted) — short-circuit to avoid re-relay. Logged so
+    // a re-discovery (cursor rewind, restart with stale state) is visible to operators rather
+    // than disappearing silently. Steady-state scanning shouldn't re-discover the same log
+    // because the cursor advances past it.
+    if (sourceState.processedMessages.has(dedupKey)) {
+      console.log(
+        `  [iris-relay] ${sourceState.config.name}: skip ${dedupKey} — already in processedMessages (previously delivered).`,
+      );
+      return;
+    }
+    // Already queued in this process — re-discovery of an in-flight message (also non-steady
+    // state). Same diagnostic value as the processed-set check.
+    if (this.pendingMessages.has(dedupKey)) {
+      console.log(
+        `  [iris-relay] ${sourceState.config.name}: skip ${dedupKey} — already in pendingMessages (in-flight).`,
+      );
+      return;
+    }
 
     const { sourceDomain, destinationDomain, nonce, mintRecipient, destinationCaller } = parseMessageFields(messageBytes);
 
@@ -729,7 +784,14 @@ export class IrisRelayModule {
     // On real CCTP V2, the MessageV2.recipient is always the dest TokenMessenger (shared),
     // so we check mintRecipient (the actual contract that receives minted tokens).
     if (destState.knownRecipients.size > 0 && mintRecipient && !destState.knownRecipients.has(mintRecipient)) {
-      // Not our message — someone else's CCTP transfer on the shared MessageTransmitter
+      // Not our message — someone else's CCTP transfer on the shared MessageTransmitter. Log
+      // it so a misconfigured knownRecipients set (stale deployment file, address typo) doesn't
+      // present as "the relayer silently dropped my message." Includes both the rejected
+      // mintRecipient and the expected set so operators can diff them.
+      console.log(
+        `  [iris-relay] ${sourceState.config.name}: skip ${dedupKey} — mintRecipient ${mintRecipient} not in ${destState.config.name}'s knownRecipients ` +
+          `[${Array.from(destState.knownRecipients).join(", ")}]. Either a foreign CCTP transfer on the shared MessageTransmitter OR a deployment-address drift.`,
+      );
       return;
     }
 
@@ -746,6 +808,7 @@ export class IrisRelayModule {
     const pending: PendingMessage = {
       messageBytes,
       messageHash,
+      dedupKey,
       sourceDomain,
       destinationDomain,
       nonce,
@@ -758,7 +821,7 @@ export class IrisRelayModule {
       nextRetryAt: 0,
     };
 
-    this.pendingMessages.set(messageHash, pending);
+    this.pendingMessages.set(dedupKey, pending);
     // Persist immediately so a crash between enqueue and the first Iris poll doesn't lose
     // this entry — the cursor has already advanced past sourceBlock, so without persistence
     // the scanner wouldn't re-discover it.
@@ -983,7 +1046,7 @@ export class IrisRelayModule {
         // AND the destination chain (no state mutation but conceptually relevant). We only
         // mark the source dirty here; the destination's pending state for this message
         // already ran through the source's persistChain since pendingMessages is keyed by
-        // messageHash globally.
+        // dedupKey globally.
         if (sourceState) await this.persistChain(sourceState);
         mutated = true;
       } else {
@@ -1026,9 +1089,9 @@ export class IrisRelayModule {
     msg.retryAttempts++;
     if (msg.retryAttempts >= MAX_RELAY_RETRIES) {
       console.error(
-        `[iris-relay] ${chainLabel}: GAVE UP on ${msg.messageHash.slice(0, 18)}... after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
+        `[iris-relay] ${chainLabel}: GAVE UP on ${msg.dedupKey} (hash ${msg.messageHash.slice(0, 18)}...) after ${msg.retryAttempts} attempts. Source Tx: ${msg.sourceTxHash}. Manual recovery may be required.`,
       );
-      this.pendingMessages.delete(msg.messageHash);
+      this.pendingMessages.delete(msg.dedupKey);
     } else {
       const backoffMs = RELAY_RETRY_BASE_DELAY_MS * Math.pow(2, msg.retryAttempts - 1);
       msg.nextRetryAt = Date.now() + backoffMs;
