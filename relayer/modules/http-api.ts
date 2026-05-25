@@ -149,12 +149,17 @@ export class HttpApi {
         res.status(code).json(health);
       } catch (e: any) {
         // getHealth itself throwing means a wiring bug (e.g. health provider not yet
-        // initialised). Log loudly and return 503 — operators should never see this in steady
-        // state, but the alternative (silent 500 with no body) is worse.
+        // initialised) — operators should never see this in steady state. Log server-side
+        // with the error detail; respond with a properly-shaped RelayerHealth so consumers
+        // parse one schema regardless of failure mode (a 503 with an ad-hoc body would
+        // break monitoring that decodes the response as RelayerHealth).
         console.error("[http-api] /health threw:", e);
-        res
-          .status(503)
-          .json({ status: "unhealthy", error: e?.message ?? "unknown", chains: [] });
+        const errorResponse: RelayerHealth = {
+          status: "unhealthy",
+          chains: [],
+          generatedAt: Date.now(),
+        };
+        res.status(503).json(errorResponse);
       }
     });
   }

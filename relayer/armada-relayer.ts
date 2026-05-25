@@ -155,21 +155,6 @@ async function main() {
     armadaYieldAdapter: contracts.armadaYieldAdapter,
   });
 
-  // Initialize HTTP API — the cctpRelayModule below is constructed AFTER the api, so we pass
-  // a lazy getter rather than the snapshot. The api calls it on each /health request.
-  let healthProvider: (() => RelayerHealth) | null = null;
-  const httpApi = new HttpApi(
-    armadaRelayerSettings.port,
-    privacyRelay,
-    feeCalculator,
-    () => {
-      if (!healthProvider) {
-        throw new Error("Health provider not yet initialised");
-      }
-      return healthProvider();
-    },
-  );
-
   // Initialize CCTP relay module — select based on CCTP mode. `getHealth` is the contract
   // surfaced to http-api for the /health endpoint; both iris and cctp modules implement it.
   let cctpRelayModule: {
@@ -201,10 +186,16 @@ async function main() {
     }
     cctpRelayModule = cctpRelay;
   }
-  // Wire the health provider now that the module exists. The lambda passed to HttpApi above
-  // resolves to this on every request.
-  healthProvider = () => cctpRelayModule.getHealth();
   console.log();
+
+  // Initialize HTTP API — constructed AFTER cctpRelayModule so the /health closure can bind to
+  // it directly. No lazy-getter indirection, no init-order race window.
+  const httpApi = new HttpApi(
+    armadaRelayerSettings.port,
+    privacyRelay,
+    feeCalculator,
+    () => cctpRelayModule.getHealth(),
+  );
 
   // Start HTTP server
   await httpApi.start();
