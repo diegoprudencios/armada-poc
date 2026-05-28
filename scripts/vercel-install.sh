@@ -11,9 +11,9 @@ echo "[vercel-install] cleaning node_modules…"
 rm -rf node_modules
 
 echo "[vercel-install] npm install (legacy-peer-deps)…"
-npm install --legacy-peer-deps
+npm install --legacy-peer-deps --include=optional
 
-echo "[vercel-install] ensure Rollup linux native…"
-node scripts/ensure-rollup-native.mjs
+echo "[vercel-install] ensure linux native modules (rollup, lightningcss, oxide)…"
+node scripts/ensure-linux-native-modules.mjs
 
 echo "[vercel-install] done."
