@@ -47,7 +47,7 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
   const submittingLabel = warming ? 'Warming up engine…' : 'Waiting for signature…'
   const primary = isConnected
     ? {
-        label: submitting ? submittingLabel : 'Sign enrollment message',
+        label: submitting ? submittingLabel : 'Sign message',
         onClick: handleSign,
         disabled: submitting,
       }
@@ -59,7 +59,7 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
 
   return (
     <div className={styles.root}>
-      <div className={styles.icon} aria-hidden="true">
+      <div className={styles.icon} aria-hidden="true" style={{ marginBottom: 'var(--primitives-spacing-5)' }}>
         <PenLine size={40} />
       </div>
       <h3 className={styles.title}>Sign to generate your keys</h3>
@@ -79,8 +79,8 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
       ) : null}
       <FlowFooter
         className={styles.footer}
-        primary={primary}
-        secondary={{ label: 'Back', onClick: onBack, disabled: submitting }}
+        primary={{ ...primary, showIcon: false }}
+        secondary={{ label: 'Back', onClick: onBack, disabled: submitting, showIcon: false }}
       />
     </div>
   )

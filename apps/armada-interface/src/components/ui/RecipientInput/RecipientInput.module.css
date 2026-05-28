@@ -27,7 +27,7 @@
   border-radius: calc(var(--semantic-borderRadius-input) * 1px);
   padding: 10px 12px;
   color: var(--semantic-color-text-primary);
-  font-family: "Geist Mono", monospace;
+  font-family: var(--primitives-fontFamily-mono), monospace;
   outline: none;
 }
 

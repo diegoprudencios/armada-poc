@@ -156,12 +156,12 @@
 }
 
 .hash {
-  font-family: "Geist Mono", monospace;
+  font-family: var(--primitives-fontFamily-mono), monospace;
   color: var(--semantic-color-text-secondary);
 }
 
 .link {
-  font-family: "Geist Mono", monospace;
+  font-family: var(--primitives-fontFamily-mono), monospace;
   color: var(--semantic-color-text-lavender);
   text-decoration: underline;
   text-decoration-color: rgba(196, 145, 229, 0.32);

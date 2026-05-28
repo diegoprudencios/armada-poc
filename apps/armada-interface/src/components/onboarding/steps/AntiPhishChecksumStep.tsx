@@ -27,8 +27,8 @@ export function AntiPhishChecksumStep({ checksum, onBack, onContinue }: AntiPhis
       </div>
       <FlowFooter
         className={styles.footer}
-        primary={{ label: 'Continue', onClick: onContinue }}
-        secondary={{ label: 'Back', onClick: onBack }}
+        primary={{ label: 'Continue', onClick: onContinue, showIcon: false }}
+        secondary={{ label: 'Back', onClick: onBack, showIcon: false }}
       />
     </div>
   )

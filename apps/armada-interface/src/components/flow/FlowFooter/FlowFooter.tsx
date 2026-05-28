@@ -1,13 +1,15 @@
 // ABOUTME: ActionFlowShell footer — primary CTA on the right, optional secondary (Back/Cancel) on the left.
 // ABOUTME: Wraps @armada/ui Button; consumers describe actions via label/onClick/disabled, footer composes the layout.
 
-import { Button } from '@armada/ui'
+import { Button, type ButtonVariant } from '@armada/ui'
 import styles from './FlowFooter.module.css'
 
 export interface FlowAction {
   label: string
   onClick?: () => void
   disabled?: boolean
+  /** Optional override for the underlying @armada/ui Button variant. */
+  variant?: ButtonVariant
   /** Force the trailing arrow icon on/off. Primary defaults true; secondary defaults false. */
   showIcon?: boolean
   /** Button kind for the underlying @armada/ui Button. Primary defaults `primary`; secondary defaults `secondary`. */
@@ -27,7 +29,7 @@ export function FlowFooter({ primary, secondary, className }: FlowFooterProps) {
       <div className={styles.left}>
         {secondary ? (
           <Button
-            variant="secondary"
+            variant={secondary.variant ?? 'secondary'}
             size="md"
             label={secondary.label}
             showIcon={secondary.showIcon ?? false}
@@ -39,7 +41,7 @@ export function FlowFooter({ primary, secondary, className }: FlowFooterProps) {
       </div>
       <div className={styles.right}>
         <Button
-          variant="primary"
+          variant={primary.variant ?? 'primary'}
           size="md"
           label={primary.label}
           showIcon={primary.showIcon ?? true}

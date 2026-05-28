@@ -82,6 +82,11 @@ export function readStoredWalletId(): string | null {
   return storedWalletId()
 }
 
+/** Dev/UX escape hatch: clear persisted wallet identity (forces onboarding on next boot). */
+export function clearStoredWalletIdentity(): void {
+  clearStoredWalletId()
+}
+
 function storedWalletId(): string | null {
   try {
     return window.localStorage.getItem(STORED_WALLET_ID_KEY)

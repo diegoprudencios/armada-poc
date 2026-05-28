@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { Modal } from '../ui/Modal'
 import { FlowHeader } from '../flow/FlowHeader'
+import type { FlowStepIndicatorStatus } from '../flow/FlowStepIndicator'
 import styles from './OnboardingShell.module.css'
 
 export interface OnboardingShellProps {
@@ -12,6 +13,10 @@ export interface OnboardingShellProps {
   currentStep: number
   /** Total step count; ignored when showIndicator=false. */
   totalSteps: number
+  /** Optional human labels for each step in the indicator. */
+  steps?: string[]
+  /** When `confirmed`, progress segments render success green (final onboarding step). */
+  indicatorStatus?: FlowStepIndicatorStatus
   /** Whether to render the step indicator beneath the title. Default true. UnlockFlow passes false. */
   showIndicator?: boolean
   children: ReactNode
@@ -21,6 +26,8 @@ export function OnboardingShell({
   title,
   currentStep,
   totalSteps,
+  steps,
+  indicatorStatus,
   showIndicator = true,
   children,
 }: OnboardingShellProps) {
@@ -33,13 +40,19 @@ export function OnboardingShell({
       dismissible={false}
       ariaLabel={title}
       wrapBody={false}
+      dialogClassName={styles.dialog}
     >
-      <FlowHeader
-        title={title}
-        currentStep={currentStep}
-        totalSteps={totalSteps}
-        showIndicator={showIndicator}
-      />
+      {showIndicator ? (
+        <FlowHeader
+          title=""
+          currentStep={currentStep}
+          totalSteps={totalSteps}
+          steps={steps}
+          indicatorStatus={indicatorStatus}
+          showIndicator
+          className={styles.header}
+        />
+      ) : null}
       <div className={styles.body}>{children}</div>
     </Modal>
   )

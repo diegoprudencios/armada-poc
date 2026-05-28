@@ -18,11 +18,20 @@
   justify-content: center;
   background: rgba(196, 145, 229, 0.12);
   color: var(--semantic-color-brand-lavender);
-  margin-bottom: var(--primitives-spacing-2);
+  margin-bottom: 0;
+}
+
+.eyebrow {
+  font-size: calc(var(--primitives-fontSize-xs) * 1px);
+  line-height: var(--primitives-lineHeight-tight);
+  letter-spacing: var(--primitives-letterSpacing-wider);
+  text-transform: uppercase;
+  color: var(--semantic-color-text-muted);
+  margin-top: var(--primitives-spacing-10);
 }
 
 .title {
-  font-family: "Charis SIL", serif;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-2xl) * 1px);
   line-height: var(--primitives-lineHeight-tight);
   font-weight: var(--primitives-fontWeight-regular);
@@ -34,9 +43,29 @@
   color: var(--semantic-color-text-muted);
   max-width: 46ch;
   margin: 0;
+  margin-top: var(--primitives-spacing-6);
 }
 
 .footer {
   align-self: stretch;
-  margin: var(--primitives-spacing-6) calc(var(--primitives-spacing-6) * -1) calc(var(--primitives-spacing-6) * -1);
+  margin-top: var(--primitives-spacing-10);
+  border-top: none;
+  padding: 0;
+  display: flex;
+  gap: var(--primitives-spacing-3);
+}
+
+.footer > div {
+  flex: 1 1 0;
+}
+
+.footer :global(button) {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Keep CTA geometry stable during disabled/loading states in onboarding steps. */
+.footer > div:last-child :global(button:disabled) {
+  background: var(--semantic-component-button-primary-bg);
+  color: var(--semantic-component-button-primary-text);
 }

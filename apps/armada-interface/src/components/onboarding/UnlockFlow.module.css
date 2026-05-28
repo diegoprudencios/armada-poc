@@ -57,7 +57,6 @@
 
 .footer {
   align-self: stretch;
-  margin: var(--primitives-spacing-6) calc(var(--primitives-spacing-6) * -1) calc(var(--primitives-spacing-6) * -1);
 }
 
 .createNew {

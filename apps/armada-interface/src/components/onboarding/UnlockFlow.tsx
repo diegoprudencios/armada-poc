@@ -7,11 +7,14 @@ import { OnboardingShell } from './OnboardingShell'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import { Tabs } from '@/components/ui'
 import { useShieldedWallet } from '@/hooks/useShieldedWallet'
+import { clearStoredWalletIdentity } from '@/lib/railgun/wallet'
 import styles from './UnlockFlow.module.css'
 
 export interface UnlockFlowProps {
   /** Called when unlock succeeds. Parent flips App-level mode to "app". */
   onUnlocked: () => void
+  /** Optional escape hatch — return to onboarding welcome. */
+  onBack?: () => void
   /**
    * Optional escape hatch — switches to the create-new-account flow. App.tsx only passes this
    * when there's no persisted walletId on this device, so a returning user (who has a real
@@ -30,7 +33,7 @@ const MODES: ReadonlyArray<{ id: Mode; label: string }> = [
   { id: 'paste', label: 'Paste secret' },
 ]
 
-export function UnlockFlow({ onUnlocked, onCreateNew }: UnlockFlowProps) {
+export function UnlockFlow({ onUnlocked, onBack, onCreateNew }: UnlockFlowProps) {
   const { unlockByPaste, unlockByBackup } = useShieldedWallet()
   const [mode, setMode] = useState<Mode>('backup')
   const [submitting, setSubmitting] = useState(false)
@@ -137,7 +140,21 @@ export function UnlockFlow({ onUnlocked, onCreateNew }: UnlockFlowProps) {
                 label: submitting ? 'Unlocking…' : 'Unlock',
                 type: 'submit',
                 disabled: !pasteValue || submitting,
+                showIcon: false,
               }}
+              secondary={
+                onBack
+                  ? {
+                      label: 'Back',
+                      type: 'button',
+                      showIcon: false,
+                      onClick: () => {
+                        clearStoredWalletIdentity()
+                        onBack()
+                      },
+                    }
+                  : undefined
+              }
             />
           </form>
         )}
@@ -187,7 +204,21 @@ export function UnlockFlow({ onUnlocked, onCreateNew }: UnlockFlowProps) {
                 label: submitting ? 'Unlocking…' : 'Unlock',
                 type: 'submit',
                 disabled: !backupFile || !backupPassphrase || submitting,
+                showIcon: false,
               }}
+              secondary={
+                onBack
+                  ? {
+                      label: 'Back',
+                      type: 'button',
+                      showIcon: false,
+                      onClick: () => {
+                        clearStoredWalletIdentity()
+                        onBack()
+                      },
+                    }
+                  : undefined
+              }
             />
           </form>
         )}

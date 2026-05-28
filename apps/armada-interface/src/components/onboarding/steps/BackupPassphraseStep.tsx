@@ -73,14 +73,20 @@ export function BackupPassphraseStep({
         and the downloaded file together to restore your account.
       </p>
       <div className={styles.field}>
-        <label htmlFor={`${idBase}-pass`} className={styles.label}>
-          Passphrase
-        </label>
+        <div className={styles.labelRow}>
+          <label htmlFor={`${idBase}-pass`} className={styles.label}>
+            Passphrase
+          </label>
+          <span id={`${idBase}-pass-hint`} className={styles.labelHint}>
+            Min {minLength} characters
+          </span>
+        </div>
         <input
           id={`${idBase}-pass`}
           type="password"
           autoComplete="new-password"
           className={styles.input}
+          aria-describedby={`${idBase}-pass-hint`}
           value={passphrase}
           onChange={(e: ChangeEvent<HTMLInputElement>) => {
             setPassphrase(e.target.value)
@@ -120,14 +126,15 @@ export function BackupPassphraseStep({
         className={styles.footer}
         primary={
           downloaded
-            ? { label: 'Continue', type: 'button', onClick: onContinue }
+            ? { label: 'Continue', type: 'button', onClick: onContinue, showIcon: false }
             : {
                 label: downloading ? 'Encrypting…' : 'Download backup',
                 type: 'submit',
                 disabled: !passphrasesMatch || downloading,
+                showIcon: false,
               }
         }
-        secondary={{ label: 'Back', onClick: onBack, disabled: downloading }}
+        secondary={{ label: 'Back', onClick: onBack, disabled: downloading, showIcon: false }}
       />
     </form>
   )

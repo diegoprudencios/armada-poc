@@ -46,7 +46,7 @@
   --primitives-color-neutral-700: #c0bece;
   --primitives-color-neutral-800: #e0deea;
   --primitives-color-white-low: rgba(255,255,255,0.18);
-  --primitives-color-white-mid: rgba(255,255,255,0.38);
+  --primitives-color-white-mid: rgba(255, 255, 255, 0.45);
   --primitives-color-white-high: rgba(255,255,255,0.87);
   --primitives-color-white-full: #ffffff;
   --primitives-color-status-success: #34d399;
@@ -110,6 +110,7 @@
   --semantic-color-surface-bg: var(--primitives-color-neutral-0);
   --semantic-color-surface-default: var(--primitives-color-neutral-50);
   --semantic-color-surface-raised: var(--primitives-color-neutral-100);
+  --semantic-color-surface-hover: var(--primitives-color-neutral-100);
   --semantic-color-border-default: rgba(255,255,255,0.07);
   --semantic-color-border-lavender: rgba(196,145,229,0.14);
   --semantic-color-border-amber: rgba(243,208,160,0.14);
@@ -131,6 +132,8 @@
   --semantic-borderRadius-button: var(--primitives-borderRadius-full);
   --semantic-borderRadius-input: var(--primitives-borderRadius-md);
   --semantic-borderRadius-badge: var(--primitives-borderRadius-sm);
+  --semantic-borderRadius-item: 8px;
+  --semantic-borderRadius-modal: 20px;
   --semantic-component-button-primary-bg: var(--primitives-color-purple-500);
   --semantic-component-button-primary-bg-hover: var(--primitives-color-purple-400);
   --semantic-component-button-primary-bg-active: var(--primitives-color-purple-600);

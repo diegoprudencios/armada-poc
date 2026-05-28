@@ -1,7 +1,7 @@
 // ABOUTME: Onboarding step — verifies the user can re-import their backup file by decrypting it locally and matching its checksum to the live one.
 // ABOUTME: Pure dry-run: never touches keyManager, never calls SDK. Pass on success; surface decrypt failures inline.
 
-import { useId, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import {
@@ -26,6 +26,12 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
   const [verified, setVerified] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const idBase = useId()
+
+  useEffect(() => {
+    if (!verified) return
+    const timer = window.setTimeout(() => onConfirmed(), 400)
+    return () => clearTimeout(timer)
+  }, [verified, onConfirmed])
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -113,16 +119,13 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
       ) : null}
       <FlowFooter
         className={styles.footer}
-        primary={
-          verified
-            ? { label: 'Continue', type: 'button', onClick: onConfirmed }
-            : {
-                label: verifying ? 'Verifying…' : 'Verify backup',
-                type: 'submit',
-                disabled: !file || !passphrase || verifying,
-              }
-        }
-        secondary={{ label: 'Back', onClick: onBack, disabled: verifying }}
+        primary={{
+          label: verifying ? 'Verifying…' : 'Verify backup',
+          type: 'submit',
+          disabled: !file || !passphrase || verifying || verified,
+          showIcon: false,
+        }}
+        secondary={{ label: 'Back', onClick: onBack, disabled: verifying, showIcon: false }}
       />
     </form>
   )

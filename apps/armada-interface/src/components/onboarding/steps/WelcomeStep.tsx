@@ -21,6 +21,7 @@ export function WelcomeStep({ onContinue, onRestore }: WelcomeStepProps) {
       <div className={styles.icon} aria-hidden="true">
         <ShieldCheck size={40} />
       </div>
+      <div className={styles.eyebrow}>Set up your account</div>
       <h3 className={styles.title}>Create your private USDC account</h3>
       <p className={styles.body}>
         Armada keeps your USDC balance and activity private. Your privacy keys are derived from a
@@ -29,8 +30,8 @@ export function WelcomeStep({ onContinue, onRestore }: WelcomeStepProps) {
       </p>
       <FlowFooter
         className={styles.footer}
-        primary={{ label: 'Create account', onClick: onContinue }}
-        secondary={onRestore ? { label: 'I have a backup — restore', onClick: onRestore } : undefined}
+        primary={{ label: 'Create account', onClick: onContinue, variant: 'gradient', showIcon: true }}
+        secondary={onRestore ? { label: 'I have a backup', onClick: onRestore } : undefined}
       />
     </div>
   )

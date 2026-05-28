@@ -41,6 +41,7 @@ export interface ModalProps {
   wrapBody?: boolean
   children: ReactNode
   className?: string
+  dialogClassName?: string
 }
 
 /**
@@ -62,6 +63,7 @@ export function Modal({
   wrapBody = true,
   children,
   className,
+  dialogClassName,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
@@ -136,7 +138,7 @@ export function Modal({
     >
       <div
         ref={dialogRef}
-        className={styles.dialog}
+        className={[styles.dialog, dialogClassName].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? headingId : undefined}

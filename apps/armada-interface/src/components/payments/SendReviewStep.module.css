@@ -24,7 +24,7 @@
 
 .amount {
   color: var(--semantic-color-text-primary);
-  font-family: "Charis SIL", serif;
+  font-family: var(--primitives-fontFamily-mono), monospace;
   font-size: calc(var(--primitives-fontSize-5xl) * 1px);
   line-height: var(--primitives-lineHeight-tight);
   font-weight: var(--primitives-fontWeight-regular);
@@ -74,7 +74,7 @@
 }
 
 .recipient {
-  font-family: "Geist Mono", monospace;
+  font-family: var(--primitives-fontFamily-mono), monospace;
 }
 
 .syncNotice {

@@ -8,23 +8,51 @@
 }
 
 .headline {
-  font-weight: var(--primitives-fontWeight-semibold);
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-size: calc(var(--primitives-fontSize-2xl) * 1px);
+  line-height: var(--primitives-lineHeight-tight);
+  font-weight: var(--primitives-fontWeight-regular);
   color: var(--semantic-color-text-primary);
+  text-align: center;
 }
 
 .body {
   color: var(--semantic-color-text-muted);
-  margin: 0;
+  text-align: center;
+  max-width: 46ch;
+  margin: 0 auto;
+  /* Match title→body gap on other onboarding screens (24px) despite root flex gap. */
+  margin-top: calc(var(--primitives-spacing-6) - var(--primitives-spacing-3));
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: var(--primitives-spacing-1);
+  width: 100%;
+}
+
+/* First field follows .body; :first-of-type never matched because .headline is the first div. */
+.body + .field {
+  margin-top: calc(var(--primitives-spacing-10) - var(--primitives-spacing-3));
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--primitives-spacing-3);
 }
 
 .label {
-  color: var(--semantic-color-text-muted);
+  color: var(--semantic-color-text-secondary);
+}
+
+.labelHint {
+  color: var(--semantic-color-text-secondary);
+  font-size: calc(var(--primitives-fontSize-xs) * 1px);
+  letter-spacing: var(--primitives-letterSpacing-wide);
+  white-space: nowrap;
 }
 
 .input {
@@ -47,5 +75,18 @@
 
 .footer {
   align-self: stretch;
-  margin: var(--primitives-spacing-6) calc(var(--primitives-spacing-6) * -1) calc(var(--primitives-spacing-6) * -1);
+  margin-top: var(--primitives-spacing-10);
+  border-top: none;
+  padding: 0;
+  display: flex;
+  gap: var(--primitives-spacing-3);
+}
+
+.footer > div {
+  flex: 1 1 0;
+}
+
+.footer :global(button) {
+  width: 100%;
+  justify-content: center;
 }

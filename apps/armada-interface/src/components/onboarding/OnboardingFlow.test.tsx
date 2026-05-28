@@ -171,9 +171,11 @@ describe('<OnboardingFlow>', () => {
     await waitFor(() => {
       expect(screen.getByText(/Backup verified/)).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ })) // confirm-backup → complete
+    await waitFor(() => {
+      expect(screen.getByText("You're in")).toBeInTheDocument()
+    })
 
-    expect(screen.getByText("You're in")).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Continue$/ })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Go to dashboard/ }))
     expect(onDone).toHaveBeenCalledTimes(1)
 

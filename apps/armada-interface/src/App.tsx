@@ -18,6 +18,7 @@ import { useTabVisible } from '@/hooks/useTabVisible'
 import { useTxHistory } from '@/hooks/useTxHistory'
 import { useUsdcBalances } from '@/hooks/useUsdcBalances'
 import { useWallet } from '@/hooks/useWallet'
+import { isLocalMode } from '@/config/network'
 // Side-effect imports: register each feature's stage handler with the tx executor at module load.
 // Per-feature handlers each have their own side-effect entry point under features/<area>/index.ts.
 import '@/features/shield'
@@ -29,7 +30,7 @@ import '@/features/yield-deposit'
 import '@/features/yield-withdraw'
 import { startEngine } from '@/lib/tx/executor'
 import { initRailgunEngine } from '@/lib/railgun/init'
-import { readStoredWalletId } from '@/lib/railgun/wallet'
+import { clearStoredWalletIdentity, readStoredWalletId } from '@/lib/railgun/wallet'
 import {
   activeRailgunWalletIdAtom,
   shieldedWalletAtom,
@@ -138,6 +139,14 @@ export function App() {
     return (
       <UnlockFlow
         onUnlocked={() => setMode('app')}
+        onBack={
+          isLocalMode()
+            ? () => {
+                clearStoredWalletIdentity()
+                setMode('onboarding')
+              }
+            : undefined
+        }
         onCreateNew={hadPersistedWalletAtBoot ? undefined : () => setMode('onboarding')}
       />
     )
