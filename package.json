@@ -126,6 +126,9 @@
     "solidity-coverage": "^0.8.17",
     "typechain": "^8.3.2"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.57.1"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@types/abstract-leveldown": "^7.2.1",

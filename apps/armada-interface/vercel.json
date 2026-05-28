@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd ../.. && npm install --legacy-peer-deps",
+  "installCommand": "cd ../.. && rm -rf node_modules && npm install --legacy-peer-deps",
   "buildCommand": "cd ../.. && bash apps/armada-interface/scripts/fetch-sepolia-deployments.sh && npm run build --workspace=@armada/interface",
   "outputDirectory": "dist",
   "framework": "vite",
