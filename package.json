@@ -89,6 +89,7 @@
     "test:sepolia": "npx ts-node scripts/test_sepolia.ts",
     "verify:snark": "hardhat run scripts/verify_snark_mode.ts --network hub",
     "verify:snark:sepolia": "hardhat run scripts/verify_snark_mode.ts --network sepoliaHub",
+    "postinstall": "node scripts/ensure-rollup-native.mjs",
     "prepare": "git config core.hooksPath .githooks",
     "check:anvil-addresses": "./scripts/check-anvil-addresses.sh",
     "check:sizes": "node scripts/check-contract-sizes.js",
