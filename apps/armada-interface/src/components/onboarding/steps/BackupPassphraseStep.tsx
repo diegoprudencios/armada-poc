@@ -3,6 +3,7 @@
 
 import { useId, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Download } from 'lucide-react'
+import { HeadingSm } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import type { BackupBlob } from '@/lib/crypto/kdf'
 import styles from './PassphraseStep.module.css'
@@ -67,7 +68,7 @@ export function BackupPassphraseStep({
 
   return (
     <form className={styles.root} onSubmit={handleSubmit}>
-      <div className={styles.headline}>Create your backup</div>
+      <HeadingSm as="div" className={styles.headline}>Create your backup</HeadingSm>
       <p className={styles.body}>
         Choose a passphrase to encrypt a backup of your recovery secret. You'll need this passphrase
         and the downloaded file together to restore your account.

@@ -3,6 +3,7 @@
 
 import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 'react'
 import { CheckCircle2 } from 'lucide-react'
+import { HeadingSm } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import {
   antiPhishChecksumBytes,
@@ -71,7 +72,7 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
 
   return (
     <form className={styles.root} onSubmit={handleSubmit}>
-      <div className={styles.headline}>Confirm your backup</div>
+      <HeadingSm as="div" className={styles.headline}>Confirm your backup</HeadingSm>
       <p className={styles.body}>
         Re-upload the backup file you just downloaded and enter the passphrase you set. This
         confirms you can restore your account — your account isn't activated until this succeeds.

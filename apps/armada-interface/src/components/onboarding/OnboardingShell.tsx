@@ -19,6 +19,8 @@ export interface OnboardingShellProps {
   indicatorStatus?: FlowStepIndicatorStatus
   /** Whether to render the step indicator beneath the title. Default true. UnlockFlow passes false. */
   showIndicator?: boolean
+  /** Rendered below the modal card (outside the bordered container). */
+  below?: ReactNode
   children: ReactNode
 }
 
@@ -29,6 +31,7 @@ export function OnboardingShell({
   steps,
   indicatorStatus,
   showIndicator = true,
+  below,
   children,
 }: OnboardingShellProps) {
   // Onboarding/unlock are never user-dismissible — passing dismissible=false hides the close button
@@ -41,6 +44,7 @@ export function OnboardingShell({
       ariaLabel={title}
       wrapBody={false}
       dialogClassName={styles.dialog}
+      belowDialog={below}
     >
       {showIndicator ? (
         <FlowHeader

@@ -1,6 +1,7 @@
 // ABOUTME: Step 1 of onboarding — welcomes the user and explains the private account before any keys are generated.
 // ABOUTME: Primary CTA "Create account"; optional secondary "Restore from backup" surfaces when onRestore is supplied (new device / cleared storage path).
 
+import { HeadingSm } from '@armada/ui'
 import { ShieldCheck } from 'lucide-react'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import styles from './WelcomeStep.module.css'
@@ -22,7 +23,7 @@ export function WelcomeStep({ onContinue, onRestore }: WelcomeStepProps) {
         <ShieldCheck size={40} />
       </div>
       <div className={styles.eyebrow}>Set up your account</div>
-      <h3 className={styles.title}>Create your private USDC account</h3>
+      <HeadingSm>Create your private USDC account</HeadingSm>
       <p className={styles.body}>
         Armada keeps your USDC balance and activity private. Your privacy keys are derived from a
         signature your EVM wallet produces — no extra recovery phrase to write down. You'll create

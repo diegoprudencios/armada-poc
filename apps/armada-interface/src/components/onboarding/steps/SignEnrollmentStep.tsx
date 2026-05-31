@@ -6,6 +6,7 @@ import { PenLine } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useAtomValue } from 'jotai'
+import { HeadingSm } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import { railgunEngineAtom } from '@/state/wallet'
 import styles from './WelcomeStep.module.css'
@@ -59,10 +60,10 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
 
   return (
     <div className={styles.root}>
-      <div className={styles.icon} aria-hidden="true" style={{ marginBottom: 'var(--primitives-spacing-5)' }}>
+      <div className={styles.icon} aria-hidden="true">
         <PenLine size={40} />
       </div>
-      <h3 className={styles.title}>Sign to generate your keys</h3>
+      <HeadingSm>Sign to generate your keys</HeadingSm>
       <p className={styles.body}>
         Your privacy keys are derived from a signature your EVM wallet produces against a fixed
         message. The signing prompt explains that this is <strong>not a transaction</strong> — no

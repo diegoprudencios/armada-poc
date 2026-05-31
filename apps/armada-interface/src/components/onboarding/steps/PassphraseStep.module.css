@@ -4,37 +4,35 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--primitives-spacing-3);
+  align-items: flex-start;
+  gap: var(--primitives-spacing-4);
+  text-align: left;
 }
 
 .headline {
-  font-family: var(--primitives-fontFamily-ui), sans-serif;
-  font-size: calc(var(--primitives-fontSize-2xl) * 1px);
-  line-height: var(--primitives-lineHeight-tight);
-  font-weight: var(--primitives-fontWeight-regular);
-  color: var(--semantic-color-text-primary);
-  text-align: center;
+  text-align: left;
 }
 
 .body {
   color: var(--semantic-color-text-muted);
-  text-align: center;
+  text-align: left;
   max-width: 46ch;
-  margin: 0 auto;
-  /* Match title→body gap on other onboarding screens (24px) despite root flex gap. */
-  margin-top: calc(var(--primitives-spacing-6) - var(--primitives-spacing-3));
+  margin: 0;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--primitives-spacing-1);
+  gap: var(--primitives-spacing-2);
   width: 100%;
 }
 
-/* First field follows .body; :first-of-type never matched because .headline is the first div. */
 .body + .field {
-  margin-top: calc(var(--primitives-spacing-10) - var(--primitives-spacing-3));
+  margin-top: calc(var(--primitives-spacing-8) - var(--primitives-spacing-4));
+}
+
+.field + .field {
+  margin-top: calc(var(--primitives-spacing-5) - var(--primitives-spacing-4));
 }
 
 .labelRow {
@@ -75,7 +73,7 @@
 
 .footer {
   align-self: stretch;
-  margin-top: var(--primitives-spacing-10);
+  margin-top: var(--primitives-spacing-8);
   border-top: none;
   padding: 0;
   display: flex;

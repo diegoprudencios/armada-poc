@@ -43,7 +43,7 @@ export interface OnboardingFlowProps {
 }
 
 export function OnboardingFlow({ onDone, onRestore }: OnboardingFlowProps) {
-  const { state, enroll, exportBackup } = useShieldedWallet()
+  const { state, enroll, exportBackup, reset } = useShieldedWallet()
   const [step, setStep] = useState<Step>('welcome')
 
   // The live anti-phish checksum is derived once Sign completes and lives in the active wallet
@@ -77,8 +77,11 @@ export function OnboardingFlow({ onDone, onRestore }: OnboardingFlowProps) {
       {step === 'checksum' && (
         <AntiPhishChecksumStep
           checksum={checksum ?? '—'}
-          onBack={() => setStep('sign')}
           onContinue={() => setStep('backup')}
+          onCancelSetup={async () => {
+            await reset()
+            setStep('welcome')
+          }}
         />
       )}
 

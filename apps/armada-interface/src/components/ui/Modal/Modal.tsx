@@ -42,6 +42,8 @@ export interface ModalProps {
   children: ReactNode
   className?: string
   dialogClassName?: string
+  /** Optional content rendered below the dialog card (e.g. secondary links). */
+  belowDialog?: ReactNode
 }
 
 /**
@@ -64,6 +66,7 @@ export function Modal({
   children,
   className,
   dialogClassName,
+  belowDialog,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
@@ -137,33 +140,43 @@ export function Modal({
       role="presentation"
     >
       <div
-        ref={dialogRef}
-        className={[styles.dialog, dialogClassName].filter(Boolean).join(' ')}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? headingId : undefined}
-        aria-label={!title ? ariaLabel : undefined}
-        tabIndex={-1}
-        onKeyDown={onDialogKeyDown}
+        className={[
+          styles.stack,
+          belowDialog ? styles.stackWithBelow : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
-        {title ? (
-          <header className={styles.header}>
-            <h2 id={headingId} className={styles.title}>
-              {title}
-            </h2>
-            {closeVisible ? (
-              <button
-                type="button"
-                className={styles.closeButton}
-                onClick={onClose}
-                aria-label="Close"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            ) : null}
-          </header>
-        ) : null}
-        {wrapBody ? <div className={styles.body}>{children}</div> : children}
+        <div
+          ref={dialogRef}
+          className={[styles.dialog, dialogClassName].filter(Boolean).join(' ')}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={title ? headingId : undefined}
+          aria-label={!title ? ariaLabel : undefined}
+          tabIndex={-1}
+          onKeyDown={onDialogKeyDown}
+        >
+          {title ? (
+            <header className={styles.header}>
+              <h2 id={headingId} className={styles.title}>
+                {title}
+              </h2>
+              {closeVisible ? (
+                <button
+                  type="button"
+                  className={styles.closeButton}
+                  onClick={onClose}
+                  aria-label="Close"
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+              ) : null}
+            </header>
+          ) : null}
+          {wrapBody ? <div className={styles.body}>{children}</div> : children}
+        </div>
+        {belowDialog ? <div className={styles.belowDialog}>{belowDialog}</div> : null}
       </div>
     </div>
   )
