@@ -1,65 +1,98 @@
-/* ABOUTME: ShieldReviewStep layout — centered big amount, From facts row, fee summary, footer. */
-/* ABOUTME: Matches the visual rhythm of the input step so the user's mental anchor (the big number) stays stable. */
+.contentZone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--primitives-spacing-6);
+  width: 100%;
+}
 
-.root {
+.title {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-medium);
+  font-size: calc(var(--primitives-fontSize-lg) * 1px);
+  color: var(--semantic-color-text-primary);
+  text-align: center;
+  margin: 0;
+}
+
+.amountBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--primitives-spacing-3);
+  width: 100%;
+}
+
+.amountValue {
+  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-weight: var(--primitives-fontWeight-regular);
+  font-size: calc(var(--primitives-fontSize-4xl) * 1px);
+  line-height: var(--primitives-lineHeight-snug);
+  font-variant-numeric: tabular-nums;
+  color: var(--semantic-color-text-primary);
+}
+
+.currencyRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--primitives-spacing-2);
+}
+
+.currencyIcon {
+  width: var(--primitives-spacing-6);
+  height: var(--primitives-spacing-6);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.currencyIcon :global(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.currencyLabel {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-regular);
+  font-size: calc(var(--primitives-fontSize-xl) * 1px);
+  color: var(--semantic-color-text-muted);
+}
+
+.summary {
+  background: var(--semantic-color-surface-raised);
+  border: 1px solid var(--semantic-color-border-default);
+  border-radius: var(--semantic-borderRadius-modal);
+  padding: var(--primitives-spacing-5);
   display: flex;
   flex-direction: column;
   gap: var(--primitives-spacing-4);
 }
 
-.headline {
-  color: var(--semantic-color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--primitives-letterSpacing-wider);
-  font-size: calc(var(--primitives-fontSize-xs) * 1px);
-  text-align: center;
-}
-
-.amountBlock {
+.summaryRow {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: var(--primitives-spacing-3);
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--primitives-spacing-4);
 }
 
-.amount {
-  color: var(--semantic-color-text-primary);
-  font-family: var(--primitives-fontFamily-mono), monospace;
-  font-size: calc(var(--primitives-fontSize-5xl) * 1px);
-  line-height: var(--primitives-lineHeight-tight);
-  font-weight: var(--primitives-fontWeight-regular);
-  font-variant-numeric: tabular-nums;
-}
-
-.unit {
-  color: var(--semantic-color-text-muted);
-  font-size: calc(var(--primitives-fontSize-lg) * 1px);
-}
-
-.facts {
-  display: flex;
-  flex-direction: column;
-  gap: var(--primitives-spacing-2);
+.summaryDivider {
+  height: 1px;
+  background: var(--semantic-color-border-default);
+  border: none;
   margin: 0;
 }
 
-.facts > div {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--primitives-spacing-3);
-  padding: var(--primitives-spacing-2) 0;
-  border-bottom: 1px solid var(--semantic-color-border-default);
-}
-
-.facts dt {
+.summaryLabel {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-regular);
+  font-size: calc(var(--primitives-fontSize-base) * 1px);
   color: var(--semantic-color-text-muted);
 }
 
-.facts dd {
+.summaryValue {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-medium);
+  font-size: calc(var(--primitives-fontSize-base) * 1px);
   color: var(--semantic-color-text-primary);
-}
-
-.footer {
-  align-self: stretch;
-  margin: var(--primitives-spacing-4) calc(var(--primitives-spacing-6) * -1) calc(var(--primitives-spacing-6) * -1);
 }

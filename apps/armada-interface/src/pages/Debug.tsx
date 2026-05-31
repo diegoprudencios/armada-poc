@@ -1,9 +1,9 @@
 // ABOUTME: Developer panel — contract addresses, wallet balances on each chain, plus a faucet drip button in local mode only.
 // ABOUTME: Available in both local and sepolia (read-only diagnostics make sense everywhere); the faucet column hides on sepolia.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import { ethers } from 'ethers'
-import { useAtomValue } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import { useAccount } from 'wagmi'
 import { Check, Copy } from 'lucide-react'
 import { Card, SectionHeader } from '@/components/ui'
@@ -12,6 +12,7 @@ import { useWallet } from '@/hooks/useWallet'
 import { useShieldedWallet } from '@/hooks/useShieldedWallet'
 import { loadDeployments, type ResolvedDeployments } from '@/config/deployments'
 import { getNetworkConfig, isLocalMode, type ChainIdentity } from '@/config/network'
+import { devMockBalanceAtom } from '@/state/devMockBalance'
 import { railgunEngineAtom, shieldedUsdcAtom } from '@/state/wallet'
 import { formatUsdcAmount, truncateAddress } from '@/lib/format'
 import styles from './Debug.module.css'
@@ -266,10 +267,63 @@ export function Debug() {
   )
 
   const localMode = isLocalMode()
+  const [devMockBalance, setDevMockBalance] = useAtom(devMockBalanceAtom)
 
   return (
     <div className={styles.page}>
       <SectionHeader title="Debug" />
+
+      {localMode ? (
+        <Card className={styles.section}>
+          <h3 className={styles.sectionTitle}>Mock deposit balance</h3>
+          <p className={styles.muted}>
+            Overrides the available balance shown in the Deposit flow so you can test amount entry
+            and review without dripping faucet USDC. Tx progress is always simulated in local mode;
+            on-chain balance is unchanged.
+          </p>
+          <ul className={styles.mockRows}>
+            <li className={styles.mockRow}>
+              <span className={styles.mockRowLabel}>Use mock balance</span>
+              <label className={styles.toggle}>
+                <input
+                  type="checkbox"
+                  aria-label="Use mock deposit balance"
+                  checked={devMockBalance.enabled}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setDevMockBalance({ ...devMockBalance, enabled: e.target.checked })
+                  }
+                />
+                <span className={styles.toggleTrack} aria-hidden="true">
+                  <span className={styles.toggleThumb} />
+                </span>
+              </label>
+            </li>
+            {devMockBalance.enabled ? (
+              <li className={styles.mockRow}>
+                <label className={styles.mockRowLabel} htmlFor="dev-mock-balance-amount">
+                  Mock amount (USDC)
+                </label>
+                <input
+                  id="dev-mock-balance-amount"
+                  type="text"
+                  inputMode="decimal"
+                  className={styles.mockAmountInput}
+                  value={devMockBalance.amountUsdc}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setDevMockBalance({ ...devMockBalance, amountUsdc: e.target.value })
+                  }
+                  aria-describedby="dev-mock-balance-hint"
+                />
+              </li>
+            ) : null}
+          </ul>
+          {devMockBalance.enabled ? (
+            <p id="dev-mock-balance-hint" className={styles.muted}>
+              Deposit modal shows this as AVAILABLE on every chain.
+            </p>
+          ) : null}
+        </Card>
+      ) : null}
 
       <Card className={styles.section}>
         <h3 className={styles.sectionTitle}>Network</h3>

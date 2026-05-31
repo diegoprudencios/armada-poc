@@ -31,7 +31,8 @@ export function useAutoLock() {
   const { state, lock } = useShieldedWallet()
 
   const isUnlocked = state?.status === 'unlocked'
-  const timeoutMs = prefs.autoLockMinutes * 60_000
+  const autoLockMinutes = prefs.autoLockMinutes
+  const timeoutMs = autoLockMinutes == null ? null : autoLockMinutes * 60_000
 
   // Refs for values that should be read at fire time without re-arming the effect on every change.
   const hasInflightRef = useRef(pending.length > 0)
@@ -41,11 +42,12 @@ export function useAutoLock() {
 
   useEffect(() => {
     const store = getDefaultStore()
-    if (!isUnlocked) {
+    if (!isUnlocked || timeoutMs == null) {
       store.set(autoLockDeadlineAtom, null)
       return
     }
 
+    const idleTimeoutMs = timeoutMs
     let lastReset = 0
     let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -65,14 +67,14 @@ export function useAutoLock() {
       if (now - lastReset < RESET_THROTTLE_MS) return
       lastReset = now
       if (timer) clearTimeout(timer)
-      store.set(autoLockDeadlineAtom, now + timeoutMs)
-      timer = setTimeout(fire, timeoutMs)
+      store.set(autoLockDeadlineAtom, now + idleTimeoutMs)
+      timer = setTimeout(fire, idleTimeoutMs)
     }
 
     ACTIVITY_EVENTS.forEach(e => window.addEventListener(e, reset, { passive: true }))
     // Arm the initial timer.
-    store.set(autoLockDeadlineAtom, Date.now() + timeoutMs)
-    timer = setTimeout(fire, timeoutMs)
+    store.set(autoLockDeadlineAtom, Date.now() + idleTimeoutMs)
+    timer = setTimeout(fire, idleTimeoutMs)
 
     return () => {
       ACTIVITY_EVENTS.forEach(e => window.removeEventListener(e, reset))

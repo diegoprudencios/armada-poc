@@ -6,8 +6,8 @@ import { atomWithStorage } from 'jotai/utils'
 export type AutoLockMinutes = 5 | 15 | 30
 
 export interface PreferencesValue {
-  /** Idle minutes before the shielded wallet auto-locks. */
-  autoLockMinutes: AutoLockMinutes
+  /** Idle minutes before the shielded wallet auto-locks; `null` disables auto-lock. */
+  autoLockMinutes: AutoLockMinutes | null
   /** When true, TxLifecycleStepper opens its technical-details disclosure by default. */
   showTechnicalDetailsByDefault: boolean
 }

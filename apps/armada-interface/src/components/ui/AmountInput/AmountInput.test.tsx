@@ -25,12 +25,12 @@ describe('<AmountInput>', () => {
 
   it('shows AVAILABLE caption when max is supplied (compact variant)', () => {
     render(<AmountInput value="" onValueChange={() => {}} max={5_000_000n} variant="compact" />)
-    expect(screen.getByText(/Available 5\.00 USDC/i)).toBeInTheDocument()
+    expect(screen.getByText(/Available 5 USDC/i)).toBeInTheDocument()
   })
 
   it('shows AVAILABLE caption when max is supplied (display variant)', () => {
     render(<AmountInput value="" onValueChange={() => {}} max={5_000_000n} variant="display" />)
-    expect(screen.getByText('AVAILABLE 5.00')).toBeInTheDocument()
+    expect(screen.getByText('AVAILABLE 5')).toBeInTheDocument()
   })
 
   it('writes the max value as a plain decimal string on MAX click', () => {

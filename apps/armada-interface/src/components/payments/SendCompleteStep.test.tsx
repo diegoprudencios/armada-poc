@@ -19,7 +19,7 @@ describe('<SendCompleteStep>', () => {
       />,
     )
     expect(screen.getByText(/privately/)).toBeInTheDocument()
-    expect(screen.getByText(/100\.00 USDC/)).toBeInTheDocument()
+    expect(screen.getByText(/100 USDC/)).toBeInTheDocument()
   })
 
   it('external tab: renders the chain name in the copy', () => {
@@ -33,7 +33,7 @@ describe('<SendCompleteStep>', () => {
       />,
     )
     expect(screen.getByText(/Anvil Hub/)).toBeInTheDocument()
-    expect(screen.getByText(/50\.00 USDC/)).toBeInTheDocument()
+    expect(screen.getByText(/50 USDC/)).toBeInTheDocument()
   })
 
   it('fires onDone when the CTA is clicked', () => {

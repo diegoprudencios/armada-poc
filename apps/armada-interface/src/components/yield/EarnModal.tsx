@@ -76,14 +76,12 @@ export function EarnModal() {
   // Also pull a fresh rate on open so the APY hint + max-balance reflect current state — the
   // background poll only ticks every 5 min and a user opening the modal expects "now" data.
   useEffect(() => {
-    if (!isOpen) {
-      setStep('input')
-      setSubmitError(null)
-      setErrorAtStep(undefined)
-      setAmountStr('')
-      setSubmittedKind(null)
-      return
-    }
+    if (!isOpen) return
+    setStep('input')
+    setSubmitError(null)
+    setErrorAtStep(undefined)
+    setAmountStr('')
+    setSubmittedKind(null)
     setTab(initialTab)
     void refreshYieldRate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,11 +150,9 @@ export function EarnModal() {
     }
   }
 
-  if (!isOpen) return null
-
   return (
     <ActionFlowShell
-      open
+      open={isOpen}
       onClose={close}
       title="Earn"
       step={step}

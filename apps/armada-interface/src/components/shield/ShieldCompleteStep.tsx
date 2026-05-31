@@ -1,31 +1,72 @@
-// ABOUTME: Shield complete step — celebratory success panel with the deposited amount and a Done CTA.
-// ABOUTME: Matches the WelcomeStep/CompleteStep style (centered icon + serif headline + body + footer).
+// ABOUTME: Shield complete step — deposit confirmation with amount display and Done / explorer CTAs.
+// ABOUTME: Matches review-step typography; progress bar turns green via DepositOverlayShell status.
 
-import { CheckCircle2 } from 'lucide-react'
-import { FlowFooter } from '@/components/flow/FlowFooter'
+import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
+import { Button } from '@armada/ui'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import { formatUsdcAmount } from '@/lib/format'
-import styles from './ShieldCompleteStep.module.css'
+import { ShieldDepositSummary } from './ShieldDepositSummary'
+import reviewStyles from './ShieldReviewStep.module.css'
+
+const USDC_ICON_SIZE = 24
 
 export interface ShieldCompleteStepProps {
-  /** Net amount deposited (post-fee), raw 6-decimal USDC. */
+  fromChainId: number
+  /** Gross deposit amount (pre-fee), raw 6-decimal USDC. */
+  amount: bigint
+  fee: bigint | null
+  /** Net amount deposited (post-fee), shown in the hero. */
   netAmount: bigint
+  /** Block explorer URL for the submitted tx; omit when the chain has no explorer. */
+  explorerUrl?: string
   onDone: () => void
 }
 
-export function ShieldCompleteStep({ netAmount, onDone }: ShieldCompleteStepProps) {
+export function ShieldCompleteStep({
+  fromChainId,
+  amount,
+  fee,
+  netAmount,
+  explorerUrl,
+  onDone,
+}: ShieldCompleteStepProps) {
+  const amountLabel = formatUsdcAmount(netAmount)
+
+  function openExplorer() {
+    if (!explorerUrl) return
+    window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+  }
+
   return (
-    <div className={styles.root}>
-      <div className={styles.icon} aria-hidden="true">
-        <CheckCircle2 size={40} />
+    <div className={reviewStyles.contentZone}>
+      <h2 className={reviewStyles.title}>Deposit complete</h2>
+      <div className={reviewStyles.amountBlock}>
+        <span className={reviewStyles.amountValue}>{amountLabel}</span>
+        <div className={reviewStyles.currencyRow}>
+          <span className={reviewStyles.currencyIcon} aria-hidden>
+            <TokenUSDC size={USDC_ICON_SIZE} variant="branded" />
+          </span>
+          <span className={reviewStyles.currencyLabel}>USDC</span>
+        </div>
       </div>
-      <h3 className={styles.title}>Success</h3>
-      <p className={styles.body}>
-        You've deposited {formatUsdcAmount(netAmount)} USDC.
-      </p>
-      <FlowFooter
-        className={styles.footer}
-        primary={{ label: 'Done', onClick: onDone }}
-      />
+      <ShieldDepositSummary fromChainId={fromChainId} amount={amount} fee={fee} />
+      <div className={depositOverlayShellStyles.buttonRow}>
+        <Button
+          variant="secondary"
+          size="lg"
+          label="View on explorer"
+          showIcon={false}
+          disabled={!explorerUrl}
+          onClick={openExplorer}
+        />
+        <Button
+          variant="primary"
+          size="lg"
+          label="Done"
+          showIcon={false}
+          onClick={onDone}
+        />
+      </div>
     </div>
   )
 }

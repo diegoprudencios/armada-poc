@@ -17,7 +17,7 @@ function Harness() {
 
 function setupStore(opts: {
   unlocked?: boolean
-  autoLockMinutes?: 5 | 15 | 30
+  autoLockMinutes?: 5 | 15 | 30 | null
   withInflightTx?: boolean
 }) {
   const store = createStore()
@@ -31,7 +31,9 @@ function setupStore(opts: {
   store.set(activeRailgunWalletIdAtom, 'rg-1')
   store.set(preferencesAtom, {
     ...DEFAULT_PREFERENCES,
-    autoLockMinutes: opts.autoLockMinutes ?? DEFAULT_PREFERENCES.autoLockMinutes,
+    autoLockMinutes: opts.autoLockMinutes !== undefined
+      ? opts.autoLockMinutes
+      : DEFAULT_PREFERENCES.autoLockMinutes,
   })
   if (opts.withInflightTx) {
     const r: TxRecord<'shield'> = {
@@ -76,6 +78,19 @@ describe('useAutoLock', () => {
     })
     // After the timeout, lock() should have flipped the entry to 'locked'.
     expect(store.get(shieldedWalletsAtom)['rg-1']?.status).toBe('locked')
+  })
+
+  it('does not lock when auto-lock is disabled', () => {
+    const store = setupStore({ unlocked: true, autoLockMinutes: null })
+    render(
+      <Provider store={store}>
+        <Harness />
+      </Provider>,
+    )
+    act(() => {
+      vi.advanceTimersByTime(60 * 60_000)
+    })
+    expect(store.get(shieldedWalletsAtom)['rg-1']?.status).toBe('unlocked')
   })
 
   it('does not lock when the wallet is already locked', () => {

@@ -14,6 +14,7 @@ import styles from './Settings.module.css'
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION as string | undefined
 
+const AUTO_LOCK_OFF = 'off' as const
 const AUTO_LOCK_OPTIONS: ReadonlyArray<AutoLockMinutes> = [5, 15, 30]
 
 export function Settings() {
@@ -88,11 +89,18 @@ export function Settings() {
               <select
                 aria-label="Auto-lock timer"
                 className={styles.select}
-                value={prefs.autoLockMinutes}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                  setPrefs({ ...prefs, autoLockMinutes: Number(e.target.value) as AutoLockMinutes })
-                }
+                value={prefs.autoLockMinutes ?? AUTO_LOCK_OFF}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                  const raw = e.target.value
+                  setPrefs({
+                    ...prefs,
+                    autoLockMinutes: raw === AUTO_LOCK_OFF
+                      ? null
+                      : Number(raw) as AutoLockMinutes,
+                  })
+                }}
               >
+                <option value={AUTO_LOCK_OFF}>Never</option>
                 {AUTO_LOCK_OPTIONS.map(min => (
                   <option key={min} value={min}>
                     {min} minutes
@@ -154,6 +162,7 @@ export function Settings() {
  * granularity. Returns '—' when no timer is armed (wallet missing/locked).
  */
 function AutoLockCountdown() {
+  const prefs = useAtomValue(preferencesAtom)
   const deadline = useAtomValue(autoLockDeadlineAtom)
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -161,6 +170,7 @@ function AutoLockCountdown() {
     const t = window.setInterval(() => setNow(Date.now()), 10_000)
     return () => window.clearInterval(t)
   }, [deadline])
+  if (prefs.autoLockMinutes == null) return <>Never</>
   if (deadline == null) return <>—</>
   const remaining = Math.max(0, deadline - now)
   if (remaining <= 0) return <>Locking now…</>

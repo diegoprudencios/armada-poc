@@ -123,3 +123,98 @@
   padding-top: var(--primitives-spacing-3);
   border-top: 1px solid var(--semantic-color-border-default);
 }
+
+.mockRows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--primitives-spacing-3);
+}
+
+.mockRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--primitives-spacing-3);
+}
+
+.mockRowLabel {
+  color: var(--semantic-color-text-secondary);
+}
+
+.mockAmountInput {
+  width: min(160px, 100%);
+  background: var(--semantic-color-surface-default);
+  border: 1px solid var(--semantic-color-border-default);
+  border-radius: calc(var(--semantic-borderRadius-input) * 1px);
+  padding: 6px 12px;
+  color: var(--semantic-color-text-primary);
+  font-family: var(--primitives-fontFamily-mono), monospace;
+  outline: none;
+}
+
+.mockAmountInput:focus {
+  border-color: var(--semantic-color-border-focus);
+  box-shadow: 0 0 0 2px rgba(196, 145, 229, 0.18);
+}
+
+/* Toggle switch — matches Settings page pattern. */
+.toggle {
+  position: relative;
+  display: inline-flex;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggleTrack {
+  position: absolute;
+  inset: 0;
+  background: var(--primitives-color-neutral-200);
+  border: 1px solid var(--semantic-color-border-default);
+  border-radius: 999px;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--semantic-color-text-secondary);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.toggle input:checked + .toggleTrack {
+  background: rgba(196, 145, 229, 0.32);
+  border-color: var(--semantic-color-brand-lavender);
+}
+
+.toggle input:checked + .toggleTrack .toggleThumb {
+  transform: translateX(16px);
+  background: var(--semantic-color-brand-lavender);
+}
+
+.toggle input:focus-visible + .toggleTrack {
+  outline: 2px solid var(--semantic-color-border-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggleTrack,
+  .toggleThumb {
+    transition: none;
+  }
+}

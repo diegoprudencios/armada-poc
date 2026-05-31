@@ -27,7 +27,7 @@ function setup(opts?: { isXchain?: boolean; destChainId?: number }) {
 describe('<UnshieldReviewStep>', () => {
   it('renders the amount + destination + truncated recipient', () => {
     setup()
-    expect(screen.getAllByText('50.00').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('50').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/Anvil Hub/)).toBeInTheDocument()
     expect(screen.getByText('0x1234...5678')).toBeInTheDocument()
   })

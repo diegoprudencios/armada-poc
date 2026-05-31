@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react'
 import { TxStatusChip } from './TxStatusChip'
 import { stageCopy } from './stageCopy'
 import { TechnicalDetailsDisclosure } from '../ui/TechnicalDetailsDisclosure'
+import { isDevSimulateTxEnabled, DEV_SIM_STEP_DELAY_MS } from '@/lib/tx/devSimulateTx'
 import { lifecycleFor } from '@/lib/tx/lifecycles'
 import { getChainById } from '@/config/network'
 import type { TxRecord, TxExecutionState } from '@/lib/tx/types'
@@ -67,16 +68,20 @@ export function TxLifecycleStepper({
   className,
 }: TxLifecycleStepperProps) {
   const lifecycle = lifecycleFor(record.kind)
+  const etaMs = isDevSimulateTxEnabled()
+    ? lifecycle.stages.length * DEV_SIM_STEP_DELAY_MS
+    : lifecycle.estDuration.p50
   const cls = [styles.root, className].filter(Boolean).join(' ')
 
   return (
     <div className={cls}>
-      <header className={styles.header}>
-        <TxStatusChip state={record.executionState} error={record.artifacts.error ?? null} />
-        <span className={styles.eta}>Usually takes {formatDurationHint(lifecycle.estDuration.p50)}</span>
-      </header>
+      <section className={styles.statusCard} aria-label="Transaction status">
+        <header className={styles.header}>
+          <TxStatusChip state={record.executionState} error={record.artifacts.error ?? null} />
+          <span className={styles.eta}>Usually takes {formatDurationHint(etaMs)}</span>
+        </header>
 
-      <ol className={styles.stages}>
+        <ol className={styles.stages}>
         {lifecycle.stages.map(stage => {
           const kind = rowKindFor(
             stage as string,
@@ -132,10 +137,15 @@ export function TxLifecycleStepper({
             </li>
           )
         })}
-      </ol>
+        </ol>
+      </section>
 
-      <TechnicalDetailsDisclosure defaultOpen={technicalDetailsDefaultOpen}>
-        <dl className={styles.facts}>
+      <section className={styles.detailsCard} aria-label="Technical details">
+        <TechnicalDetailsDisclosure
+          defaultOpen={technicalDetailsDefaultOpen}
+          className={styles.detailsDisclosure}
+        >
+          <dl className={styles.facts}>
           <div>
             <dt>Record id</dt>
             <dd>{record.id}</dd>
@@ -190,8 +200,9 @@ export function TxLifecycleStepper({
               </dd>
             </div>
           ) : null}
-        </dl>
-      </TechnicalDetailsDisclosure>
+          </dl>
+        </TechnicalDetailsDisclosure>
+      </section>
     </div>
   )
 }

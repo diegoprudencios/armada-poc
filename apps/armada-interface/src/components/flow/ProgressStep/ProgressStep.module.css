@@ -1,10 +1,29 @@
-/* ABOUTME: ProgressStep styling — wrapper around the placeholder copy when no record exists yet. */
-/* ABOUTME: When a record is present, TxLifecycleStepper renders inside with its own module CSS. */
+/* ABOUTME: ProgressStep styling — title + raised status card; stepper owns the technical-details card. */
 
-.root {
+.contentZone {
   display: flex;
   flex-direction: column;
-  gap: var(--primitives-spacing-4);
+  gap: var(--primitives-spacing-6);
+  width: 100%;
+}
+
+.title {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-medium);
+  font-size: calc(var(--primitives-fontSize-lg) * 1px);
+  color: var(--semantic-color-text-primary);
+  text-align: center;
+  margin: 0;
+}
+
+.statusCard {
+  background: var(--semantic-color-surface-raised);
+  border: 1px solid var(--semantic-color-border-default);
+  border-radius: var(--semantic-borderRadius-modal);
+  padding: var(--primitives-spacing-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--primitives-spacing-3);
 }
 
 .headline {
@@ -14,4 +33,31 @@
 
 .sub {
   color: var(--semantic-color-text-muted);
+}
+
+.actionFooter {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.dismissFooter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--primitives-spacing-4);
+  width: 100%;
+  margin-top: var(--primitives-spacing-2);
+}
+
+.dismissHint {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-regular);
+  font-size: calc(var(--primitives-fontSize-sm) * 1px);
+  line-height: var(--primitives-lineHeight-normal);
+  color: var(--semantic-color-text-muted);
+  text-align: center;
+  margin: 0;
+  width: 100%;
+  white-space: nowrap;
 }

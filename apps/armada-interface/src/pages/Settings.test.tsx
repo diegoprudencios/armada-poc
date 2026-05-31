@@ -64,6 +64,13 @@ describe('<Settings>', () => {
     expect(store.get(preferencesAtom).autoLockMinutes).toBe(5)
   })
 
+  it('persists never auto-lock to the preferences atom', () => {
+    const store = renderSettings({ walletUnlocked: true })
+    fireEvent.change(screen.getByLabelText('Auto-lock timer'), { target: { value: 'off' } })
+    expect(store.get(preferencesAtom).autoLockMinutes).toBeNull()
+    expect(screen.getByLabelText('Auto-lock timer')).toHaveValue('off')
+  })
+
   it('persists the technical-details toggle to the preferences atom', () => {
     const store = renderSettings({ walletUnlocked: true })
     expect(store.get(preferencesAtom).showTechnicalDetailsByDefault).toBe(false)

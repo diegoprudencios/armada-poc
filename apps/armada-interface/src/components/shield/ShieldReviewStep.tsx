@@ -1,11 +1,14 @@
-// ABOUTME: Shield review step — read-only echo of the deposit summary with Confirm + Back CTAs.
-// ABOUTME: Renders the same big Charis-SIL numeral as the input step so the user sees their amount in the same visual context.
+// ABOUTME: Shield review step — deposit summary with Back / Confirm deposit CTAs.
+// ABOUTME: Amount display matches DepositAmountCard sizing; network + fee breakdown in raised list.
 
-import { FlowFooter } from '@/components/flow/FlowFooter'
-import { FeeSummary } from '@/components/ui'
+import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
+import { Button } from '@armada/ui'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import { formatUsdcAmount } from '@/lib/format'
-import { getChainById } from '@/config/network'
+import { ShieldDepositSummary } from './ShieldDepositSummary'
 import styles from './ShieldReviewStep.module.css'
+
+const USDC_ICON_SIZE = 24
 
 export interface ShieldReviewStepProps {
   fromChainId: number
@@ -14,36 +17,65 @@ export interface ShieldReviewStepProps {
   netAmount: bigint
   onBack: () => void
   onConfirm: () => void
+  isSubmitting?: boolean
 }
 
-export function ShieldReviewStep({
+export function ShieldReviewStepContent({
   fromChainId,
   amount,
   fee,
-  netAmount,
+}: Pick<ShieldReviewStepProps, 'fromChainId' | 'amount' | 'fee'>) {
+  const amountLabel = formatUsdcAmount(amount)
+
+  return (
+    <div className={styles.contentZone}>
+      <h2 className={styles.title}>Review your deposit</h2>
+      <div className={styles.amountBlock}>
+        <span className={styles.amountValue}>{amountLabel}</span>
+        <div className={styles.currencyRow}>
+          <span className={styles.currencyIcon} aria-hidden>
+            <TokenUSDC size={USDC_ICON_SIZE} variant="branded" />
+          </span>
+          <span className={styles.currencyLabel}>USDC</span>
+        </div>
+      </div>
+      <ShieldDepositSummary fromChainId={fromChainId} amount={amount} fee={fee} />
+    </div>
+  )
+}
+
+export function ShieldReviewStepFooter({
   onBack,
   onConfirm,
-}: ShieldReviewStepProps) {
-  const fromChain = getChainById(fromChainId)
+  isSubmitting = false,
+}: Pick<ShieldReviewStepProps, 'onBack' | 'onConfirm' | 'isSubmitting'>) {
   return (
-    <div className={styles.root}>
-      <div className={styles.headline}>Review your deposit</div>
-      <div className={styles.amountBlock}>
-        <span className={styles.amount}>{formatUsdcAmount(amount)}</span>
-        <span className={styles.unit}>USDC</span>
-      </div>
-      <dl className={styles.facts}>
-        <div>
-          <dt>From</dt>
-          <dd>{fromChain?.name ?? `Chain ${fromChainId}`}</dd>
-        </div>
-      </dl>
-      <FeeSummary fee={fee} netAmount={netAmount} netLabel="You'll deposit" />
-      <FlowFooter
-        className={styles.footer}
-        primary={{ label: 'Confirm deposit', onClick: onConfirm }}
-        secondary={{ label: 'Back', onClick: onBack }}
+    <div className={depositOverlayShellStyles.buttonRow}>
+      <Button
+        variant="secondary"
+        size="lg"
+        label="Back"
+        showIcon={false}
+        onClick={onBack}
+        disabled={isSubmitting}
+      />
+      <Button
+        variant="primary"
+        size="lg"
+        label={isSubmitting ? 'Confirming…' : 'Confirm deposit'}
+        showIcon={false}
+        disabled={isSubmitting}
+        onClick={onConfirm}
       />
     </div>
+  )
+}
+
+export function ShieldReviewStep(props: ShieldReviewStepProps) {
+  return (
+    <>
+      <ShieldReviewStepContent {...props} />
+      <ShieldReviewStepFooter {...props} />
+    </>
   )
 }

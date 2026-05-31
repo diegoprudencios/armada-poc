@@ -112,17 +112,16 @@ export function SendModal() {
   const fee: bigint = userFeeForKind(computedKind, amount)
   const netAmount = amount > fee ? amount - fee : 0n
 
-  // Reset local state on close.
+  // Reset local state when opening.
   useEffect(() => {
-    if (!isOpen) {
-      setStep('input')
-      setSubmitError(null)
-      setErrorAtStep(undefined)
-      setAmountStr('')
-      setRecipient('')
-      setTab('private')
-      setSubmittedKind(null)
-    }
+    if (!isOpen) return
+    setStep('input')
+    setSubmitError(null)
+    setErrorAtStep(undefined)
+    setAmountStr('')
+    setRecipient('')
+    setTab('private')
+    setSubmittedKind(null)
   }, [isOpen])
 
   // Watch the submitted record for terminal transitions. Dep is `record?.executionState` rather
@@ -181,11 +180,9 @@ export function SendModal() {
     }
   }
 
-  if (!isOpen) return null
-
   return (
     <ActionFlowShell
-      open
+      open={isOpen}
       onClose={close}
       title="Send"
       step={step}

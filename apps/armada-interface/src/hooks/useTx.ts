@@ -10,7 +10,9 @@ import { putTxIfFresh } from '@/lib/tx/storage'
 import { cancelTx, executeTx } from '@/lib/tx/executor'
 import { txByIdAtom, upsertTxAtom } from '@/state/tx'
 import { evmAddressAtom, shieldedWalletAtom } from '@/state/wallet'
-import { getNetworkConfig } from '@/config/network'
+import { getNetworkConfig, isLocalMode } from '@/config/network'
+import { txListAtom } from '@/state/tx'
+import { getDefaultStore } from 'jotai'
 import { track } from '@/lib/telemetry'
 
 export interface UseTxOptions<K extends TxKind> {
@@ -71,6 +73,22 @@ export function useTx<K extends TxKind>(opts: UseTxOptions<K>): UseTxResult<K> {
     // Dispatch to the executor. No-op until a stage handler is registered
     // for this kind (feature passes do that at module load time).
     executeTx(newId)
+
+    // Local dev: re-dispatch if the first call raced leader init or a stuck handler blocked us.
+    if (isLocalMode()) {
+      const retry = () => {
+        const r = getDefaultStore().get(txListAtom).find(t => t.id === newId)
+        if (!r) return
+        if (r.executionState === 'completed' || r.executionState === 'failed'
+          || r.executionState === 'expired' || r.executionState === 'cancelled') {
+          return
+        }
+        executeTx(newId)
+      }
+      queueMicrotask(retry)
+      window.setTimeout(retry, 400)
+    }
+
     return newId
   }, [opts.kind, upsert, evmAddress, shieldedWallet])
 

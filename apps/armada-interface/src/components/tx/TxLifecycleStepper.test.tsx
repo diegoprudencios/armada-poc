@@ -107,4 +107,10 @@ describe('<TxLifecycleStepper>', () => {
     render(<TxLifecycleStepper record={shieldRecord()} />)
     expect(screen.getByText(/Usually takes/)).toBeInTheDocument()
   })
+
+  it('wraps status and technical details in separate raised cards', () => {
+    render(<TxLifecycleStepper record={shieldRecord()} />)
+    expect(screen.getByLabelText('Transaction status')).toBeInTheDocument()
+    expect(screen.getByLabelText('Technical details')).toBeInTheDocument()
+  })
 })

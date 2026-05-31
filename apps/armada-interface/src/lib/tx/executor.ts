@@ -2,6 +2,8 @@
 // ABOUTME: Hooks (useTx) only trigger execution; they never orchestrate. Plan §7a; reviewer rec #2 + #9.
 
 import { getDefaultStore } from 'jotai'
+import { isLocalMode } from '@/config/network'
+import { isDevSimulateTxEnabled, runDevSimulatedTxChain } from './devSimulateTx'
 import { track, trackError } from '../telemetry'
 import { lifecycleFor } from './lifecycles'
 import { markCancelled, markDismissed, markExpired, markRetrying, shouldResume } from './reducer'
@@ -43,6 +45,8 @@ export interface StageHandler<K extends TxKind = TxKind> {
 
 const handlers = new Map<TxKind, StageHandler<TxKind>>()
 const running = new Map<string, AbortController>()
+/** executeTx called before leader lock acquired — flushed in onBecomeLeader. */
+const pendingExecuteIds = new Set<string>()
 let isLeader = false
 let engineStarted = false
 
@@ -68,6 +72,12 @@ export function getIsLeader(): boolean {
 export function startEngine(): void {
   if (engineStarted) return
   engineStarted = true
+
+  // Local dev: skip cross-tab leader election — always run the executor in this tab.
+  if (isLocalMode()) {
+    onBecomeLeader()
+    return
+  }
 
   if (typeof navigator === 'undefined' || !navigator.locks) {
     // No Locks API (SSR or ancient browser): assume single-tab leader semantics.
@@ -103,15 +113,41 @@ export function startEngine(): void {
  * No-op on follower tabs and when no handler is registered for the kind.
  */
 export function executeTx(id: string): void {
-  if (!isLeader) return
-  if (running.has(id)) return // already in flight; reentrancy guard
-
   const store = getDefaultStore()
   const record = store.get(txListAtom).find(t => t.id === id)
   if (!record) {
-    trackError('tx.executor.execute', new Error('no record'), {
-      scope: 'tx.executor',
-      message: `executeTx called for unknown id ${id}`,
+    pendingExecuteIds.add(id)
+    return
+  }
+
+  // Sepolia/production: follower tabs don't execute; queue until this tab becomes leader.
+  if (!isLeader && !isLocalMode()) {
+    pendingExecuteIds.add(id)
+    return
+  }
+
+  startTxExecution(record)
+}
+
+function startTxExecution(record: TxRecord): void {
+  const id = record.id
+
+  if (running.has(id)) {
+    // Stuck real handler from before local simulation — abort and take over in local mode.
+    if (isDevSimulateTxEnabled()) {
+      running.get(id)!.abort()
+      running.delete(id)
+    } else {
+      return
+    }
+  }
+
+  const controller = new AbortController()
+  running.set(id, controller)
+
+  if (isDevSimulateTxEnabled()) {
+    void runDevSimulatedTxChain(record, controller.signal).finally(() => {
+      running.delete(id)
     })
     return
   }
@@ -119,11 +155,10 @@ export function executeTx(id: string): void {
   const handler = handlers.get(record.kind)
   if (!handler) {
     track('tx.engine.no-handler', { kind: record.kind })
+    running.delete(id)
     return
   }
 
-  const controller = new AbortController()
-  running.set(id, controller)
   void runHandlerChain(record, handler, controller)
 }
 
@@ -227,6 +262,10 @@ function abortAndMark(id: string, kind: 'cancel' | 'dismiss'): void {
 function onBecomeLeader(): void {
   isLeader = true
   track('tx.engine.started', { isLeader: true })
+  for (const id of [...pendingExecuteIds]) {
+    pendingExecuteIds.delete(id)
+    executeTx(id)
+  }
   void resumeNonTerminal()
 }
 

@@ -61,11 +61,20 @@ export function getIntegratorAddress(): `0x${string}` {
 
 // Local CCTP domains match config/networks.ts (HUB=100, CLIENT_A=101, CLIENT_B=102).
 // Real CCTP domains (e.g. Ethereum=0, Base=6) are reserved for the `sepolia` mode.
+function localExplorerUrl(): string | undefined {
+  const fromEnv = import.meta.env.VITE_LOCAL_EXPLORER_URL as string | undefined
+  if (fromEnv?.trim()) return fromEnv.trim().replace(/\/$/, '')
+  // Anvil has no native explorer UI — default to Sepolia Etherscan so deposit complete
+  // can show "View on explorer" during local UI work (simulated tx hashes are placeholders).
+  return 'https://sepolia.etherscan.io'
+}
+
 const LOCAL_HUB: ChainIdentity = {
   chainId: 31337,
   domain: 100,
   name: 'Anvil Hub (local)',
   rpcUrls: ['http://localhost:8545'],
+  explorerUrl: localExplorerUrl(),
 } as const
 
 const LOCAL_CLIENT_A: ChainIdentity = {

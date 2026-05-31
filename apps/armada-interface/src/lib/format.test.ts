@@ -27,9 +27,14 @@ describe('formatUsdcPlain', () => {
 })
 
 describe('formatUsdcAmount', () => {
-  it('formats with thousand separators and 2 decimal places by default', () => {
+  it('formats with thousand separators and omits trailing zero decimals', () => {
     expect(formatUsdcAmount(12_481_220_000n)).toBe('12,481.22')
-    expect(formatUsdcAmount(0n)).toBe('0.00')
+    expect(formatUsdcAmount(500_000_000n)).toBe('500')
+    expect(formatUsdcAmount(0n)).toBe('0')
+  })
+  it('shows fractional digits when present', () => {
+    expect(formatUsdcAmount(100_500_000n)).toBe('100.5')
+    expect(formatUsdcAmount(1_500_000n)).toBe('1.5')
   })
   it('honors a custom decimals option', () => {
     expect(formatUsdcAmount(1_234_567_890n, { decimals: 4 })).toBe('1,234.5679')

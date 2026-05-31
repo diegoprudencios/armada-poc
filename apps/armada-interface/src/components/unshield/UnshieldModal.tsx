@@ -81,16 +81,17 @@ export function UnshieldModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
-  // Reset local state on close.
+  // Reset local state when opening; clear prefill guard when fully closed.
   useEffect(() => {
     if (!isOpen) {
-      setStep('input')
-      setSubmitError(null)
-      setErrorAtStep(undefined)
-      setAmountStr('')
-      setSubmittedKind(null)
       didPrefillRef.current = false
+      return
     }
+    setStep('input')
+    setSubmitError(null)
+    setErrorAtStep(undefined)
+    setAmountStr('')
+    setSubmittedKind(null)
   }, [isOpen])
 
   // Watch the submitted record for terminal transitions. Dep is `record?.executionState` rather
@@ -141,11 +142,9 @@ export function UnshieldModal() {
     }
   }
 
-  if (!isOpen) return null
-
   return (
     <ActionFlowShell
-      open
+      open={isOpen}
       onClose={close}
       title="Withdraw"
       step={step}

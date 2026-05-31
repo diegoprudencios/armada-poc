@@ -23,7 +23,7 @@ const PRE_TERMINAL_STATES = new Set(['pending', 'active', 'waiting', 'retrying']
  * "Cancel" label would be dishonest. Switch to "Stop tracking" copy and call dismissTx, which
  * marks the record DISMISSED instead of CANCELLED so the UI can render explorer-link copy.
  */
-function hasBroadcast(record: TxRecord): boolean {
+export function txHasBroadcast(record: TxRecord): boolean {
   const sourceTxHash = (record.artifacts as { sourceTxHash?: `0x${string}` }).sourceTxHash
   return Boolean(sourceTxHash)
 }
@@ -35,7 +35,7 @@ export function TxActions({ record, variant = 'both' }: TxActionsProps) {
   // Nothing to show on completed records — no Cancel (already done), no Retry (lifecycle finished).
   if (!isInFlight && !canRetry) return null
 
-  const broadcasted = hasBroadcast(record)
+  const broadcasted = txHasBroadcast(record)
   const stopLabel = broadcasted ? 'Stop tracking' : 'Cancel'
   // Confirm before dismissing — the user is intentionally stopping us from watching an on-chain
   // tx that will still run regardless. A bare click on the same place that previously meant

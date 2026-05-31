@@ -38,27 +38,29 @@ describe('<ShieldModal>', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('renders the input step when open', () => {
+  it('renders the deposit overlay with DEPOSIT progress when open', () => {
     renderModal({ open: true, max: 10_000_000n })
     expect(screen.getByRole('dialog', { name: 'Deposit' })).toBeInTheDocument()
-    expect(screen.getByLabelText('How much USDC?')).toBeInTheDocument()
+    expect(screen.getByText('DEPOSIT')).toBeInTheDocument()
+    expect(screen.getByText('STEP 1 OF 3')).toBeInTheDocument()
+    expect(screen.getByText(/How much USDC you want to deposit/i)).toBeInTheDocument()
   })
 
   it('advances to the review step after entering a valid amount', () => {
     renderModal({ open: true, max: 10_000_000n })
-    fireEvent.change(screen.getByLabelText('How much USDC?'), { target: { value: '5' } })
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+    fireEvent.change(screen.getByLabelText('Deposit amount'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
     expect(screen.getByText('Review your deposit')).toBeInTheDocument()
-    // 5.00 appears in both the hero numeral and the FeeSummary net-amount row.
-    expect(screen.getAllByText('5.00').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('STEP 2 OF 3')).toBeInTheDocument()
+    expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(1)
   })
 
   it('Back from review returns to the input step', () => {
     renderModal({ open: true, max: 10_000_000n })
-    fireEvent.change(screen.getByLabelText('How much USDC?'), { target: { value: '5' } })
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+    fireEvent.change(screen.getByLabelText('Deposit amount'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
     fireEvent.click(screen.getByRole('button', { name: /^Back/ }))
-    expect(screen.getByLabelText('How much USDC?')).toBeInTheDocument()
+    expect(screen.getByText(/How much USDC you want to deposit/i)).toBeInTheDocument()
   })
 
   it('Cancel closes the modal', () => {
@@ -69,16 +71,14 @@ describe('<ShieldModal>', () => {
 
   it('Confirm submits the tx and advances to the progress step', async () => {
     renderModal({ open: true, max: 10_000_000n })
-    fireEvent.change(screen.getByLabelText('How much USDC?'), { target: { value: '5' } })
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+    fireEvent.change(screen.getByLabelText('Deposit amount'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Confirm deposit/ }))
     })
-    // ProgressStep renders the TxLifecycleStepper which surfaces the StatusChip; the initial
-    // executionState is 'pending' which maps to the "Pending" chip. submit() awaits IDB
-    // persistence so waitFor() handles the brief gap before the record reaches the atom.
     await waitFor(() => {
       expect(screen.getByText('Pending')).toBeInTheDocument()
+      expect(screen.getByText('STEP 3 OF 3')).toBeInTheDocument()
     })
   })
 })

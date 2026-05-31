@@ -13,14 +13,14 @@ export function formatUsdcPlain(amount: bigint): string {
 }
 
 /**
- * Format a USDC raw amount as a locale-grouped number string with a fixed number of decimals.
- * Suitable for the BalanceHero display ("12,481.22") and similar large-number presentations.
+ * Format a USDC raw amount as a locale-grouped number string.
+ * Omits fractional digits when the amount is a whole number (e.g. "500" not "500.00").
  */
 export function formatUsdcAmount(amount: bigint, options?: { decimals?: number }): string {
   const decimals = options?.decimals ?? 2
   const dollars = Number(amount) / 1e6
   return dollars.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   })
 }

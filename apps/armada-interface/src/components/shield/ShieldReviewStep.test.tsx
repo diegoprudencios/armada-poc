@@ -1,17 +1,17 @@
-// ABOUTME: Tests for ShieldReviewStep — renders amount + chain name + dispatches Back/Confirm.
+// ABOUTME: Tests for ShieldReviewStep — renders amount, network row, total, and dispatches Back/Confirm.
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ShieldReviewStep } from './ShieldReviewStep'
 
-function setup() {
+function setup(opts?: { fee?: bigint | null }) {
   const onBack = vi.fn()
   const onConfirm = vi.fn()
   render(
     <ShieldReviewStep
       fromChainId={31337}
       amount={100_500_000n}
-      fee={null}
+      fee={opts?.fee ?? null}
       netAmount={100_500_000n}
       onBack={onBack}
       onConfirm={onConfirm}
@@ -21,12 +21,22 @@ function setup() {
 }
 
 describe('<ShieldReviewStep>', () => {
-  it('renders the amount and chain name', () => {
+  it('renders the title, amount, network, and total', () => {
     setup()
-    // Amount appears in the hero numeral AND in the FeeSummary's net-amount row (fee=null →
-    // netAmount=amount in this test). Use getAllByText since both spots match.
-    expect(screen.getAllByText('100.50').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('heading', { name: /Review your deposit/i })).toBeInTheDocument()
+    expect(screen.getAllByText('100.5').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Network')).toBeInTheDocument()
     expect(screen.getByText(/Anvil Hub/)).toBeInTheDocument()
+    expect(screen.getByText('Total')).toBeInTheDocument()
+    expect(screen.getAllByText(/100\.5 USDC/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('includes fee in total when fee is non-zero', () => {
+    setup({ fee: 500_000n })
+    const feeRow = screen.getByText('Estimated fee').closest('div')
+    expect(feeRow).toHaveTextContent('0.5 USDC')
+    const totalRow = screen.getByText('Total').closest('div')
+    expect(totalRow).toHaveTextContent('101 USDC')
   })
 
   it('fires onConfirm on the primary CTA', () => {

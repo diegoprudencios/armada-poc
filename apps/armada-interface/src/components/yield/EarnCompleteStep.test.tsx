@@ -8,13 +8,13 @@ describe('<EarnCompleteStep>', () => {
   it("add tab: 'Earning' headline + matching body copy", () => {
     render(<EarnCompleteStep tab="add" netAmount={100_000_000n} onDone={() => {}} />)
     expect(screen.getByRole('heading', { name: 'Earning' })).toBeInTheDocument()
-    expect(screen.getByText(/earning yield on 100\.00 USDC/)).toBeInTheDocument()
+    expect(screen.getByText(/earning yield on 100 USDC/)).toBeInTheDocument()
   })
 
   it("withdraw tab: 'Withdrawn from vault' headline + matching body", () => {
     render(<EarnCompleteStep tab="withdraw" netAmount={50_000_000n} onDone={() => {}} />)
     expect(screen.getByRole('heading', { name: 'Withdrawn from vault' })).toBeInTheDocument()
-    expect(screen.getByText(/Returned 50\.00 USDC/)).toBeInTheDocument()
+    expect(screen.getByText(/Returned 50 USDC/)).toBeInTheDocument()
   })
 
   it('fires onDone on the CTA', () => {

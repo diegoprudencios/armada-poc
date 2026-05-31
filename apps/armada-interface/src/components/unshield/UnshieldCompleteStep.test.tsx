@@ -17,7 +17,7 @@ describe('<UnshieldCompleteStep>', () => {
       />,
     )
     expect(screen.getByRole('heading', { name: 'Withdrawal complete' })).toBeInTheDocument()
-    expect(screen.getByText(/250\.50 USDC/)).toBeInTheDocument()
+    expect(screen.getByText(/250\.5 USDC/)).toBeInTheDocument()
     expect(screen.getByText(/0xabcd\.{3}ef12/)).toBeInTheDocument()
     expect(screen.getByText(/Anvil Hub/)).toBeInTheDocument()
   })

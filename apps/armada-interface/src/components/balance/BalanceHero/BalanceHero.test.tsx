@@ -28,8 +28,8 @@ describe('<BalanceHero>', () => {
   it('renders the shielded total even when yieldShares is still null (yield sync is independent)', () => {
     renderWith({ shielded: 1_000_000n, yieldShares: null })
     expect(screen.queryByText('Syncing private balance…')).not.toBeInTheDocument()
-    // "1.00" appears twice: once in the total, once in the breakdown row.
-    expect(screen.getAllByText('1.00').length).toBeGreaterThanOrEqual(1)
+    // "1" appears twice: once in the total, once in the breakdown row.
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders an em-dash for the earning sub-balance when yieldRate is null (stub returns null today)', () => {

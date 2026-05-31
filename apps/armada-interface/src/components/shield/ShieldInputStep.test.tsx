@@ -1,5 +1,5 @@
-// ABOUTME: Tests for ShieldInputStep — Continue gated on a positive amount within max, error surfaces when amount exceeds max.
-// ABOUTME: Provides a max via prop; the AmountInput renders the AVAILABLE caption with that value.
+// ABOUTME: Tests for ShieldInputStep — Review gated on a positive amount within max, error surfaces when amount exceeds max.
+// ABOUTME: Uses DepositAmountCard (aria-label "Deposit amount") and Review/Cancel CTAs.
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
@@ -12,8 +12,7 @@ function setup(extras?: { max?: bigint; amountStr?: string }) {
     amountStr: extras?.amountStr ?? '',
     onAmountChange: vi.fn(),
     max: extras?.max ?? 5_000_000n,
-    fee: null as bigint | null,
-    netAmount: 0n,
+    fee: 0n,
     onCancel: vi.fn(),
     onContinue: vi.fn(),
   }
@@ -22,30 +21,30 @@ function setup(extras?: { max?: bigint; amountStr?: string }) {
 }
 
 describe('<ShieldInputStep>', () => {
-  it('disables Continue when the amount is empty', () => {
+  it('disables Review when the amount is empty', () => {
     setup()
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).toBeDisabled()
   })
 
-  it('disables Continue when the amount is 0', () => {
+  it('disables Review when the amount is 0', () => {
     setup({ amountStr: '0' })
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).toBeDisabled()
   })
 
-  it('disables Continue and surfaces an error when amount exceeds max', () => {
+  it('disables Review and surfaces an error when amount exceeds max', () => {
     setup({ max: 1_000_000n, amountStr: '5' })
     expect(screen.getByRole('alert')).toHaveTextContent(/exceeds your available balance/i)
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).toBeDisabled()
   })
 
-  it('enables Continue when amount is positive and within max', () => {
+  it('enables Review when amount is positive and within max', () => {
     setup({ max: 5_000_000n, amountStr: '4' })
-    expect(screen.getByRole('button', { name: /Continue/ })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).not.toBeDisabled()
   })
 
   it('fires onContinue when the user submits a valid amount', () => {
     const props = setup({ max: 5_000_000n, amountStr: '4' })
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
     expect(props.onContinue).toHaveBeenCalledTimes(1)
   })
 

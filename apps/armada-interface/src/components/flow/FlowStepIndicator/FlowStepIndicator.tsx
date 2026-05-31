@@ -12,6 +12,8 @@ export interface FlowStepIndicatorProps {
   totalSteps: number
   /** Optional human labels for each step (length should match totalSteps). */
   steps?: string[]
+  /** Fixed flow title (e.g. "Deposit") — shown left instead of the active step name. */
+  flowLabel?: string
   /** When `confirmed`, all segments use success green (crowdfund Steps parity). */
   status?: FlowStepIndicatorStatus
   className?: string
@@ -21,14 +23,20 @@ export function FlowStepIndicator({
   currentStep,
   totalSteps,
   steps,
+  flowLabel,
   status = 'default',
   className,
 }: FlowStepIndicatorProps) {
   const total = Math.max(1, Math.floor(totalSteps))
   const current = Math.max(1, Math.min(total, Math.floor(currentStep)))
 
-  const stepName = steps?.[current - 1]?.toUpperCase() ?? ''
-  const stepCount = `STEP ${current} OF ${total}`
+  const stepName = flowLabel
+    ? flowLabel.toUpperCase()
+    : (steps?.[current - 1]?.toUpperCase() ?? '')
+  const stepCount =
+    status === 'confirmed'
+      ? `STEP ${total} OF ${total}`
+      : `STEP ${current} OF ${total}`
 
   const cls = [styles.container, className].filter(Boolean).join(' ')
   return (

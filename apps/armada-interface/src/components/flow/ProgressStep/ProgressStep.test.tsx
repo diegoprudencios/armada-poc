@@ -1,8 +1,9 @@
 // ABOUTME: Tests for ProgressStep — pre-record placeholder vs. delegating to TxLifecycleStepper once a record exists.
-// ABOUTME: We assert via well-known stage copy ("Preparing transaction") that TxLifecycleStepper rendered.
+// ABOUTME: Deposit mode (onClose): centered Cancel pre-broadcast; dismiss hint + Close after broadcast.
 
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { DEV_SIMULATED_TX_HASH } from '@/lib/tx/devSimulateTx'
 import { ProgressStep } from './ProgressStep'
 import type { TxRecord } from '@/lib/tx/types'
 
@@ -24,18 +25,56 @@ const sampleRecord: TxRecord<'shield'> = {
   },
 }
 
+const broadcastRecord: TxRecord<'shield'> = {
+  ...sampleRecord,
+  stage: 'submit-relayer',
+  artifacts: {
+    sourceTxHash: DEV_SIMULATED_TX_HASH,
+  },
+}
+
 describe('<ProgressStep>', () => {
   it('renders preparing placeholder when no record exists', () => {
-    render(<ProgressStep record={null} />)
+    render(<ProgressStep record={null} title="Deposit in progress" onClose={() => {}} />)
+    expect(screen.getByRole('heading', { name: 'Deposit in progress' })).toBeInTheDocument()
     expect(screen.getByText('Preparing transaction')).toBeInTheDocument()
-    expect(screen.getByText('Hang on a moment…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    expect(screen.queryByText('You can close this window while we finish')).toBeNull()
   })
 
   it('delegates to TxLifecycleStepper when record is present', () => {
     render(<ProgressStep record={sampleRecord} />)
-    // TxLifecycleStepper renders one row per lifecycle stage; the first is "Preparing transaction"
-    // which is shield's build-proof copy. Status chip "Pending" should also be visible.
     expect(screen.getByText('Pending')).toBeInTheDocument()
     expect(screen.getByText('Preparing transaction')).toBeInTheDocument()
+  })
+
+  it('shows centered Cancel before broadcast in deposit mode', () => {
+    render(
+      <ProgressStep
+        record={sampleRecord}
+        title="Deposit in progress"
+        onClose={() => {}}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    expect(screen.queryByText('You can close this window while we finish')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop tracking' })).toBeNull()
+  })
+
+  it('shows dismiss hint and Close after broadcast in deposit mode', () => {
+    const onClose = vi.fn()
+    render(
+      <ProgressStep
+        record={broadcastRecord}
+        title="Deposit in progress"
+        onClose={onClose}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop tracking' })).toBeNull()
+    expect(screen.getByText('You can close this window while we finish')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

@@ -12,10 +12,12 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
+import { OVERLAY_EXIT_MS } from '@/constants/overlayMotion'
+import { useOverlayExitTransition } from '@/hooks/useOverlayExitTransition'
 import styles from './Modal.module.css'
 
 export interface ModalProps {
-  /** Whether the modal is open. When false the component returns null (no portal, no listeners). */
+  /** Whether the modal is open. When false, exit animations run before unmount. */
   open: boolean
   /** Called when the user presses ESC, clicks the backdrop, or clicks the close button. Ignored when dismissible=false. */
   onClose: () => void
@@ -71,21 +73,21 @@ export function Modal({
   const dialogRef = useRef<HTMLDivElement | null>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const headingId = useId()
+  const { mounted, exiting } = useOverlayExitTransition(open, OVERLAY_EXIT_MS)
 
   // Track previously-focused element + move focus into the dialog on open; restore on close.
   useEffect(() => {
-    if (!open) return
+    if (!mounted || exiting) return
     previouslyFocused.current = (document.activeElement as HTMLElement | null) ?? null
-    // Move focus to the dialog so keyboard users land inside it.
     dialogRef.current?.focus()
     return () => {
       previouslyFocused.current?.focus?.()
     }
-  }, [open])
+  }, [mounted, exiting])
 
   // ESC dismissal.
   useEffect(() => {
-    if (!open || !dismissible) return
+    if (!mounted || exiting || !dismissible) return
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.stopPropagation()
@@ -96,25 +98,25 @@ export function Modal({
     return () => {
       document.removeEventListener('keydown', onKey)
     }
-  }, [open, dismissible, onClose])
+  }, [mounted, exiting, dismissible, onClose])
 
-  // Body scroll lock while the modal is open.
+  // Body scroll lock while mounted (including exit animation).
   useEffect(() => {
-    if (!open) return
+    if (!mounted) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = prev
     }
-  }, [open])
+  }, [mounted])
 
   const onBackdropClick = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>) => {
-      if (!dismissible) return
+      if (!dismissible || exiting) return
       // Only close when the click target is the backdrop itself, not bubbled from the dialog.
       if (e.target === e.currentTarget) onClose()
     },
-    [dismissible, onClose],
+    [dismissible, exiting, onClose],
   )
 
   // Prevent Tab/Shift+Tab from escaping the dialog by capturing keydowns at the dialog root.
@@ -129,13 +131,14 @@ export function Modal({
     void e
   }, [])
 
-  if (!open) return null
+  if (!mounted) return null
 
   const closeVisible = showCloseButton ?? dismissible
 
   const dialog = (
     <div
       className={[styles.backdrop, className].filter(Boolean).join(' ')}
+      data-exiting={exiting ? true : undefined}
       onMouseDown={onBackdropClick}
       role="presentation"
     >
@@ -150,6 +153,7 @@ export function Modal({
         <div
           ref={dialogRef}
           className={[styles.dialog, dialogClassName].filter(Boolean).join(' ')}
+          data-exiting={exiting ? true : undefined}
           role="dialog"
           aria-modal="true"
           aria-labelledby={title ? headingId : undefined}
