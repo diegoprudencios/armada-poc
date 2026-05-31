@@ -7,6 +7,12 @@ export type { ArmadaLogoProps } from './components/ArmadaLogo'
 export { Button } from './components/Button'
 export type { ButtonProps, ButtonVariant, ButtonSize } from './components/Button'
 
+export { Text } from './components/Text'
+export type { TextProps, TypographyVariant } from './components/Text'
+
+export { HeadingSm } from './components/HeadingSm'
+export type { HeadingSmProps } from './components/HeadingSm'
+
 export { Tag } from './components/Tag'
 export type { TagProps, TagDot } from './components/Tag'
 

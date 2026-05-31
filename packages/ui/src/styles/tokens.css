@@ -6,9 +6,9 @@
  *   --primitives-*  raw values (color scales, font sizes, spacing, radii, etc.)
  *   --semantic-*    contextual aliases (surface bg, text color, button-md height, etc.)
  *
- * Forward direction: a build script will regenerate this file from armada-tokens.json
- * once recovered or rewritten. Until then, this CSS is the live source of truth — edit
- * it directly AND keep armada-tokens.json in sync so the future migration is clean.
+ * Typography composites (ui/heading-sm, etc.) are generated — see typography.css via
+ * `npm run tokens:typography --workspace=@armada/ui`. Primitives/semantic colors here
+ * are still hand-maintained; keep armada-tokens.json in sync when editing.
  *
  * Note: some token values are intentionally unitless (e.g. --primitives-fontSize-xs: 10).
  * That matches the mockup's emission style; consuming CSS multiplies by px where needed.
@@ -244,3 +244,5 @@
   --semantic-component-tag-dot-error: #f87171;
   --semantic-component-tag-dot-neutral: #9990a9;
 }
+
+@import "./typography.css";

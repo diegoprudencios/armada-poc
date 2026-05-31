@@ -1,0 +1,38 @@
+---
+description: Typography file workflow — JSON source of truth, generated CSS, regeneration command
+alwaysApply: true
+---
+
+# Typography file workflow
+
+Composite typography is defined once in JSON and emitted to CSS/TS. Do not maintain parallel copies in component modules.
+
+## Source of truth
+
+| File | Role |
+|------|------|
+| `packages/ui/src/tokens/armada-tokens.json` | **Edit here** — `semantic.typography.*` composites |
+| `packages/ui/src/styles/tokens.css` | Hand-maintained colors/spacing; **imports** generated typography |
+
+## Generated (do not hand-edit)
+
+| File | Produced by |
+|------|-------------|
+| `packages/ui/src/styles/typography.css` | `npm run tokens:typography --workspace=@armada/ui` |
+| `packages/ui/src/typography/variants.ts` | same command |
+
+Generated output includes `--semantic-typography-*` CSS variables and `.armada-text-*` utility classes.
+
+## Workflow
+
+1. Change composites only in `armada-tokens.json`.
+2. From repo root: `npm run tokens:typography --workspace=@armada/ui`
+3. Commit JSON **and** both generated files together.
+4. **Never** hand-edit `typography.css` or `variants.ts`.
+
+Apps import composites via `@armada/ui/styles/tokens.css` (which pulls in `typography.css`).
+
+## Reference
+
+- `packages/ui/TYPOGRAPHY.md` — composite list and consumption patterns
+- `docs/DECISION_LOG.md` — rationale (2026-05-30)

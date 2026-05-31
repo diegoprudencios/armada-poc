@@ -588,11 +588,11 @@
             "fontFamily": "{fontFamily.ui}",
             "fontWeight": "{fontWeight.medium}",
             "fontSize": "{fontSize.lg}",
-            "lineHeight": "{lineHeight.snug}",
+            "lineHeight": "{spacing.6}",
             "letterSpacing": "{letterSpacing.tight}"
           },
           "type": "typography",
-          "description": "17px \u2014 subheadings"
+          "description": "17px / 24px line-height \u2014 step titles, subheadings"
         },
         "body-lg": {
           "value": {
