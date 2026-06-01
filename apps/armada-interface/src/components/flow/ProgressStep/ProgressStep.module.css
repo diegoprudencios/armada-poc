@@ -16,6 +16,25 @@
   margin: 0;
 }
 
+.walletTitle {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-regular);
+  font-size: calc(var(--primitives-fontSize-2xl) * 1px);
+  line-height: var(--primitives-lineHeight-snug);
+  color: var(--semantic-color-text-primary);
+  text-align: center;
+  margin: 0;
+}
+
+.walletFooterText {
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
+  font-weight: var(--primitives-fontWeight-regular);
+  font-size: calc(var(--primitives-fontSize-base) * 1px);
+  color: var(--semantic-color-text-secondary);
+  text-align: center;
+  margin: 0;
+}
+
 .statusCard {
   background: var(--semantic-color-surface-raised);
   border: 1px solid var(--semantic-color-border-default);

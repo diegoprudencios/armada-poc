@@ -23,7 +23,7 @@
 }
 
 .address {
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-base) * 1px);
   color: var(--semantic-color-text-primary);
   font-variant-numeric: tabular-nums;

@@ -2,8 +2,7 @@
 // ABOUTME: Pure dry-run: never touches keyManager, never calls SDK. Pass on success; surface decrypt failures inline.
 
 import { useEffect, useId, useState, type ChangeEvent, type FormEvent } from 'react'
-import { CheckCircle2 } from 'lucide-react'
-import { HeadingSm } from '@armada/ui'
+import { Text } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import {
   antiPhishChecksumBytes,
@@ -67,7 +66,9 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
 
   return (
     <form className={styles.root} onSubmit={handleSubmit}>
-      <HeadingSm as="div" className={styles.headline}>Confirm your backup</HeadingSm>
+      <Text variant="display-lg" as="h2" className={styles.headline}>
+        Confirm your backup
+      </Text>
       <p className={styles.body}>
         Re-upload the backup file you just downloaded and enter the passphrase you set. This
         confirms you can restore your account — your account isn't activated until this succeeds.
@@ -109,12 +110,11 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
         <div role="alert" className={styles.error}>{error}</div>
       ) : null}
       {verified ? (
-        <div style={{ color: 'var(--semantic-color-status-success)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <CheckCircle2 size={16} aria-hidden="true" /> Backup verified — checksum matches.
-        </div>
+        <p className={styles.success}>Backup verified — checksum matches.</p>
       ) : null}
       <FlowFooter
         className={styles.footer}
+        layout="stack"
         primary={{
           label: verifying ? 'Verifying…' : 'Verify backup',
           type: 'submit',

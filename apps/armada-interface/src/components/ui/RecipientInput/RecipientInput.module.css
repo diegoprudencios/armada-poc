@@ -53,7 +53,7 @@
   background: transparent;
   padding: var(--primitives-spacing-3) var(--primitives-spacing-3);
   color: var(--semantic-color-text-primary);
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   outline: none;
 }
 

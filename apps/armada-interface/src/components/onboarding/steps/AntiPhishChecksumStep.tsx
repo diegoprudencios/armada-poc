@@ -2,8 +2,7 @@
 // ABOUTME: Post-sign checkpoint: Continue advances to backup; Cancel opens a destructive confirm that wipes the enrolled wallet on this device.
 
 import { useState } from 'react'
-import { Fingerprint } from 'lucide-react'
-import { HeadingSm } from '@armada/ui'
+import { Text } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import { CancelSetupConfirmDialog } from '../CancelSetupConfirmDialog'
 import styles from './AntiPhishChecksumStep.module.css'
@@ -25,10 +24,9 @@ export function AntiPhishChecksumStep({
   return (
     <>
       <div className={styles.root}>
-        <div className={styles.icon} aria-hidden="true">
-          <Fingerprint size={40} />
-        </div>
-        <HeadingSm>Your anti-phishing code</HeadingSm>
+        <Text variant="display-lg" as="h2" className={styles.title}>
+          Your anti-phishing code
+        </Text>
         <p className={styles.body}>
           This 12-character code is unique to your account. Future unlock screens display it so you
           can spot impostor sites that don't know your real keys. Write it down or commit it to memory.
@@ -38,6 +36,7 @@ export function AntiPhishChecksumStep({
         </div>
         <FlowFooter
           className={styles.footer}
+          layout="stack"
           primary={{ label: 'Continue', onClick: onContinue, showIcon: false }}
           secondary={{ label: 'Cancel', onClick: () => setConfirmOpen(true), showIcon: false }}
         />

@@ -23,7 +23,7 @@
 }
 
 .amountValue {
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-weight: var(--primitives-fontWeight-regular);
   font-size: calc(var(--primitives-fontSize-4xl) * 1px);
   line-height: var(--primitives-lineHeight-snug);

@@ -8,9 +8,73 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding-top: var(--primitives-spacing-20);
+  padding-top: calc(var(--primitives-spacing-20) + var(--primitives-spacing-11));
   padding-bottom: var(--primitives-spacing-12);
   overflow-y: auto;
+}
+
+.chrome {
+  position: fixed;
+  top: var(--primitives-spacing-6);
+  left: 0;
+  right: 0;
+  z-index: 201;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--primitives-spacing-6);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.root:not([data-exiting]) .chrome {
+  animation: depositChromeIn 200ms ease-out 220ms forwards;
+}
+
+.root[data-exiting] .chrome {
+  animation: depositContentOut 260ms ease-in forwards;
+}
+
+.chrome > * {
+  pointer-events: auto;
+}
+
+.logo {
+  display: block;
+  flex-shrink: 0;
+  width: var(--primitives-spacing-12);
+  height: var(--primitives-spacing-12);
+}
+
+.closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--primitives-spacing-12);
+  height: var(--primitives-spacing-12);
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--semantic-color-border-default);
+  color: var(--semantic-color-text-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.closeButton:hover {
+  background: var(--primitives-color-neutral-200);
+  color: var(--semantic-color-text-primary);
+  border-color: var(--semantic-color-border-default);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--semantic-color-border-focus);
+  outline-offset: 2px;
+}
+
+.closePlaceholder {
+  width: var(--primitives-spacing-12);
+  height: var(--primitives-spacing-12);
+  flex-shrink: 0;
 }
 
 .backdrop {
@@ -68,6 +132,15 @@
   }
 }
 
+@keyframes depositChromeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes depositContentIn {
   from {
     opacity: 0;
@@ -101,9 +174,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .root:not([data-exiting]) .backdrop,
+  .root:not([data-exiting]) .chrome,
   .root:not([data-exiting]) .column,
   .root[data-exiting] .backdrop,
+  .root[data-exiting] .chrome,
   .root[data-exiting] .column {
     animation: none;
+  }
+
+  .root:not([data-exiting]) .chrome {
+    opacity: 1;
   }
 }

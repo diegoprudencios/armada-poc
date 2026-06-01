@@ -587,6 +587,17 @@
           "type": "typography",
           "description": "20px \u2014 card titles"
         },
+        "heading-xl": {
+          "value": {
+            "fontFamily": "{fontFamily.ui}",
+            "fontWeight": "{fontWeight.medium}",
+            "fontSize": "{fontSize.3xl}",
+            "lineHeight": "{lineHeight.snug}",
+            "letterSpacing": "{letterSpacing.tight}"
+          },
+          "type": "typography",
+          "description": "32px \u2014 prominent step titles"
+        },
         "heading-sm": {
           "value": {
             "fontFamily": "{fontFamily.ui}",

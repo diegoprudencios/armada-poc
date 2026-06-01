@@ -247,6 +247,10 @@ export interface ArtifactsXchain extends ArtifactsCommon {
  * or re-computing the engine-side request. `value` is stringified for IDB serializability.
  */
 export interface ArtifactsShield extends ArtifactsCommon {
+  /** True when allowance was already sufficient — deposit progress UI skips the approve row. */
+  approveSkipped?: boolean
+  /** ERC-20 approve tx hash when the user submitted an approval before shield. */
+  approveTxHash?: `0x${string}`
   privacyPoolAddress?: string
   usdcAddress?: string
   shieldRequest?: {
@@ -278,6 +282,8 @@ export interface ArtifactsYield extends ArtifactsCommon {
  * & ArtifactsXchain` so the manifest is explicit and easy to read.
  */
 export interface ArtifactsShieldXchain extends ArtifactsXchain {
+  approveSkipped?: boolean
+  approveTxHash?: `0x${string}`
   /** Hub PrivacyPool address — used by the hub mint detection to scope log queries. */
   privacyPoolAddress?: string
   /** Client PrivacyPoolClient address — used by submit-relayer to call crossChainShield. */

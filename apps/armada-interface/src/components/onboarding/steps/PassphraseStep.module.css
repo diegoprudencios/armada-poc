@@ -4,18 +4,18 @@
 .root {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--primitives-spacing-4);
-  text-align: left;
+  text-align: center;
 }
 
 .headline {
-  text-align: left;
+  margin: 0;
+  width: 100%;
 }
 
 .body {
   color: var(--semantic-color-text-muted);
-  text-align: left;
   max-width: 46ch;
   margin: 0;
 }
@@ -25,6 +25,8 @@
   flex-direction: column;
   gap: var(--primitives-spacing-2);
   width: 100%;
+  align-self: stretch;
+  text-align: left;
 }
 
 .body + .field {
@@ -69,22 +71,19 @@
 
 .error {
   color: var(--semantic-color-status-error);
+  margin: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.success {
+  color: var(--semantic-color-status-success);
+  margin: 0;
+  width: 100%;
+  text-align: center;
 }
 
 .footer {
   align-self: stretch;
   margin-top: var(--primitives-spacing-8);
-  border-top: none;
-  padding: 0;
-  display: flex;
-  gap: var(--primitives-spacing-3);
-}
-
-.footer > div {
-  flex: 1 1 0;
-}
-
-.footer :global(button) {
-  width: 100%;
-  justify-content: center;
 }

@@ -24,6 +24,26 @@ describe('<DepositOverlayShell>', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('renders Armada symbol and close when onClose is provided', () => {
+    const onClose = vi.fn()
+    render(
+      <DepositOverlayShell open currentStep={1} onClose={onClose}>
+        <div>content</div>
+      </DepositOverlayShell>,
+    )
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Deposit')).toBeInTheDocument()
+  })
+
+  it('hides close during non-dismissible progress', () => {
+    render(
+      <DepositOverlayShell open currentStep={2} onClose={() => {}} dismissible={false}>
+        <div>content</div>
+      </DepositOverlayShell>,
+    )
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+  })
+
   it('sets data-exiting on close and unmounts after exit duration', () => {
     vi.useFakeTimers()
     const { rerender } = render(

@@ -168,7 +168,7 @@
 
 .amountDisplay,
 .amountInput {
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-4xl) * 1px);
   font-weight: var(--primitives-fontWeight-regular);
   line-height: var(--primitives-lineHeight-snug);

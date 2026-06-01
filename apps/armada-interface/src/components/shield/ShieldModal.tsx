@@ -125,6 +125,8 @@ export function ShieldModal() {
   return (
     <DepositOverlayShell
       open={isOpen}
+      onClose={close}
+      dismissible={step !== 'progress'}
       flowLabel="Deposit"
       currentStep={indicatorStep}
       status={indicatorStatus}
@@ -171,7 +173,8 @@ export function ShieldModal() {
       {step === 'progress' ? (
         <ProgressStep
           record={record}
-          title="Deposit in progress"
+          ux="wallet"
+          depositAmount={amount}
           onClose={close}
         />
       ) : null}

@@ -1,8 +1,10 @@
-// ABOUTME: Full-viewport deposit overlay — replaces ActionFlowShell/Modal for the shield (deposit) flow.
+// ABOUTME: Full-viewport deposit overlay — replaces ActionFlowShell/Modal for shield/unshield/send/earn flows.
 // ABOUTME: Backdrop fades in first, then content; on close, content exits then backdrop.
 
 import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { X } from 'lucide-react'
+import { ArmadaSymbol } from '@armada/ui'
 import { OVERLAY_EXIT_MS } from '@/constants/overlayMotion'
 import { useOverlayExitTransition } from '@/hooks/useOverlayExitTransition'
 import {
@@ -14,6 +16,13 @@ import styles from './DepositOverlayShell.module.css'
 
 export interface DepositOverlayShellProps {
   open: boolean
+  /** Closes the flow (wired to the upper-right X). */
+  onClose?: () => void
+  /**
+   * When false, hides the close control (e.g. wallet-confirmation progress).
+   * Defaults to true when `onClose` is provided.
+   */
+  dismissible?: boolean
   /** Shown in the step indicator (e.g. Deposit, Withdraw, Send, Earn). */
   flowLabel?: string
   /** Dialog aria-label; defaults to flowLabel. */
@@ -28,6 +37,8 @@ export interface DepositOverlayShellProps {
 
 export function DepositOverlayShell({
   open,
+  onClose,
+  dismissible: dismissibleProp,
   flowLabel = 'Deposit',
   ariaLabel,
   currentStep,
@@ -36,6 +47,8 @@ export function DepositOverlayShell({
   children,
 }: DepositOverlayShellProps) {
   const label = ariaLabel ?? flowLabel
+  const dismissible = dismissibleProp ?? Boolean(onClose)
+  const showCloseButton = dismissible && Boolean(onClose)
   const { mounted, exiting } = useOverlayExitTransition(open, OVERLAY_EXIT_MS)
 
   useEffect(() => {
@@ -46,6 +59,15 @@ export function DepositOverlayShell({
       document.body.style.overflow = prev
     }
   }, [mounted])
+
+  useEffect(() => {
+    if (!mounted || !showCloseButton || !onClose) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mounted, showCloseButton, onClose])
 
   if (!mounted) return null
 
@@ -58,6 +80,21 @@ export function DepositOverlayShell({
       data-exiting={exiting ? true : undefined}
     >
       <div className={styles.backdrop} aria-hidden />
+      <header className={styles.chrome}>
+        <ArmadaSymbol className={styles.logo} size={48} />
+        {showCloseButton ? (
+          <button
+            type="button"
+            className={styles.closeButton}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <X size={24} aria-hidden="true" />
+          </button>
+        ) : (
+          <span className={styles.closePlaceholder} aria-hidden />
+        )}
+      </header>
       <div className={styles.column}>
         <FlowStepIndicator
           flowLabel={flowLabel}

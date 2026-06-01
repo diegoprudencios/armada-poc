@@ -197,6 +197,7 @@ async function runSubmitAndConfirm(
   })
   if (ctx.signal.aborted) throw new Error('cancelled')
 
+  let working = record
   if (allowance < record.meta.amount) {
     // Approve max — same UX trade-off as the legacy app (one approval, all future shields free).
     const approveHash = await writeContract(wagmiConfig, {
@@ -205,8 +206,13 @@ async function runSubmitAndConfirm(
       functionName: 'approve',
       args: [privacyPoolAddress as `0x${string}`, maxUint256],
     })
+    working = patchArtifacts(working, { approveTxHash: approveHash })
+    await ctx.upsert(working)
     await waitForReceiptOrFail({ hash: approveHash, signal: ctx.signal })
     if (ctx.signal.aborted) throw new Error('cancelled')
+  } else {
+    working = patchArtifacts(working, { approveSkipped: true })
+    await ctx.upsert(working)
   }
 
   // 2. Submit the shield tx. Compose the tuple from the stored artifacts.
@@ -237,7 +243,7 @@ async function runSubmitAndConfirm(
   // patched record forward to the final advance: `record` is now stale (updatedSeq lower than
   // what's in the atom/IDB), so building advance from `record` would produce an equal-seq
   // write that OCC silently drops, leaving the executor stuck re-entering this stage.
-  const broadcastRecord = patchArtifacts(record, { sourceTxHash: shieldHash })
+  const broadcastRecord = patchArtifacts(working, { sourceTxHash: shieldHash })
   await ctx.upsert(broadcastRecord)
   if (ctx.signal.aborted) throw new Error('cancelled')
 

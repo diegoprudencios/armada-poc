@@ -1,5 +1,4 @@
-/* ABOUTME: AntiPhishChecksumStep layout — centered icon, headline, body, code block, edge-to-edge footer. */
-/* ABOUTME: Mirrors WelcomeStep icon-chip pattern; code block draws the eye. */
+/* ABOUTME: AntiPhishChecksumStep layout — centered headline, body, code block, edge-to-edge footer. */
 
 .root {
   display: flex;
@@ -7,18 +6,6 @@
   align-items: center;
   gap: var(--primitives-spacing-4);
   text-align: center;
-}
-
-.icon {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(196, 145, 229, 0.12);
-  color: var(--semantic-color-brand-lavender);
-  margin-bottom: calc(var(--primitives-spacing-6) - var(--primitives-spacing-4));
 }
 
 .body {
@@ -37,23 +24,14 @@
   padding: var(--primitives-spacing-3) var(--primitives-spacing-4);
   color: var(--semantic-color-text-primary);
   margin: 0;
-  align-self: stretch;
+  width: max-content;
+  max-width: 100%;
+}
+
+.title {
+  margin: 0;
 }
 
 .footer {
-  align-self: stretch;
   margin-top: var(--primitives-spacing-8);
-  border-top: none;
-  padding: 0;
-  display: flex;
-  gap: var(--primitives-spacing-3);
-}
-
-.footer > div {
-  flex: 1 1 0;
-}
-
-.footer :global(button) {
-  width: 100%;
-  justify-content: center;
 }

@@ -227,6 +227,7 @@ async function runSubmitAndBurn(
   })
   if (ctx.signal.aborted) throw new Error('cancelled')
 
+  let working = record
   if (allowance < record.meta.amount) {
     const approveHash = await writeContract(wagmiConfig, {
       address: clientUsdcAddress as `0x${string}`,
@@ -234,7 +235,13 @@ async function runSubmitAndBurn(
       functionName: 'approve',
       args: [privacyPoolClientAddress as `0x${string}`, maxUint256],
     })
+    working = patchArtifacts(working, { approveTxHash: approveHash })
+    await ctx.upsert(working)
     await waitForReceiptOrFail({ hash: approveHash, signal: ctx.signal, chainId: record.meta.fromChainId })
+    if (ctx.signal.aborted) throw new Error('cancelled')
+  } else {
+    working = patchArtifacts(working, { approveSkipped: true })
+    await ctx.upsert(working)
   }
 
   // 2. destinationCaller = the HUB's hookRouter, in bytes32 form. Constrains who can call
@@ -283,7 +290,7 @@ async function runSubmitAndBurn(
   // record MUST be threaded into the final advance below — `record` is now stale (lower
   // updatedSeq than the atom/IDB) so an advance from it would produce an equal-seq write that
   // OCC silently drops, leaving the executor looping on this stage.
-  const broadcastRecord = patchArtifacts(record, { sourceTxHash: hash })
+  const broadcastRecord = patchArtifacts(working, { sourceTxHash: hash })
   await ctx.upsert(broadcastRecord)
   if (ctx.signal.aborted) throw new Error('cancelled')
 

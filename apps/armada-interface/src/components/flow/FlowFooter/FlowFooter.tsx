@@ -8,6 +8,8 @@ export interface FlowAction {
   label: string
   onClick?: () => void
   disabled?: boolean
+  /** Spinner + default colors; blocks repeat submit without muted disabled styling. */
+  loading?: boolean
   /** Optional override for the underlying @armada/ui Button variant. */
   variant?: ButtonVariant
   /** Force the trailing arrow icon on/off. Primary defaults true; secondary defaults false. */
@@ -20,10 +22,41 @@ export interface FlowFooterProps {
   primary: FlowAction
   secondary?: FlowAction
   className?: string
+  /** Row: secondary left, primary right (default). Stack: primary on top, secondary below (ghost by default). */
+  layout?: 'row' | 'stack'
 }
 
-export function FlowFooter({ primary, secondary, className }: FlowFooterProps) {
-  const cls = [styles.root, className].filter(Boolean).join(' ')
+export function FlowFooter({ primary, secondary, className, layout = 'row' }: FlowFooterProps) {
+  const cls = [styles.root, layout === 'stack' && styles.rootStack, className].filter(Boolean).join(' ')
+
+  if (layout === 'stack') {
+    return (
+      <footer className={cls}>
+        <Button
+          variant={primary.variant ?? 'primary'}
+          size="md"
+          label={primary.label}
+          showIcon={primary.showIcon ?? true}
+          disabled={primary.disabled}
+          loading={primary.loading}
+          onClick={primary.onClick}
+          type={primary.type ?? 'button'}
+        />
+        {secondary ? (
+          <Button
+            variant={secondary.variant ?? 'ghost'}
+            size="md"
+            label={secondary.label}
+            showIcon={secondary.showIcon ?? false}
+            disabled={secondary.disabled}
+            onClick={secondary.onClick}
+            type={secondary.type ?? 'button'}
+          />
+        ) : null}
+      </footer>
+    )
+  }
+
   return (
     <footer className={cls}>
       <div className={styles.left}>
@@ -46,6 +79,7 @@ export function FlowFooter({ primary, secondary, className }: FlowFooterProps) {
           label={primary.label}
           showIcon={primary.showIcon ?? true}
           disabled={primary.disabled}
+          loading={primary.loading}
           onClick={primary.onClick}
           type={primary.type ?? 'button'}
         />

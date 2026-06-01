@@ -46,16 +46,15 @@ export function ShieldDepositSummary({
       <hr className={styles.summaryDivider} />
       {protocolFee > 0n ? (
         <>
-          <hr className={styles.summaryDivider} />
           <div className={styles.summaryRow}>
             <span className={styles.summaryLabel}>You&apos;ll receive</span>
             <span className={styles.summaryValue}>
               {formatUsdcAmount(netDeposit)} USDC
             </span>
           </div>
+          <hr className={styles.summaryDivider} />
         </>
       ) : null}
-      <hr className={styles.summaryDivider} />
       <div className={styles.summaryRow}>
         <span className={styles.summaryLabel}>Total from wallet</span>
         <span className={styles.summaryValue}>{totalLabel}</span>

@@ -1,8 +1,7 @@
 // ABOUTME: Step 5 of onboarding — celebratory "You're in" panel; single Done CTA returns to the Dashboard.
 // ABOUTME: This step is only shown after createWallet succeeds. The actual atom write (status='unlocked') is the parent's responsibility.
 
-import { Button, HeadingSm } from '@armada/ui'
-import { CheckCircle2 } from 'lucide-react'
+import { Button, Text } from '@armada/ui'
 import styles from './CompleteStep.module.css'
 
 export interface CompleteStepProps {
@@ -12,22 +11,22 @@ export interface CompleteStepProps {
 export function CompleteStep({ onDone }: CompleteStepProps) {
   return (
     <div className={styles.root}>
-      <div className={styles.icon} aria-hidden="true">
-        <CheckCircle2 size={40} />
-      </div>
-      <HeadingSm>You&apos;re in</HeadingSm>
+      <Text variant="display-xl" as="h1" className={styles.title}>
+        You&apos;re in
+      </Text>
       <p className={styles.body}>
         Your private USDC account is ready. You can now deposit, withdraw, send, and earn —
         all privately.
       </p>
-      <Button
-        className={styles.cta}
-        variant="primary"
-        size="md"
-        label="Go to dashboard"
-        showIcon={false}
-        onClick={onDone}
-      />
+      <div className={styles.actions}>
+        <Button
+          variant="gradient"
+          size="md"
+          label="Go to dashboard"
+          showIcon
+          onClick={onDone}
+        />
+      </div>
     </div>
   )
 }

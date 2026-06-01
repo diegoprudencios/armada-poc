@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { AppLayout } from '@/components/AppLayout'
-import { OnboardingFlow, UnlockFlow } from '@/components/onboarding'
+import { OnboardingFlowV2, UnlockFlow } from '@/components/onboarding'
 import { ShieldModal } from '@/components/shield'
 import { UnshieldModal } from '@/components/unshield'
 import { SendModal } from '@/components/payments'
@@ -138,7 +138,7 @@ export function App() {
     // Always offer the Restore escape hatch — the onboarding flow has no way to know whether
     // the user is genuinely new vs. arriving on a new device with an existing backup. The link
     // is harmless for genuinely new users (they ignore it) and load-bearing for the second case.
-    return <OnboardingFlow onDone={() => setMode('app')} onRestore={() => setMode('unlock')} />
+    return <OnboardingFlowV2 onDone={() => setMode('app')} onRestore={() => setMode('unlock')} />
   }
 
   if (mode === 'unlock') {
@@ -161,7 +161,6 @@ export function App() {
     return (
       <UnlockFlow
         onUnlocked={() => setMode('app')}
-        onBack={isLocalMode() ? handleStartOver : undefined}
         onCreateNew={handleStartOver}
         createNewLabel={
           hadPersistedWalletAtBoot ? 'Start over and create a new account' : undefined

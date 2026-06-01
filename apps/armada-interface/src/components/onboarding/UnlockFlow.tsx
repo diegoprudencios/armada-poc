@@ -2,9 +2,8 @@
 // ABOUTME: Re-signing was explored but removed (specs/TX_SIGNING.md §"Recovery"): non-deterministic wallets produce a different identity each time. Paste / backup are the canonical paths.
 
 import { useId, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Lock } from 'lucide-react'
 import { Button } from '@armada/ui'
-import { OnboardingShell } from './OnboardingShell'
+import { OnboardingLayout } from '@/components/OnboardingLayout/OnboardingLayout'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import { Tabs, Tooltip } from '@/components/ui'
 import { useShieldedWallet } from '@/hooks/useShieldedWallet'
@@ -14,8 +13,6 @@ import styles from './UnlockFlow.module.css'
 export interface UnlockFlowProps {
   /** Called when unlock succeeds. Parent flips App-level mode to "app". */
   onUnlocked: () => void
-  /** Optional escape hatch — return to onboarding welcome. */
-  onBack?: () => void
   /**
    * Optional escape hatch — switches to the create-new-account flow. Hidden on testnet when this
    * device already had a wallet at boot (avoid orphaning). Always available in local mode.
@@ -42,7 +39,7 @@ const PASTE_SECRET_PLACEHOLDER =
 const PASTE_HEADS_UP =
   'Pasting the raw secret triggers a full chain rescan to recover your balances. This can take a few minutes on the first unlock. For faster restores in the future, use the encrypted Backup file instead — and re-export a fresh backup from Settings once this scan completes.'
 
-export function UnlockFlow({ onUnlocked, onBack, onCreateNew, createNewLabel }: UnlockFlowProps) {
+export function UnlockFlow({ onUnlocked, onCreateNew, createNewLabel }: UnlockFlowProps) {
   const { unlockByPaste, unlockByBackup } = useShieldedWallet()
   const [mode, setMode] = useState<Mode>('backup')
   const [submitting, setSubmitting] = useState(false)
@@ -117,33 +114,9 @@ export function UnlockFlow({ onUnlocked, onBack, onCreateNew, createNewLabel }: 
   }
 
   return (
-    <OnboardingShell
-      title="Unlock your account"
-      currentStep={1}
-      totalSteps={1}
-      showIndicator={false}
-      below={
-        onCreateNew ? (
-          <div className={styles.createNew}>
-            <span>{createNewLabel ? 'Stuck on unlock?' : "Don't have a backup?"}</span>
-            <button
-              type="button"
-              className={styles.createNewLink}
-              onClick={() => {
-                clearStoredWalletIdentity()
-                onCreateNew()
-              }}
-            >
-              {createNewLabel ?? 'Create a new account instead'}
-            </button>
-          </div>
-        ) : undefined
-      }
-    >
-      <div className={styles.shell}>
-        <div className={styles.icon} aria-hidden="true">
-          <Lock size={32} />
-        </div>
+    <OnboardingLayout>
+      <div className={styles.flow}>
+        <section className={styles.shell} aria-label="Unlock your account">
         <Tabs items={MODES} selected={mode} onSelect={switchMode} ariaLabel="Unlock method" />
 
         {mode === 'paste' && (
@@ -205,25 +178,14 @@ export function UnlockFlow({ onUnlocked, onBack, onCreateNew, createNewLabel }: 
             </div>
             <FlowFooter
               className={styles.footer}
+              layout="stack"
               primary={{
                 label: submitting ? 'Unlocking…' : 'Unlock',
                 type: 'submit',
-                disabled: !pasteValue || submitting,
+                disabled: !pasteValue,
+                loading: submitting,
                 showIcon: false,
               }}
-              secondary={
-                onBack
-                  ? {
-                      label: 'Back',
-                      type: 'button',
-                      showIcon: false,
-                      onClick: () => {
-                        clearStoredWalletIdentity()
-                        onBack()
-                      },
-                    }
-                  : undefined
-              }
             />
           </form>
         )}
@@ -271,29 +233,34 @@ export function UnlockFlow({ onUnlocked, onBack, onCreateNew, createNewLabel }: 
             </div>
             <FlowFooter
               className={styles.footer}
+              layout="stack"
               primary={{
                 label: submitting ? 'Unlocking…' : 'Unlock',
                 type: 'submit',
-                disabled: !backupFile || !backupPassphrase || submitting,
+                disabled: !backupFile || !backupPassphrase,
+                loading: submitting,
                 showIcon: false,
               }}
-              secondary={
-                onBack
-                  ? {
-                      label: 'Back',
-                      type: 'button',
-                      showIcon: false,
-                      onClick: () => {
-                        clearStoredWalletIdentity()
-                        onBack()
-                      },
-                    }
-                  : undefined
-              }
             />
           </form>
         )}
+        </section>
+        {onCreateNew ? (
+          <div className={styles.createNew}>
+            <span>{createNewLabel ? 'Stuck on unlock?' : "Don't have a backup?"}</span>
+            <button
+              type="button"
+              className={styles.createNewLink}
+              onClick={() => {
+                clearStoredWalletIdentity()
+                onCreateNew()
+              }}
+            >
+              {createNewLabel ?? 'Create a new account instead'}
+            </button>
+          </div>
+        ) : null}
       </div>
-    </OnboardingShell>
+    </OnboardingLayout>
   )
 }

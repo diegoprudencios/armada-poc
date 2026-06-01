@@ -34,15 +34,15 @@
 
 .progressBar {
   display: flex;
-  gap: var(--primitives-spacing-1);
+  gap: var(--primitives-spacing-2);
   width: 100%;
 }
 
 .segment {
   flex: 1;
-  height: calc(var(--primitives-borderWidth-default) * 3px);
+  height: calc(var(--primitives-borderWidth-default) * 5px);
   border-radius: calc(var(--primitives-borderWidth-default) * 2px);
-  background-color: var(--semantic-color-border-default);
+  background-color: var(--primitives-color-neutral-200);
 }
 
 .segment.active {

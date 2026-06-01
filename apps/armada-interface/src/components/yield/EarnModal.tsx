@@ -152,6 +152,8 @@ export function EarnModal() {
   return (
     <DepositOverlayShell
       open={isOpen}
+      onClose={close}
+      dismissible={step !== 'progress'}
       flowLabel="Earn"
       currentStep={indicatorStep}
       status={indicatorStatus}

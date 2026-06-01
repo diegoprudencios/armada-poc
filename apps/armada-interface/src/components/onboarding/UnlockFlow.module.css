@@ -1,6 +1,16 @@
 /* ABOUTME: UnlockFlow layout — left-aligned lock icon, body copy, fields, edge-to-edge footer. */
 /* ABOUTME: Visually similar to WelcomeStep but more compact since there's only one field per mode. */
 
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--primitives-spacing-11);
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  justify-content: center;
+}
+
 .shell {
   display: flex;
   flex-direction: column;
@@ -8,6 +18,8 @@
   gap: var(--primitives-spacing-8);
   text-align: left;
   width: 100%;
+  max-width: 400px;
+  margin-inline: auto;
 }
 
 .modeForm {
@@ -23,19 +35,6 @@
   align-items: stretch;
   gap: var(--primitives-spacing-4);
   width: 100%;
-}
-
-.icon {
-  align-self: flex-start;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(196, 145, 229, 0.12);
-  color: var(--semantic-color-brand-lavender);
-  margin-bottom: calc(var(--primitives-spacing-6) - var(--primitives-spacing-8));
 }
 
 .body {
@@ -127,7 +126,7 @@
 
 .secretInput {
   width: 100%;
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-base) * 1px);
   line-height: var(--primitives-lineHeight-normal);
   letter-spacing: var(--primitives-letterSpacing-wide);
@@ -163,19 +162,6 @@
 .footer {
   align-self: stretch;
   margin-top: var(--primitives-spacing-6);
-  border-top: none;
-  padding: 0;
-  display: flex;
-  gap: var(--primitives-spacing-3);
-}
-
-.footer > div {
-  flex: 1 1 0;
-}
-
-.footer :global(button) {
-  width: 100%;
-  justify-content: center;
 }
 
 .createNew {

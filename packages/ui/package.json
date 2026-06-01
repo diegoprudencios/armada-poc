@@ -20,6 +20,10 @@
     "typecheck": "tsc --noEmit",
     "tokens:typography": "node scripts/build-typography.mjs"
   },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@web3icons/react": "^4.1.17"
+  },
   "peerDependencies": {
     "react": "^19.0.0"
   },

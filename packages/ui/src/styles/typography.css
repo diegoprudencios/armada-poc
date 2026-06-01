@@ -37,6 +37,11 @@
   --semantic-typography-ui-heading-lg-font-size: calc(var(--primitives-fontSize-xl) * 1px);
   --semantic-typography-ui-heading-lg-line-height: var(--primitives-lineHeight-snug);
   --semantic-typography-ui-heading-lg-letter-spacing: var(--primitives-letterSpacing-tight);
+  --semantic-typography-ui-heading-xl-font-family: var(--primitives-fontFamily-ui);
+  --semantic-typography-ui-heading-xl-font-weight: var(--primitives-fontWeight-medium);
+  --semantic-typography-ui-heading-xl-font-size: calc(var(--primitives-fontSize-3xl) * 1px);
+  --semantic-typography-ui-heading-xl-line-height: var(--primitives-lineHeight-snug);
+  --semantic-typography-ui-heading-xl-letter-spacing: var(--primitives-letterSpacing-tight);
   --semantic-typography-ui-heading-sm-font-family: var(--primitives-fontFamily-ui);
   --semantic-typography-ui-heading-sm-font-weight: var(--primitives-fontWeight-medium);
   --semantic-typography-ui-heading-sm-font-size: calc(var(--primitives-fontSize-lg) * 1px);
@@ -153,6 +158,14 @@
   font-size: var(--semantic-typography-ui-heading-lg-font-size);
   line-height: var(--semantic-typography-ui-heading-lg-line-height);
   letter-spacing: var(--semantic-typography-ui-heading-lg-letter-spacing);
+}
+
+.armada-text-ui-heading-xl {
+  font-family: var(--semantic-typography-ui-heading-xl-font-family);
+  font-weight: var(--semantic-typography-ui-heading-xl-font-weight);
+  font-size: var(--semantic-typography-ui-heading-xl-font-size);
+  line-height: var(--semantic-typography-ui-heading-xl-line-height);
+  letter-spacing: var(--semantic-typography-ui-heading-xl-letter-spacing);
 }
 
 .armada-text-ui-heading-sm {

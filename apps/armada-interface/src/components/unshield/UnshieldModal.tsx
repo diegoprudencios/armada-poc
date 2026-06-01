@@ -146,6 +146,8 @@ export function UnshieldModal() {
   return (
     <DepositOverlayShell
       open={isOpen}
+      onClose={close}
+      dismissible={step !== 'progress'}
       flowLabel="Withdraw"
       currentStep={indicatorStep}
       status={indicatorStatus}

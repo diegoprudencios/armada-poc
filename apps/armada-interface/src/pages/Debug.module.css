@@ -57,7 +57,7 @@
 
 .kv code,
 .table code {
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: 0.92em;
 }
 
@@ -151,7 +151,7 @@
   border-radius: calc(var(--semantic-borderRadius-input) * 1px);
   padding: 6px 12px;
   color: var(--semantic-color-text-primary);
-  font-family: var(--primitives-fontFamily-mono), monospace;
+  font-family: var(--primitives-fontFamily-ui), sans-serif;
   outline: none;
 }
 

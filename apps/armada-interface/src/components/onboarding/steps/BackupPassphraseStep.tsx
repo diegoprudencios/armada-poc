@@ -2,8 +2,7 @@
 // ABOUTME: After Download, advances on Continue; before Download the Continue CTA is disabled so the user can't skip the backup.
 
 import { useId, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Download } from 'lucide-react'
-import { HeadingSm } from '@armada/ui'
+import { Text } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
 import type { BackupBlob } from '@/lib/crypto/kdf'
 import styles from './PassphraseStep.module.css'
@@ -68,7 +67,9 @@ export function BackupPassphraseStep({
 
   return (
     <form className={styles.root} onSubmit={handleSubmit}>
-      <HeadingSm as="div" className={styles.headline}>Create your backup</HeadingSm>
+      <Text variant="display-lg" as="h2" className={styles.headline}>
+        Create your backup
+      </Text>
       <p className={styles.body}>
         Choose a passphrase to encrypt a backup of your recovery secret. You'll need this passphrase
         and the downloaded file together to restore your account.
@@ -119,12 +120,11 @@ export function BackupPassphraseStep({
         </div>
       ) : null}
       {downloaded ? (
-        <div style={{ color: 'var(--semantic-color-status-success)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <Download size={16} aria-hidden="true" /> Backup downloaded. Keep this file safe.
-        </div>
+        <p className={styles.success}>Backup downloaded. Keep this file safe.</p>
       ) : null}
       <FlowFooter
         className={styles.footer}
+        layout="stack"
         primary={
           downloaded
             ? { label: 'Continue', type: 'button', onClick: onContinue, showIcon: false }

@@ -71,6 +71,7 @@
   --primitives-fontWeight-semibold: 600;
   --primitives-fontFamily-display: Charis SIL;
   --primitives-fontFamily-ui: Geist;
+  /* Optional — use for hashes / code when explicitly needed; default UI type is Geist. */
   --primitives-fontFamily-mono: Geist Mono;
   --primitives-lineHeight-none: 100%;
   --primitives-lineHeight-tight: 110%;
