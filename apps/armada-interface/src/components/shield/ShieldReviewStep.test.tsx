@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import {
   ZERO_DISPLAY_FEES,
-  displayFeesWithTotal,
+  displayFeesWithProtocol,
 } from '@/test/fixtures/displayFees'
 import { ShieldReviewStep } from './ShieldReviewStep'
 
@@ -31,16 +31,18 @@ describe('<ShieldReviewStep>', () => {
     expect(screen.getAllByText('100.5').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Network')).toBeInTheDocument()
     expect(screen.getByText(/Anvil Hub/)).toBeInTheDocument()
-    expect(screen.getByText('Total')).toBeInTheDocument()
+    expect(screen.getByText('Total from wallet')).toBeInTheDocument()
     expect(screen.getAllByText(/100\.5 USDC/).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('includes fee in total when fee is non-zero', () => {
-    setup({ displayFees: displayFeesWithTotal(500_000n) })
+  it('shows protocol fee and net deposit when fee is non-zero', () => {
+    setup({ displayFees: displayFeesWithProtocol(500_000n) })
     const feeRow = screen.getByText('Estimated fee').closest('div')
     expect(feeRow).toHaveTextContent('0.5 USDC')
-    const totalRow = screen.getByText('Total').closest('div')
-    expect(totalRow).toHaveTextContent('101 USDC')
+    expect(screen.getByText("You'll receive")).toBeInTheDocument()
+    expect(screen.getByText('100 USDC')).toBeInTheDocument()
+    const totalRow = screen.getByText('Total from wallet').closest('div')
+    expect(totalRow).toHaveTextContent('100.5 USDC')
   })
 
   it('fires onConfirm on the primary CTA', () => {

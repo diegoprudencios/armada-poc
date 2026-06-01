@@ -22,8 +22,10 @@ export function ShieldDepositSummary({
   const fromChain = getChainById(fromChainId)
   const networkName = fromChain?.name ?? `Chain ${fromChainId}`
   const amountLabel = formatUsdcAmount(amount)
-  const feeAmount = displayFees?.totalFee ?? 0n
-  const totalLabel = `${formatUsdcAmount(amount + feeAmount)} USDC`
+  const protocolFee = displayFees?.protocolFee ?? 0n
+  const netDeposit =
+    amount > protocolFee ? amount - protocolFee : 0n
+  const totalLabel = `${formatUsdcAmount(amount)} USDC`
 
   return (
     <div className={styles.summary}>
@@ -42,8 +44,20 @@ export function ShieldDepositSummary({
         <EstimatedFeeValue fees={displayFees} isLoading={feeLoading} />
       </div>
       <hr className={styles.summaryDivider} />
+      {protocolFee > 0n ? (
+        <>
+          <hr className={styles.summaryDivider} />
+          <div className={styles.summaryRow}>
+            <span className={styles.summaryLabel}>You&apos;ll receive</span>
+            <span className={styles.summaryValue}>
+              {formatUsdcAmount(netDeposit)} USDC
+            </span>
+          </div>
+        </>
+      ) : null}
+      <hr className={styles.summaryDivider} />
       <div className={styles.summaryRow}>
-        <span className={styles.summaryLabel}>Total</span>
+        <span className={styles.summaryLabel}>Total from wallet</span>
         <span className={styles.summaryValue}>{totalLabel}</span>
       </div>
     </div>

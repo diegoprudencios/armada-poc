@@ -1,7 +1,7 @@
 // ABOUTME: UnshieldModal — withdraw private USDC to an EVM address using full-viewport overlay shell.
 // ABOUTME: Selects unshield-local or unshield-xchain based on destination chain.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { openModalAtom } from '@/state/ui'
 import { evmAddressAtom, yieldSharesAtom } from '@/state/wallet'
@@ -16,7 +16,11 @@ import { getNetworkConfig } from '@/config/network'
 import { parseUsdcInput } from '@/lib/format'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
 import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
-import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
+import {
+  useDisplayFees,
+  maxSpendableAmount,
+  netAmountAfterFees,
+} from '@/hooks/useDisplayFees'
 import { DepositOverlayShell } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import {
   ProgressStep,
@@ -70,14 +74,16 @@ export function UnshieldModal() {
   const record = activeTx?.record ?? null
 
   const computedKind: SubmittedKind = destChainId === hubChainId ? 'unshield-local' : 'unshield-xchain'
-  const displayFees = useMemo(
-    () => computeDisplayFees(computedKind, amount, quote ?? null),
-    [computedKind, amount, quote],
-  )
-  const maxInput = maxInputAmount(max, displayFees.totalFee)
-  const feeLoading = !quote
-  const netAmount = amount > displayFees.totalFee ? amount - displayFees.totalFee : 0n
   const isXchain = computedKind === 'unshield-xchain'
+  const gasChainId = hubChainId
+  const { fees: displayFees, isLoading: feeLoading } = useDisplayFees(
+    computedKind,
+    amount,
+    gasChainId,
+    quote ?? null,
+  )
+  const maxInput = maxSpendableAmount(max, displayFees)
+  const netAmount = netAmountAfterFees(amount, displayFees)
 
   useEffect(() => {
     if (!isOpen) return

@@ -12,3 +12,17 @@ vi.mock('@/hooks/useGasBalanceWarning', () => ({
     formattedBalance: '0',
   }),
 }))
+
+vi.mock('@/hooks/useDisplayFees', async (importOriginal) => {
+  const { computeDisplayFees } = await importOriginal<typeof import('@/lib/fees/displayFees')>()
+  return {
+    useDisplayFees: (kind: import('@/lib/tx/types').TxKind, amount: bigint) => ({
+      fees: computeDisplayFees(kind, amount, null),
+      isLoading: false,
+    }),
+    maxSpendableAmount: (balance: bigint, fees: ReturnType<typeof computeDisplayFees>) =>
+      fees.feeInclusive ? balance : balance > fees.totalFee ? balance - fees.totalFee : 0n,
+    netAmountAfterFees: (amount: bigint, fees: ReturnType<typeof computeDisplayFees>) =>
+      amount > fees.protocolFee ? amount - fees.protocolFee : 0n,
+  }
+})

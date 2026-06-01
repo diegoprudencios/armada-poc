@@ -1,13 +1,17 @@
 // ABOUTME: ShieldModal — deposit flow orchestrator using full-viewport DepositOverlayShell (not ActionFlowShell modal).
 // ABOUTME: Dispatches same-chain shield vs shield-xchain; progress/complete/error steps unchanged.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAtom } from 'jotai'
 import { openModalAtom } from '@/state/ui'
 import { useTx } from '@/hooks/useTx'
 import { useFees } from '@/hooks/useFees'
 import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
-import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
+import {
+  useDisplayFees,
+  maxSpendableAmount,
+  netAmountAfterFees,
+} from '@/hooks/useDisplayFees'
 import { useBalances } from '@/hooks/useBalances'
 import { getNetworkConfig } from '@/config/network'
 import { parseUsdcInput } from '@/lib/format'
@@ -52,13 +56,14 @@ export function ShieldModal() {
 
   const { quote, isStale, refresh } = useFees()
   const computedKind: SubmittedKind = computeKind(fromChainId, hubChainId)
-  const displayFees = useMemo(
-    () => computeDisplayFees(computedKind, amount, quote ?? null),
-    [computedKind, amount, quote],
+  const { fees: displayFees, isLoading: feeLoading } = useDisplayFees(
+    computedKind,
+    amount,
+    fromChainId,
+    quote ?? null,
   )
-  const maxInput = maxInputAmount(max, displayFees.totalFee)
-  const feeLoading = !quote
-  const netAmount = amount > displayFees.protocolFee ? amount - displayFees.protocolFee : 0n
+  const maxInput = maxSpendableAmount(max, displayFees)
+  const netAmount = netAmountAfterFees(amount, displayFees)
 
   const txShield = useTx({ kind: 'shield' })
   const txShieldXchain = useTx({ kind: 'shield-xchain' })

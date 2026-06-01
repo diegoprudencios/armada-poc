@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDisplayFees, maxInputAmount, relayerGasFeeForKind } from './displayFees'
+import { computeDisplayFees, relayerGasFeeForKind } from './displayFees'
 import type { FeeSchedule } from '@/lib/relayer'
 
 const quote: FeeSchedule = {
@@ -22,23 +22,14 @@ describe('computeDisplayFees', () => {
     expect(fees.protocolFee).toBe(200_000n) // 2 bps
     expect(fees.gasFee).toBe(0n)
     expect(fees.totalFee).toBe(200_000n)
+    expect(fees.feeInclusive).toBe(true)
   })
 
-  it('charges no USDC fees for same-chain shield (user pays native gas)', () => {
+  it('defaults shield to inclusive with zero CCTP until fee module overrides', () => {
     const fees = computeDisplayFees('shield', 5_000_000n, quote)
     expect(fees.protocolFee).toBe(0n)
-    expect(fees.gasFee).toBe(0n)
     expect(fees.totalFee).toBe(0n)
-  })
-})
-
-describe('maxInputAmount', () => {
-  it('subtracts total fee from balance', () => {
-    expect(maxInputAmount(10_000_000n, 1_000_000n)).toBe(9_000_000n)
-  })
-
-  it('returns zero when fee exceeds balance', () => {
-    expect(maxInputAmount(100n, 200n)).toBe(0n)
+    expect(fees.feeInclusive).toBe(true)
   })
 })
 

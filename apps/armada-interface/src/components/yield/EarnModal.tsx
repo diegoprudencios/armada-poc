@@ -1,7 +1,7 @@
 // ABOUTME: EarnModal — vault deposit + withdrawal using full-viewport overlay shell.
 // ABOUTME: Matches openModalAtom yield-deposit or yield-withdraw for initial tab.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { openModalAtom, type ModalKind } from '@/state/ui'
 import { shieldedUsdcAtom, yieldSharesAtom } from '@/state/wallet'
@@ -11,7 +11,11 @@ import { useSpendableSyncGate } from '@/hooks/useSpendableSyncGate'
 import { useYieldRate } from '@/hooks/useYieldRate'
 import { parseUsdcInput } from '@/lib/format'
 import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
-import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
+import {
+  useDisplayFees,
+  maxSpendableAmount,
+  netAmountAfterFees,
+} from '@/hooks/useDisplayFees'
 import { getNetworkConfig } from '@/config/network'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
 import { sharesToUsdc } from '@/lib/yield'
@@ -58,13 +62,14 @@ export function EarnModal() {
   const syncGate = useSpendableSyncGate()
   const hubChainId = getNetworkConfig().hub.chainId
   const yieldKind: 'yield-deposit' | 'yield-withdraw' = tab === 'add' ? 'yield-deposit' : 'yield-withdraw'
-  const displayFees = useMemo(
-    () => computeDisplayFees(yieldKind, amount, quote ?? null),
-    [yieldKind, amount, quote],
+  const { fees: displayFees, isLoading: feeLoading } = useDisplayFees(
+    yieldKind,
+    amount,
+    hubChainId,
+    quote ?? null,
   )
-  const maxInput = maxInputAmount(max, displayFees.totalFee)
-  const feeLoading = !quote
-  const netAmount = amount > displayFees.totalFee ? amount - displayFees.totalFee : 0n
+  const maxInput = maxSpendableAmount(max, displayFees)
+  const netAmount = netAmountAfterFees(amount, displayFees)
 
   const txDeposit = useTx({ kind: 'yield-deposit' })
   const txWithdraw = useTx({ kind: 'yield-withdraw' })

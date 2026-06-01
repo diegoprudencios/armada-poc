@@ -19,5 +19,7 @@ curl -sfL -o "${OUT}/privacy-pool-hub-sepolia.json" "${BASE}/sepolia/privacy-poo
 curl -sfL -o "${OUT}/privacy-pool-client-sepolia.json" "${BASE}/base-sepolia/privacy-pool.json"
 curl -sfL -o "${OUT}/privacy-pool-clientB-sepolia.json" "${BASE}/arbitrum-sepolia/privacy-pool.json"
 curl -sfL -o "${OUT}/yield-hub-sepolia.json" "${BASE}/sepolia/yield.json"
+# Fee module lives in armada-poc deployments/ (not armada-deployments remote yet).
+cp "$(cd "${ROOT}/../.." && pwd)/deployments/fee-module-hub-sepolia.json" "${OUT}/fee-module-hub-sepolia.json"
 
 echo "Done."

@@ -54,7 +54,7 @@ export function ShieldInputStepContent({
   const { value: amount, error: amountError } = parseUsdcInput(amountStr)
   const tooMuch = amount > maxInput
   const errorMessage = usdcInputErrorMessage(amountError)
-    ?? (tooMuch ? 'Amount exceeds your available balance after fees.' : undefined)
+    ?? (tooMuch ? 'Amount exceeds your available balance.' : undefined)
 
   const balanceDisplay = formatUsdcPlain(max)
 

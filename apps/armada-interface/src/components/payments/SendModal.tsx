@@ -1,7 +1,7 @@
 // ABOUTME: SendModal — pay USDC privately or to an external wallet using full-viewport overlay shell.
 // ABOUTME: Picks transfer-shielded / unshield-local / unshield-xchain based on tab + destination chain.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { openModalAtom } from '@/state/ui'
 import { shieldedUsdcAtom } from '@/state/wallet'
@@ -16,7 +16,11 @@ import {
 } from '@/config/deployments'
 import { parseUsdcInput } from '@/lib/format'
 import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
-import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
+import {
+  useDisplayFees,
+  maxSpendableAmount,
+  netAmountAfterFees,
+} from '@/hooks/useDisplayFees'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
 import { trackError } from '@/lib/telemetry'
 import { DepositOverlayShell } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
@@ -98,16 +102,16 @@ export function SendModal() {
 
   const computedKind: SubmittedKind = computeKind(tab, destChainId, hubChainId)
   const isXchain = computedKind === 'unshield-xchain'
-  const displayFees = useMemo(
-    () => computeDisplayFees(computedKind, amount, quote ?? null),
-    [computedKind, amount, quote],
-  )
-  const maxInput = maxInputAmount(max, displayFees.totalFee)
-  const feeLoading = !quote
   const gasChainId =
     computedKind === 'unshield-local' ? destChainId : hubChainId
-  const netAmount =
-    amount > displayFees.totalFee ? amount - displayFees.totalFee : 0n
+  const { fees: displayFees, isLoading: feeLoading } = useDisplayFees(
+    computedKind,
+    amount,
+    gasChainId,
+    quote ?? null,
+  )
+  const maxInput = maxSpendableAmount(max, displayFees)
+  const netAmount = netAmountAfterFees(amount, displayFees)
 
   useEffect(() => {
     if (!isOpen) return
