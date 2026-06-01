@@ -80,8 +80,18 @@ export function DepositOverlayShell({
       data-exiting={exiting ? true : undefined}
     >
       <div className={styles.backdrop} aria-hidden />
-      <header className={styles.chrome}>
+      <header className={styles.topBar}>
         <ArmadaSymbol className={styles.logo} size={48} />
+        <div className={styles.stepHeader}>
+          <FlowStepIndicator
+            className={styles.stepIndicator}
+            flowLabel={flowLabel}
+            currentStep={currentStep}
+            totalSteps={totalSteps}
+            steps={[...OVERLAY_STEP_LABELS]}
+            status={status}
+          />
+        </div>
         {showCloseButton ? (
           <button
             type="button"
@@ -95,15 +105,8 @@ export function DepositOverlayShell({
           <span className={styles.closePlaceholder} aria-hidden />
         )}
       </header>
-      <div className={styles.column}>
-        <FlowStepIndicator
-          flowLabel={flowLabel}
-          currentStep={currentStep}
-          totalSteps={totalSteps}
-          steps={[...OVERLAY_STEP_LABELS]}
-          status={status}
-        />
-        {children}
+      <div className={styles.body}>
+        <div className={styles.column}>{children}</div>
       </div>
     </div>,
     document.body,

@@ -3,10 +3,12 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAtom, useAtomValue } from 'jotai'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
+import { isRelayerConfigured } from '@/config/network'
 import { feeQuoteAtom, feeQuoteIsStaleAtom } from '@/state/fees'
 import { tabVisibleAtom } from '@/state/visibility'
 import { fetchFees, type FeeSchedule } from '@/lib/relayer'
+import { offlineFeeSchedule } from '@/lib/relayer/resolveFeeCacheId'
 import { trackError } from '@/lib/telemetry'
 
 export interface UseFeesResult {
@@ -44,23 +46,32 @@ export function useFees(): UseFeesResult {
   const isStale = useAtomValue(feeQuoteIsStaleAtom)
   const tabVisible = useAtomValue(tabVisibleAtom)
   const queryClient = useQueryClient()
+  const relayerConfigured = isRelayerConfigured()
+  const offlineQuote = useMemo(() => offlineFeeSchedule(), [])
 
   const query = useQuery({
     queryKey: FEES_QUERY_KEY,
     queryFn: ({ signal }) => fetchFees(signal),
+    enabled: relayerConfigured,
+    initialData: relayerConfigured ? undefined : offlineQuote,
     // Tab-visibility gate: when hidden the interval pauses; resumes on visibility flip.
-    refetchInterval: ({ state }) => (tabVisible ? refetchDelayFor(state.data ?? null) : false),
+    refetchInterval: ({ state }) =>
+      relayerConfigured && tabVisible ? refetchDelayFor(state.data ?? null) : false,
     refetchIntervalInBackground: false,
     // Refetch on focus if the cached quote is past its refresh window — cheap correctness.
-    refetchOnWindowFocus: 'always',
+    refetchOnWindowFocus: relayerConfigured ? 'always' : false,
     // Cold-start retry with the explicit schedule above. Loops 60s indefinitely until success
-    // because the modal flows cannot proceed without a quote.
-    retry: true,
+    // because the modal flows cannot proceed without a quote when a relayer is configured.
+    retry: relayerConfigured,
     retryDelay: attemptIndex =>
       COLD_RETRY_SCHEDULE_MS[Math.min(attemptIndex, COLD_RETRY_SCHEDULE_MS.length - 1)]!,
     staleTime: 0,
     gcTime: 60 * 60_000,
   })
+
+  useEffect(() => {
+    if (!relayerConfigured) setAtomQuote(offlineQuote)
+  }, [relayerConfigured, offlineQuote, setAtomQuote])
 
   // Mirror the latest successful fetch into feeQuoteAtom so non-React consumers (handlers calling
   // fetchFees directly, modal tests that seed the atom) keep working unchanged.
@@ -77,6 +88,10 @@ export function useFees(): UseFeesResult {
   }, [query.error])
 
   const refresh = async (): Promise<FeeSchedule | null> => {
+    if (!relayerConfigured) {
+      setAtomQuote(offlineQuote)
+      return offlineQuote
+    }
     const result = await queryClient.fetchQuery({
       queryKey: FEES_QUERY_KEY,
       queryFn: ({ signal }) => fetchFees(signal),
@@ -90,7 +105,9 @@ export function useFees(): UseFeesResult {
     return result
   }
 
-  // Prefer the live query data, falling back to the atom (covers the brief window before the
-  // first useEffect tick has mirrored a freshly fetched quote into the atom).
-  return { quote: query.data ?? atomQuote, isStale, refresh }
+  const quote = relayerConfigured
+    ? (query.data ?? atomQuote)
+    : (atomQuote ?? offlineQuote)
+
+  return { quote, isStale, refresh }
 }

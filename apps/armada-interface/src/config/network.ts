@@ -49,6 +49,23 @@ export function isLocalMode(): boolean {
 }
 
 /**
+ * Resolves the relayer HTTP base URL for the active build.
+ * - Local: defaults to `http://localhost:3001` (override with `VITE_RELAYER_URL`).
+ * - Sepolia / hosted: only set when `VITE_RELAYER_URL` is provided — never localhost.
+ */
+function resolveRelayerUrl(mode: NetworkMode): string {
+  const raw = import.meta.env.VITE_RELAYER_URL as string | undefined
+  if (raw?.trim()) return raw.trim().replace(/\/$/, '')
+  if (mode === 'local') return 'http://localhost:3001'
+  return ''
+}
+
+/** Whether the UI should call the relayer HTTP API (`/fees`, `/relay`, …). */
+export function isRelayerConfigured(): boolean {
+  return getNetworkConfig().relayerUrl.length > 0
+}
+
+/**
  * Optional integrator address passed to `PrivacyPool.shield()` to route shield fees to a third
  * party. Defaults to ZeroAddress when unset or malformed (no fee-routing relationship).
  * Partners configure via `VITE_INTEGRATOR_ADDRESS` without touching code.
@@ -128,7 +145,7 @@ function sepoliaConfig(): NetworkConfig {
         explorerUrl: 'https://sepolia.arbiscan.io',
       },
     ],
-    relayerUrl: (import.meta.env.VITE_RELAYER_URL as string | undefined) ?? 'http://localhost:3001',
+    relayerUrl: resolveRelayerUrl('sepolia'),
     irisUrl: (import.meta.env.VITE_IRIS_URL as string | undefined) ?? 'https://iris-api-sandbox.circle.com',
     indexerUrl: (import.meta.env.VITE_INDEXER_URL as string | undefined) ?? null,
     pollIntervalMs: 15_000,
@@ -141,7 +158,7 @@ function localConfig(): NetworkConfig {
     mode: 'local',
     hub: LOCAL_HUB,
     clients: [LOCAL_CLIENT_A, LOCAL_CLIENT_B],
-    relayerUrl: (import.meta.env.VITE_RELAYER_URL as string | undefined) ?? 'http://localhost:3001',
+    relayerUrl: resolveRelayerUrl('local'),
     // Iris URL is unused in local mode (CCTP relays via mock module), but populate for type completeness.
     irisUrl: 'https://iris-api-sandbox.circle.com',
     indexerUrl: null,

@@ -1,4 +1,4 @@
-/* ABOUTME: Full-viewport deposit flow shell — backdrop fades in first, then column content. */
+/* ABOUTME: Full-viewport deposit flow shell — logo + step indicator + close on one row; content offset from top. */
 
 .root {
   position: fixed;
@@ -6,37 +6,45 @@
   z-index: 200;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding-top: calc(var(--primitives-spacing-20) + var(--primitives-spacing-11));
-  padding-bottom: var(--primitives-spacing-12);
-  overflow-y: auto;
+  overflow: hidden;
+  background: var(--semantic-color-surface-bg);
 }
 
-.chrome {
-  position: fixed;
-  top: var(--primitives-spacing-6);
-  left: 0;
-  right: 0;
-  z-index: 201;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--primitives-spacing-6);
-  opacity: 0;
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--semantic-color-surface-bg);
   pointer-events: none;
 }
 
-.root:not([data-exiting]) .chrome {
+.root:not([data-exiting]) .backdrop {
+  animation: depositBackdropIn 220ms ease-out forwards;
+}
+
+.root[data-exiting] .backdrop {
+  animation: depositBackdropOut 220ms ease-in 200ms forwards;
+}
+
+.topBar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 480px) 1fr;
+  align-items: center;
+  column-gap: var(--primitives-spacing-4);
+  padding: var(--primitives-spacing-6);
+  background: var(--semantic-color-surface-bg);
+  opacity: 0;
+}
+
+.root:not([data-exiting]) .topBar {
   animation: depositChromeIn 200ms ease-out 220ms forwards;
 }
 
-.root[data-exiting] .chrome {
+.root[data-exiting] .topBar {
   animation: depositContentOut 260ms ease-in forwards;
-}
-
-.chrome > * {
-  pointer-events: auto;
 }
 
 .logo {
@@ -44,9 +52,21 @@
   flex-shrink: 0;
   width: var(--primitives-spacing-12);
   height: var(--primitives-spacing-12);
+  justify-self: start;
+}
+
+.stepHeader {
+  grid-column: 2;
+  width: 100%;
+  min-width: 0;
+}
+
+.stepIndicator {
+  width: 100%;
 }
 
 .closeButton {
+  grid-column: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -57,6 +77,7 @@
   border: 1px solid var(--semantic-color-border-default);
   color: var(--semantic-color-text-muted);
   cursor: pointer;
+  justify-self: end;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
@@ -72,44 +93,46 @@
 }
 
 .closePlaceholder {
+  grid-column: 3;
   width: var(--primitives-spacing-12);
   height: var(--primitives-spacing-12);
   flex-shrink: 0;
+  justify-self: end;
 }
 
-.backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: var(--semantic-color-surface-bg);
+.body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  /* Gap below topBar — with header in flex, topBar + this ≈ 140px from viewport top */
+  padding-top: var(--primitives-spacing-11);
+  padding-right: var(--primitives-spacing-4);
+  padding-bottom: var(--primitives-spacing-12);
+  padding-left: var(--primitives-spacing-4);
+  opacity: 0;
 }
 
-.root:not([data-exiting]) .backdrop {
-  animation: depositBackdropIn 220ms ease-out forwards;
+.root:not([data-exiting]) .body {
+  animation: depositContentIn 300ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
 }
 
-.root[data-exiting] .backdrop {
-  animation: depositBackdropOut 220ms ease-in 200ms forwards;
+.root[data-exiting] .body {
+  animation: depositContentOut 260ms ease-in forwards;
 }
 
 .column {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 480px;
-  padding: 0 var(--primitives-spacing-4);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: var(--primitives-spacing-11);
-}
-
-.root:not([data-exiting]) .column {
-  animation: depositContentIn 300ms cubic-bezier(0.22, 1, 0.36, 1) 200ms both;
-}
-
-.root[data-exiting] .column {
-  animation: depositContentOut 260ms ease-in forwards;
+  width: 100%;
+  max-width: 480px;
 }
 
 .buttonRow {
@@ -174,15 +197,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .root:not([data-exiting]) .backdrop,
-  .root:not([data-exiting]) .chrome,
-  .root:not([data-exiting]) .column,
+  .root:not([data-exiting]) .topBar,
+  .root:not([data-exiting]) .body,
   .root[data-exiting] .backdrop,
-  .root[data-exiting] .chrome,
-  .root[data-exiting] .column {
+  .root[data-exiting] .topBar,
+  .root[data-exiting] .body {
     animation: none;
   }
 
-  .root:not([data-exiting]) .chrome {
+  .root:not([data-exiting]) .topBar,
+  .root:not([data-exiting]) .body {
     opacity: 1;
   }
 }

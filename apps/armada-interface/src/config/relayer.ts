@@ -37,7 +37,13 @@ export const RELAYER_STATUS_CODES: Readonly<Record<RelayerErrorCode, number>> = 
 }
 
 export function getRelayerUrl(): string {
-  return getNetworkConfig().relayerUrl
+  const url = getNetworkConfig().relayerUrl
+  if (!url) {
+    throw new Error(
+      'Armada relayer URL is not configured. Set VITE_RELAYER_URL for hosted Sepolia builds.',
+    )
+  }
+  return url
 }
 
 export function relayerEndpoint(path: string): string {

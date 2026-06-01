@@ -11,7 +11,7 @@ import { Button } from '@armada/ui'
 import { useWallet } from '@/hooks/useWallet'
 import { useShieldedWallet } from '@/hooks/useShieldedWallet'
 import { loadDeployments, type ResolvedDeployments } from '@/config/deployments'
-import { getNetworkConfig, isLocalMode, type ChainIdentity } from '@/config/network'
+import { getNetworkConfig, isLocalMode, isRelayerConfigured, type ChainIdentity } from '@/config/network'
 import { devMockBalanceAtom } from '@/state/devMockBalance'
 import { railgunEngineAtom, shieldedUsdcAtom } from '@/state/wallet'
 import { formatUsdcAmount, truncateAddress } from '@/lib/format'
@@ -345,7 +345,14 @@ export function Debug() {
           </dd>
           <dt>Hub chain</dt><dd>{getNetworkConfig().hub.name} ({getNetworkConfig().hub.chainId})</dd>
           <dt>Client chains</dt><dd>{getNetworkConfig().clients.map(c => `${c.name} (${c.chainId})`).join(', ')}</dd>
-          <dt>Relayer URL</dt><dd><code>{getNetworkConfig().relayerUrl ?? '—'}</code></dd>
+          <dt>Relayer URL</dt>
+          <dd>
+            <code>
+              {isRelayerConfigured()
+                ? getNetworkConfig().relayerUrl
+                : 'offline (wallet-submit — set VITE_RELAYER_URL for HTTP API)'}
+            </code>
+          </dd>
         </dl>
       </Card>
 

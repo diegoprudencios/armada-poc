@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { LOCAL_DEV_FEE_CACHE_ID, resolveFeeCacheId } from './resolveFeeCacheId'
+import { OFFLINE_FEE_CACHE_ID, resolveFeeCacheId } from './resolveFeeCacheId'
 
 vi.mock('@/config/network', () => ({
   isLocalMode: vi.fn(() => true),
+  isRelayerConfigured: vi.fn(() => true),
   getNetworkConfig: vi.fn(() => ({
     hub: { chainId: 31337 },
   })),
@@ -18,13 +19,35 @@ describe('resolveFeeCacheId', () => {
     expect(id).toBe('cached')
   })
 
-  it('falls back to local-dev when refresh fails in local mode', async () => {
+  it('falls back to offline cache when refresh fails in local mode', async () => {
     const id = await resolveFeeCacheId({
       quote: null,
       isStale: false,
       refresh: async () => null,
       timeoutMs: 10,
     })
-    expect(id).toBe(LOCAL_DEV_FEE_CACHE_ID)
+    expect(id).toBe(OFFLINE_FEE_CACHE_ID)
+  })
+})
+
+describe('resolveFeeCacheId (hosted Sepolia, no relayer)', () => {
+  it('uses offline cache without calling refresh', async () => {
+    vi.resetModules()
+    vi.doMock('@/config/network', () => ({
+      isLocalMode: vi.fn(() => false),
+      isRelayerConfigured: vi.fn(() => false),
+      getNetworkConfig: vi.fn(() => ({
+        hub: { chainId: 11155111 },
+      })),
+    }))
+    const { resolveFeeCacheId: resolve } = await import('./resolveFeeCacheId')
+    const refresh = vi.fn(async () => null)
+    const id = await resolve({
+      quote: null,
+      isStale: false,
+      refresh,
+    })
+    expect(id).toBe(OFFLINE_FEE_CACHE_ID)
+    expect(refresh).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "build": {
+    "env": {
+      "VITE_NETWORK": "sepolia"
+    }
+  },
   "installCommand": "cd ../.. && bash scripts/vercel-install.sh",
   "buildCommand": "cd ../.. && node scripts/ensure-linux-native-modules.mjs && bash apps/armada-interface/scripts/fetch-sepolia-deployments.sh && npm run prepare:artifacts --workspace=@armada/interface && npm run build --workspace=@armada/interface",
   "outputDirectory": "dist",

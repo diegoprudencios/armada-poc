@@ -1,6 +1,7 @@
 // ABOUTME: HTTP client for the Armada relayer — typed fees / relay / status requests with structured error handling.
 // ABOUTME: `submitRelay` is deferred (relayer-mediated submit path is a separate commit); fetchFees + pollStatus are wired.
 
+import { isRelayerConfigured } from '@/config/network'
 import { RELAYER_ENDPOINTS, RELAYER_STATUS_CODES, relayerEndpoint, type RelayerErrorCode } from '@/config/relayer'
 import type { TxKind } from '@/lib/tx/types'
 
@@ -121,6 +122,9 @@ async function parseError(res: Response): Promise<RelayerError> {
  * `useFees`. Both can re-fetch independently — relayer is the source of truth.
  */
 export async function fetchFees(signal?: AbortSignal): Promise<FeeSchedule> {
+  if (!isRelayerConfigured()) {
+    throw new Error('fetchFees called without a configured relayer URL')
+  }
   const res = await fetch(relayerEndpoint(RELAYER_ENDPOINTS.fees), {
     method: 'GET',
     headers: { Accept: 'application/json' },
