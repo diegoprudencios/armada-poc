@@ -17,11 +17,12 @@ export interface UnlockFlowProps {
   /** Optional escape hatch — return to onboarding welcome. */
   onBack?: () => void
   /**
-   * Optional escape hatch — switches to the create-new-account flow. App.tsx only passes this
-   * when there's no persisted walletId on this device, so a returning user (who has a real
-   * wallet locally) can't accidentally orphan it by starting over.
+   * Optional escape hatch — switches to the create-new-account flow. Hidden on testnet when this
+   * device already had a wallet at boot (avoid orphaning). Always available in local mode.
    */
   onCreateNew?: () => void
+  /** Override for the create-new link label (e.g. local dev "Start over…"). */
+  createNewLabel?: string
 }
 
 type Mode = 'backup' | 'paste'
@@ -41,7 +42,7 @@ const PASTE_SECRET_PLACEHOLDER =
 const PASTE_HEADS_UP =
   'Pasting the raw secret triggers a full chain rescan to recover your balances. This can take a few minutes on the first unlock. For faster restores in the future, use the encrypted Backup file instead — and re-export a fresh backup from Settings once this scan completes.'
 
-export function UnlockFlow({ onUnlocked, onBack, onCreateNew }: UnlockFlowProps) {
+export function UnlockFlow({ onUnlocked, onBack, onCreateNew, createNewLabel }: UnlockFlowProps) {
   const { unlockByPaste, unlockByBackup } = useShieldedWallet()
   const [mode, setMode] = useState<Mode>('backup')
   const [submitting, setSubmitting] = useState(false)
@@ -124,13 +125,16 @@ export function UnlockFlow({ onUnlocked, onBack, onCreateNew }: UnlockFlowProps)
       below={
         onCreateNew ? (
           <div className={styles.createNew}>
-            <span>Don&apos;t have a backup?</span>
+            <span>{createNewLabel ? 'Stuck on unlock?' : "Don't have a backup?"}</span>
             <button
               type="button"
               className={styles.createNewLink}
-              onClick={onCreateNew}
+              onClick={() => {
+                clearStoredWalletIdentity()
+                onCreateNew()
+              }}
             >
-              Create a new account instead
+              {createNewLabel ?? 'Create a new account instead'}
             </button>
           </div>
         ) : undefined

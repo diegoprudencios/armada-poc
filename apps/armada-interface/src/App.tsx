@@ -142,21 +142,30 @@ export function App() {
   }
 
   if (mode === 'unlock') {
-    // Only expose the Create-new link when there's no persisted wallet on this device. A
-    // returning user (had a persisted wallet at boot) MUST go through Unlock — accidentally
-    // starting Create would orphan their existing IDB-stored wallet without recovery.
+    const handleStartOver = () => {
+      if (
+        hadPersistedWalletAtBoot &&
+        !window.confirm(
+          'Start a new account? The wallet saved in this browser will no longer be used. ' +
+            'Only continue if you have a backup or want to enroll again.',
+        )
+      ) {
+        return
+      }
+      clearStoredWalletIdentity()
+      setShieldedWallets({})
+      setActiveWalletId(null)
+      setHadPersistedWalletAtBoot(false)
+      setMode('onboarding')
+    }
     return (
       <UnlockFlow
         onUnlocked={() => setMode('app')}
-        onBack={
-          isLocalMode()
-            ? () => {
-                clearStoredWalletIdentity()
-                setMode('onboarding')
-              }
-            : undefined
+        onBack={isLocalMode() ? handleStartOver : undefined}
+        onCreateNew={handleStartOver}
+        createNewLabel={
+          hadPersistedWalletAtBoot ? 'Start over and create a new account' : undefined
         }
-        onCreateNew={hadPersistedWalletAtBoot ? undefined : () => setMode('onboarding')}
       />
     )
   }
