@@ -73,8 +73,8 @@ export function subscribeEngineState(listener: (s: EngineStateSnapshot) => void)
  *      "Cannot read properties of undefined (reading isRequired)" on local devnet where POI
  *      isn't configured.
  *
- * Test-artifact preloading (for local Anvil POC contracts) is a separate concern handled in a
- * follow-up commit; in Sepolia mode the SDK pulls artifacts from IPFS via the artifact store.
+ * When /artifacts/* is present (local dev + production build), we preload bundled circuits and
+ * skip flaky IPFS downloads; otherwise the SDK uses the artifact store + IPFS.
  */
 export async function initRailgunEngine(): Promise<void> {
   if (initialized) return
