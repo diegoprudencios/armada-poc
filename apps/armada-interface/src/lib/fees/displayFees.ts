@@ -30,14 +30,14 @@ export function relayerFeeKeyForKind(kind: TxKind): RelayerFeeKey {
   }
 }
 
-export function relayerGasFeeForKind(kind: TxKind, quote: FeeSchedule | null): bigint {
-  if (!quote) return 0n
-  const raw = quote.fees[relayerFeeKeyForKind(kind)]
-  try {
-    return BigInt(raw)
-  } catch {
-    return 0n
-  }
+/**
+ * USDC relayer reimbursement from the fee schedule. Today every stage handler submits via the
+ * user's wallet (see lib/relayer.ts `userFeeForKind`) — native gas only, no USDC relayer fee.
+ * The relayer quote uses a 2M-gas `crossContract` estimate meant for relayed privacy txs; showing
+ * it on Deposit would wrongly imply ~$100+ USDC fees. Returns 0 until `submitRelay` is wired.
+ */
+export function relayerGasFeeForKind(_kind: TxKind, _quote: FeeSchedule | null): bigint {
+  return 0n
 }
 
 /** Protocol + relayer gas (USDC raw). Gas is an estimate; user also pays native gas in-wallet. */

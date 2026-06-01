@@ -16,19 +16,19 @@ const quote: FeeSchedule = {
 }
 
 describe('computeDisplayFees', () => {
-  it('sums protocol CCTP and relayer gas for cross-chain shield', () => {
+  it('shows CCTP protocol fee only for cross-chain shield (native gas separate)', () => {
     const amount = 1_000_000_000n // 1000 USDC
     const fees = computeDisplayFees('shield-xchain', amount, quote)
     expect(fees.protocolFee).toBe(200_000n) // 2 bps
-    expect(fees.gasFee).toBe(400_000n)
-    expect(fees.totalFee).toBe(600_000n)
+    expect(fees.gasFee).toBe(0n)
+    expect(fees.totalFee).toBe(200_000n)
   })
 
-  it('uses relayer gas only for same-chain shield', () => {
+  it('charges no USDC fees for same-chain shield (user pays native gas)', () => {
     const fees = computeDisplayFees('shield', 5_000_000n, quote)
     expect(fees.protocolFee).toBe(0n)
-    expect(fees.gasFee).toBe(300_000n)
-    expect(fees.totalFee).toBe(300_000n)
+    expect(fees.gasFee).toBe(0n)
+    expect(fees.totalFee).toBe(0n)
   })
 })
 

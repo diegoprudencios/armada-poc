@@ -6,8 +6,8 @@ import type { DisplayFees } from '@/lib/fees/displayFees'
 import { Tooltip } from '@/components/ui/Tooltip'
 import styles from './FeeBreakdownTooltip.module.css'
 
-function feeLine(label: string, amount: bigint): string {
-  const value = amount === 0n ? 'No fee' : `${formatUsdcAmount(amount)} USDC`
+function feeLine(label: string, amount: bigint, zeroLabel = 'No fee'): string {
+  const value = amount === 0n ? zeroLabel : `${formatUsdcAmount(amount)} USDC`
   return `${label}: ${value}`
 }
 
@@ -22,7 +22,7 @@ export function FeeBreakdownTooltip({ fees, isLoading = false }: FeeBreakdownToo
     ? ['Loading fee estimate…']
     : [
         feeLine('Protocol fee', fees.protocolFee),
-        feeLine('Gas', fees.gasFee),
+        feeLine('Gas (USDC)', fees.gasFee, 'Paid in native token (e.g. ETH)'),
         feeLine('Total fee', fees.totalFee),
       ]
 
