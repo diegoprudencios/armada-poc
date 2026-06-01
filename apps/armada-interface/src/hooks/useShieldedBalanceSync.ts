@@ -64,9 +64,14 @@ export function useShieldedBalanceSync(): void {
 
         if (usdcResult.status === 'fulfilled') {
           setShieldedUsdc(usdcResult.value)
+        } else {
+          // Avoid leaving the atom null forever when the query fails — UI would show perpetual "Syncing…".
+          setShieldedUsdc(0n)
         }
         if (sharesResult.status === 'fulfilled') {
           setYieldShares(sharesResult.value)
+        } else {
+          setYieldShares(0n)
         }
       } catch (err) {
         trackError('useShieldedBalanceSync.refreshAll', err, {

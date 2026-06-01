@@ -5,8 +5,11 @@ import { useMemo } from 'react'
 import { Button } from '@armada/ui'
 import { DepositAmountCard } from '@/components/deposit/DepositAmountCard/DepositAmountCard'
 import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
+import { GasBalanceNotice } from '@/components/ui/GasBalanceNotice'
 import { getAllChainIdentities } from '@/config/network'
 import { formatUsdcPlain, parseUsdcInput, usdcInputErrorMessage } from '@/lib/format'
+import type { DisplayFees } from '@/lib/fees/displayFees'
+import { useGasBalanceWarning } from '@/hooks/useGasBalanceWarning'
 import { hasActiveAmount } from '@/utils/amountInput'
 import styles from './ShieldInputStep.module.css'
 
@@ -16,7 +19,9 @@ export interface ShieldInputStepProps {
   amountStr: string
   onAmountChange: (next: string) => void
   max: bigint
-  fee: bigint
+  maxInput: bigint
+  displayFees: DisplayFees
+  feeLoading?: boolean
   onCancel: () => void
   onContinue: () => void
 }
@@ -27,22 +32,31 @@ export function ShieldInputStepContent({
   amountStr,
   onAmountChange,
   max,
-  fee,
+  maxInput,
+  displayFees,
+  feeLoading = false,
 }: Pick<
   ShieldInputStepProps,
-  'fromChainId' | 'onFromChainIdChange' | 'amountStr' | 'onAmountChange' | 'max' | 'fee'
+  | 'fromChainId'
+  | 'onFromChainIdChange'
+  | 'amountStr'
+  | 'onAmountChange'
+  | 'max'
+  | 'maxInput'
+  | 'displayFees'
+  | 'feeLoading'
 >) {
   const chains = useMemo(
     () => getAllChainIdentities().map((c) => ({ chainId: c.chainId, label: c.name })),
     [],
   )
+  const gasWarning = useGasBalanceWarning(fromChainId)
   const { value: amount, error: amountError } = parseUsdcInput(amountStr)
-  const tooMuch = amount > max
+  const tooMuch = amount > maxInput
   const errorMessage = usdcInputErrorMessage(amountError)
-    ?? (tooMuch ? 'Amount exceeds your available balance.' : undefined)
+    ?? (tooMuch ? 'Amount exceeds your available balance after fees.' : undefined)
 
   const balanceDisplay = formatUsdcPlain(max)
-  const feeDisplay = formatUsdcPlain(fee)
 
   return (
     <div className={styles.contentZone}>
@@ -54,22 +68,30 @@ export function ShieldInputStepContent({
         amount={amountStr}
         onAmountChange={onAmountChange}
         balance={balanceDisplay}
-        fee={feeDisplay}
-        onMax={() => onAmountChange(formatUsdcPlain(max))}
+        displayFees={displayFees}
+        feeLoading={feeLoading}
+        onMax={() => onAmountChange(formatUsdcPlain(maxInput))}
         error={errorMessage}
+        amountAriaLabel="Deposit amount"
       />
+      {gasWarning.show ? (
+        <GasBalanceNotice
+          nativeSymbol={gasWarning.nativeSymbol}
+          formattedBalance={gasWarning.formattedBalance}
+        />
+      ) : null}
     </div>
   )
 }
 
 export function ShieldInputStepFooter({
   amountStr,
-  max,
+  maxInput,
   onCancel,
   onContinue,
-}: Pick<ShieldInputStepProps, 'amountStr' | 'max' | 'onCancel' | 'onContinue'>) {
+}: Pick<ShieldInputStepProps, 'amountStr' | 'maxInput' | 'onCancel' | 'onContinue'>) {
   const { value: amount, error: amountError } = parseUsdcInput(amountStr)
-  const tooMuch = amount > max
+  const tooMuch = amount > maxInput
   const canReview = hasActiveAmount(amountStr) && !tooMuch && !amountError
 
   return (

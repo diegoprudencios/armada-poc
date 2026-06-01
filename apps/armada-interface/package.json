@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.vitest.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare:artifacts": "node scripts/prepare-artifacts.mjs"
   },
   "dependencies": {
     "@armada/ui": "*",

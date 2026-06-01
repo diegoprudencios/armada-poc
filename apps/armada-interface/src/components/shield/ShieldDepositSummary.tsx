@@ -2,24 +2,27 @@
 
 import { formatUsdcAmount } from '@/lib/format'
 import { getChainById } from '@/config/network'
+import type { DisplayFees } from '@/lib/fees/displayFees'
+import { EstimatedFeeValue } from '@/components/ui/EstimatedFeeValue'
 import styles from './ShieldReviewStep.module.css'
 
 export interface ShieldDepositSummaryProps {
   fromChainId: number
   amount: bigint
-  fee: bigint | null
+  displayFees: DisplayFees | null
+  feeLoading?: boolean
 }
 
 export function ShieldDepositSummary({
   fromChainId,
   amount,
-  fee,
+  displayFees,
+  feeLoading = false,
 }: ShieldDepositSummaryProps) {
   const fromChain = getChainById(fromChainId)
   const networkName = fromChain?.name ?? `Chain ${fromChainId}`
   const amountLabel = formatUsdcAmount(amount)
-  const feeAmount = fee ?? 0n
-  const feeLabel = feeAmount === 0n ? 'No fee' : `${formatUsdcAmount(feeAmount)} USDC`
+  const feeAmount = displayFees?.totalFee ?? 0n
   const totalLabel = `${formatUsdcAmount(amount + feeAmount)} USDC`
 
   return (
@@ -36,7 +39,7 @@ export function ShieldDepositSummary({
       <hr className={styles.summaryDivider} />
       <div className={styles.summaryRow}>
         <span className={styles.summaryLabel}>Estimated fee</span>
-        <span className={styles.summaryValue}>{feeLabel}</span>
+        <EstimatedFeeValue fees={displayFees} isLoading={feeLoading} />
       </div>
       <hr className={styles.summaryDivider} />
       <div className={styles.summaryRow}>

@@ -9,7 +9,8 @@ import {
   antiPhishChecksumBytes,
   decryptBackup,
   formatChecksumDisplay,
-  parseBackupBlob,
+  normalizeBackupUnlockError,
+  parseBackupJsonText,
 } from '@/lib/crypto/kdf'
 import styles from './PassphraseStep.module.css'
 
@@ -43,13 +44,7 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
     let rootSecret: Uint8Array | null = null
     try {
       const text = await file.text()
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        throw new Error('Backup file is not valid JSON.')
-      }
-      const blob = parseBackupBlob(parsed)
+      const blob = parseBackupJsonText(text)
       const payload = decryptBackup(blob, passphrase)
       rootSecret = payload.rootSecret
       const checksum = formatChecksumDisplay(antiPhishChecksumBytes(rootSecret))
@@ -61,7 +56,7 @@ export function ConfirmBackupStep({ expectedChecksum, onBack, onConfirmed }: Con
       }
       setVerified(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed.')
+      setError(normalizeBackupUnlockError(err).message)
     } finally {
       // Zero out the recovered root_secret — it's a local-only verification copy; the keyManager
       // already holds the authoritative reference.

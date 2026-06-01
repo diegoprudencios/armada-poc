@@ -9,27 +9,33 @@ import {
   FlowStepIndicator,
   type FlowStepIndicatorStatus,
 } from '@/components/flow/FlowStepIndicator'
+import { OVERLAY_STEP_LABELS } from '@/components/flow/overlayFlow'
 import styles from './DepositOverlayShell.module.css'
 
 export interface DepositOverlayShellProps {
   open: boolean
-  /** 1-based step index for the 3-segment deposit bar. */
+  /** Shown in the step indicator (e.g. Deposit, Withdraw, Send, Earn). */
+  flowLabel?: string
+  /** Dialog aria-label; defaults to flowLabel. */
+  ariaLabel?: string
+  /** 1-based step index for the 3-segment bar. */
   currentStep: number
   totalSteps?: number
-  /** Lavender while in progress; green when the deposit is confirmed. */
+  /** Lavender while in progress; green when the flow is confirmed. */
   status?: FlowStepIndicatorStatus
   children: ReactNode
 }
 
-const DEPOSIT_STEP_LABELS = ['Amount', 'Review', 'Confirm'] as const
-
 export function DepositOverlayShell({
   open,
+  flowLabel = 'Deposit',
+  ariaLabel,
   currentStep,
-  totalSteps = DEPOSIT_STEP_LABELS.length,
+  totalSteps = OVERLAY_STEP_LABELS.length,
   status = 'default',
   children,
 }: DepositOverlayShellProps) {
+  const label = ariaLabel ?? flowLabel
   const { mounted, exiting } = useOverlayExitTransition(open, OVERLAY_EXIT_MS)
 
   useEffect(() => {
@@ -48,16 +54,16 @@ export function DepositOverlayShell({
       className={styles.root}
       role="dialog"
       aria-modal="true"
-      aria-label="Deposit"
+      aria-label={label}
       data-exiting={exiting ? true : undefined}
     >
       <div className={styles.backdrop} aria-hidden />
       <div className={styles.column}>
         <FlowStepIndicator
-          flowLabel="Deposit"
+          flowLabel={flowLabel}
           currentStep={currentStep}
           totalSteps={totalSteps}
-          steps={[...DEPOSIT_STEP_LABELS]}
+          steps={[...OVERLAY_STEP_LABELS]}
           status={status}
         />
         {children}

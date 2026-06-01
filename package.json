@@ -33,6 +33,8 @@
     "vkeys:register:sepolia": "hardhat run scripts/register_missing_vkeys.ts --network sepoliaHub",
     "derive:relayer-railgun": "npx ts-node scripts/derive_relayer_railgun_address.ts",
     "relayer": "npx ts-node relayer/armada-relayer.ts",
+    "relayer:sepolia-dev": "bash scripts/relayer-sepolia-dev.sh",
+    "relayer:local": "bash scripts/relayer-local-dev.sh",
     "armada-relayer": "npx ts-node relayer/armada-relayer.ts",
     "deploy:governance": "hardhat run scripts/deploy_governance.ts --network hub",
     "deploy:fee-module": "hardhat run scripts/deploy_fee_module.ts --network hub",

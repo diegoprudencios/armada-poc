@@ -16,6 +16,15 @@ export type { EmptyStateProps } from './EmptyState'
 export { FeeSummary } from './FeeSummary'
 export type { FeeSummaryProps } from './FeeSummary'
 
+export { FeeBreakdownTooltip } from './FeeBreakdownTooltip'
+export type { FeeBreakdownTooltipProps } from './FeeBreakdownTooltip'
+
+export { EstimatedFeeValue } from './EstimatedFeeValue'
+export type { EstimatedFeeValueProps } from './EstimatedFeeValue'
+
+export { GasBalanceNotice } from './GasBalanceNotice'
+export type { GasBalanceNoticeProps } from './GasBalanceNotice'
+
 export { Modal } from './Modal'
 export type { ModalProps } from './Modal'
 

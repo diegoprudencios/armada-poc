@@ -29,9 +29,11 @@ import {
 } from '@/lib/crypto/eip712'
 import {
   encryptBackup,
-  parseBackupBlob,
+  normalizeBackupUnlockError,
+  parseBackupJsonText,
   type BackupBlob,
 } from '@/lib/crypto/kdf'
+import { normalizeEnrollmentError } from '@/lib/railgun/enrollmentErrors'
 import { track, trackError } from '@/lib/telemetry'
 
 /**
@@ -81,8 +83,9 @@ export function useShieldedWallet() {
       // `shielded.created` is emitted by `enrollFromSignature` itself; don't double-track here.
       return out
     } catch (err) {
-      trackError('useShieldedWallet.enroll', err, { scope: 'shielded.enroll', message: 'enroll failed' })
-      throw err
+      const normalized = normalizeEnrollmentError(err)
+      trackError('useShieldedWallet.enroll', normalized, { scope: 'shielded.enroll', message: 'enroll failed' })
+      throw normalized
     }
   }, [evmAddress, setWallets, setActiveId])
 
@@ -120,19 +123,14 @@ export function useShieldedWallet() {
   const unlockByBackup = useCallback(async (file: File, passphrase: string): Promise<void> => {
     try {
       const text = await file.text()
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(text)
-      } catch {
-        throw new Error('Backup file is not valid JSON.')
-      }
-      const blob: BackupBlob = parseBackupBlob(parsed)
+      const blob = parseBackupJsonText(text)
       const next = await unlockFromBackup(blob, passphrase)
       setWallets(prev => ({ ...prev, [next.id]: next }))
       setActiveId(next.id)
     } catch (err) {
-      trackError('useShieldedWallet.unlockByBackup', err, { scope: 'shielded.unlock', message: 'backup unlock failed' })
-      throw err
+      const normalized = normalizeEnrollmentError(normalizeBackupUnlockError(err))
+      trackError('useShieldedWallet.unlockByBackup', normalized, { scope: 'shielded.unlock', message: 'backup unlock failed' })
+      throw normalized
     }
   }, [setWallets, setActiveId])
 

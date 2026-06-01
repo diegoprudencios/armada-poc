@@ -214,7 +214,7 @@ describe('unlockByBackup', () => {
 
     const badFile = new File(['{not valid json'], 'armada-backup.json')
     await expect(capture.current!.unlockByBackup(badFile, 'whatever')).rejects.toThrow(
-      /not valid JSON/,
+      /not valid JSON|Armada export/i,
     )
   })
 

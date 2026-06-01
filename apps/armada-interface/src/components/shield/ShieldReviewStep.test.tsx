@@ -2,16 +2,20 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import {
+  ZERO_DISPLAY_FEES,
+  displayFeesWithTotal,
+} from '@/test/fixtures/displayFees'
 import { ShieldReviewStep } from './ShieldReviewStep'
 
-function setup(opts?: { fee?: bigint | null }) {
+function setup(opts?: { displayFees?: typeof ZERO_DISPLAY_FEES }) {
   const onBack = vi.fn()
   const onConfirm = vi.fn()
   render(
     <ShieldReviewStep
       fromChainId={31337}
       amount={100_500_000n}
-      fee={opts?.fee ?? null}
+      displayFees={opts?.displayFees ?? ZERO_DISPLAY_FEES}
       netAmount={100_500_000n}
       onBack={onBack}
       onConfirm={onConfirm}
@@ -32,7 +36,7 @@ describe('<ShieldReviewStep>', () => {
   })
 
   it('includes fee in total when fee is non-zero', () => {
-    setup({ fee: 500_000n })
+    setup({ displayFees: displayFeesWithTotal(500_000n) })
     const feeRow = screen.getByText('Estimated fee').closest('div')
     expect(feeRow).toHaveTextContent('0.5 USDC')
     const totalRow = screen.getByText('Total').closest('div')

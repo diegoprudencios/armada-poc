@@ -1,41 +1,66 @@
-// ABOUTME: Unshield complete step — success panel naming the destination chain + recipient, plus a Done CTA.
-// ABOUTME: Mirrors the shield CompleteStep structure but renames the body copy to reflect "withdrew" semantics.
+// ABOUTME: Unshield complete step — withdrawal confirmation with hero amount, summary, explorer + Done.
 
-import { CheckCircle2 } from 'lucide-react'
-import { FlowFooter } from '@/components/flow/FlowFooter'
-import { formatUsdcAmount, truncateAddress } from '@/lib/format'
-import { getChainById } from '@/config/network'
-import styles from './UnshieldCompleteStep.module.css'
+import { Button } from '@armada/ui'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
+import { FlowAmountHero } from '@/components/flow/FlowAmountHero'
+import type { DisplayFees } from '@/lib/fees/displayFees'
+import { UnshieldWithdrawSummary } from './UnshieldWithdrawSummary'
+import reviewStyles from '@/components/shield/ShieldReviewStep.module.css'
 
 export interface UnshieldCompleteStepProps {
   destChainId: number
   recipient: string
-  /** Net amount delivered (post-fee), raw 6-decimal USDC. */
+  amount: bigint
+  displayFees: DisplayFees
+  isXchain: boolean
   netAmount: bigint
+  explorerUrl?: string
   onDone: () => void
 }
 
 export function UnshieldCompleteStep({
   destChainId,
   recipient,
+  amount,
+  displayFees,
+  isXchain,
   netAmount,
+  explorerUrl,
   onDone,
 }: UnshieldCompleteStepProps) {
-  const destChain = getChainById(destChainId)
+  function openExplorer() {
+    if (!explorerUrl) return
+    window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+  }
+
   return (
-    <div className={styles.root}>
-      <div className={styles.icon} aria-hidden="true">
-        <CheckCircle2 size={40} />
-      </div>
-      <h3 className={styles.title}>Withdrawal complete</h3>
-      <p className={styles.body}>
-        Sent {formatUsdcAmount(netAmount)} USDC to {truncateAddress(recipient)} on{' '}
-        {destChain?.name ?? `chain ${destChainId}`}.
-      </p>
-      <FlowFooter
-        className={styles.footer}
-        primary={{ label: 'Done', onClick: onDone }}
+    <div className={reviewStyles.contentZone}>
+      <h2 className={reviewStyles.title}>Withdrawal complete</h2>
+      <FlowAmountHero amount={netAmount} />
+      <UnshieldWithdrawSummary
+        destChainId={destChainId}
+        recipient={recipient}
+        amount={amount}
+        displayFees={displayFees}
+        isXchain={isXchain}
       />
+      <div className={depositOverlayShellStyles.buttonRow}>
+        <Button
+          variant="secondary"
+          size="lg"
+          label="View on explorer"
+          showIcon={false}
+          disabled={!explorerUrl}
+          onClick={openExplorer}
+        />
+        <Button
+          variant="primary"
+          size="lg"
+          label="Done"
+          showIcon={false}
+          onClick={onDone}
+        />
+      </div>
     </div>
   )
 }

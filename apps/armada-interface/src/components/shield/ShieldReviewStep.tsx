@@ -5,6 +5,7 @@ import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import { Button } from '@armada/ui'
 import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import { formatUsdcAmount } from '@/lib/format'
+import type { DisplayFees } from '@/lib/fees/displayFees'
 import { ShieldDepositSummary } from './ShieldDepositSummary'
 import styles from './ShieldReviewStep.module.css'
 
@@ -13,7 +14,8 @@ const USDC_ICON_SIZE = 24
 export interface ShieldReviewStepProps {
   fromChainId: number
   amount: bigint
-  fee: bigint | null
+  displayFees: DisplayFees | null
+  feeLoading?: boolean
   netAmount: bigint
   onBack: () => void
   onConfirm: () => void
@@ -23,8 +25,9 @@ export interface ShieldReviewStepProps {
 export function ShieldReviewStepContent({
   fromChainId,
   amount,
-  fee,
-}: Pick<ShieldReviewStepProps, 'fromChainId' | 'amount' | 'fee'>) {
+  displayFees,
+  feeLoading,
+}: Pick<ShieldReviewStepProps, 'fromChainId' | 'amount' | 'displayFees' | 'feeLoading'>) {
   const amountLabel = formatUsdcAmount(amount)
 
   return (
@@ -39,7 +42,12 @@ export function ShieldReviewStepContent({
           <span className={styles.currencyLabel}>USDC</span>
         </div>
       </div>
-      <ShieldDepositSummary fromChainId={fromChainId} amount={amount} fee={fee} />
+      <ShieldDepositSummary
+        fromChainId={fromChainId}
+        amount={amount}
+        displayFees={displayFees}
+        feeLoading={feeLoading}
+      />
     </div>
   )
 }

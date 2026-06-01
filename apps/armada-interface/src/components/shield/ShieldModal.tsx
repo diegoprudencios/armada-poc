@@ -1,44 +1,32 @@
 // ABOUTME: ShieldModal — deposit flow orchestrator using full-viewport DepositOverlayShell (not ActionFlowShell modal).
 // ABOUTME: Dispatches same-chain shield vs shield-xchain; progress/complete/error steps unchanged.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAtom } from 'jotai'
 import { openModalAtom } from '@/state/ui'
 import { useTx } from '@/hooks/useTx'
 import { useFees } from '@/hooks/useFees'
-import { userFeeForKind } from '@/lib/relayer'
 import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
+import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
 import { useBalances } from '@/hooks/useBalances'
 import { getNetworkConfig } from '@/config/network'
 import { parseUsdcInput } from '@/lib/format'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
 import { DepositOverlayShell } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
-import { ProgressStep, ErrorStep, type FlowStep, type FlowVisibleStep } from '@/components/flow'
+import {
+  ProgressStep,
+  ErrorStep,
+  overlayIndicatorStep,
+  overlayIndicatorStatus,
+  type FlowStep,
+  type FlowVisibleStep,
+} from '@/components/flow'
 import { ShieldInputStepContent, ShieldInputStepFooter } from './ShieldInputStep'
 import { ShieldReviewStepContent, ShieldReviewStepFooter } from './ShieldReviewStep'
 import { ShieldCompleteStep } from './ShieldCompleteStep'
 
 type LocalStep = FlowStep
 type SubmittedKind = 'shield' | 'shield-xchain'
-
-/** Map flow step to 1-based index for the 3-segment DEPOSIT bar (Confirm covers progress + complete). */
-function depositIndicatorStep(step: LocalStep): number {
-  switch (step) {
-    case 'input': return 1
-    case 'review': return 2
-    case 'progress':
-    case 'complete':
-    case 'error':
-      return 3
-    default: return 1
-  }
-}
-
-function depositIndicatorStatus(step: LocalStep): 'default' | 'error' | 'confirmed' {
-  if (step === 'complete') return 'confirmed'
-  if (step === 'error') return 'error'
-  return 'default'
-}
 
 function computeKind(fromChainId: number, hubChainId: number): SubmittedKind {
   return fromChainId === hubChainId ? 'shield' : 'shield-xchain'
@@ -64,8 +52,13 @@ export function ShieldModal() {
 
   const { quote, isStale, refresh } = useFees()
   const computedKind: SubmittedKind = computeKind(fromChainId, hubChainId)
-  const fee: bigint = userFeeForKind(computedKind, amount)
-  const netAmount = amount > fee ? amount - fee : 0n
+  const displayFees = useMemo(
+    () => computeDisplayFees(computedKind, amount, quote ?? null),
+    [computedKind, amount, quote],
+  )
+  const maxInput = maxInputAmount(max, displayFees.totalFee)
+  const feeLoading = !quote
+  const netAmount = amount > displayFees.protocolFee ? amount - displayFees.protocolFee : 0n
 
   const txShield = useTx({ kind: 'shield' })
   const txShieldXchain = useTx({ kind: 'shield-xchain' })
@@ -121,12 +114,13 @@ export function ShieldModal() {
     }
   }
 
-  const indicatorStep = depositIndicatorStep(step)
-  const indicatorStatus = depositIndicatorStatus(step)
+  const indicatorStep = overlayIndicatorStep(step)
+  const indicatorStatus = overlayIndicatorStatus(step)
 
   return (
     <DepositOverlayShell
       open={isOpen}
+      flowLabel="Deposit"
       currentStep={indicatorStep}
       status={indicatorStatus}
     >
@@ -137,7 +131,9 @@ export function ShieldModal() {
           amountStr={amountStr}
           onAmountChange={setAmountStr}
           max={max}
-          fee={fee}
+          maxInput={maxInput}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
         />
       ) : null}
 
@@ -145,14 +141,15 @@ export function ShieldModal() {
         <ShieldReviewStepContent
           fromChainId={fromChainId}
           amount={amount}
-          fee={fee}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
         />
       ) : null}
 
       {step === 'input' ? (
         <ShieldInputStepFooter
           amountStr={amountStr}
-          max={max}
+          maxInput={maxInput}
           onCancel={close}
           onContinue={() => setStep('review')}
         />
@@ -177,7 +174,7 @@ export function ShieldModal() {
         <ShieldCompleteStep
           fromChainId={fromChainId}
           amount={amount}
-          fee={fee}
+          displayFees={displayFees}
           netAmount={netAmount}
           explorerUrl={txExplorerUrl(
             record?.walletContext.sourceChainId,

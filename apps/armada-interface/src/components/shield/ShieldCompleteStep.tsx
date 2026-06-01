@@ -5,6 +5,7 @@ import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import { Button } from '@armada/ui'
 import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import { formatUsdcAmount } from '@/lib/format'
+import type { DisplayFees } from '@/lib/fees/displayFees'
 import { ShieldDepositSummary } from './ShieldDepositSummary'
 import reviewStyles from './ShieldReviewStep.module.css'
 
@@ -14,7 +15,7 @@ export interface ShieldCompleteStepProps {
   fromChainId: number
   /** Gross deposit amount (pre-fee), raw 6-decimal USDC. */
   amount: bigint
-  fee: bigint | null
+  displayFees: DisplayFees
   /** Net amount deposited (post-fee), shown in the hero. */
   netAmount: bigint
   /** Block explorer URL for the submitted tx; omit when the chain has no explorer. */
@@ -25,7 +26,7 @@ export interface ShieldCompleteStepProps {
 export function ShieldCompleteStep({
   fromChainId,
   amount,
-  fee,
+  displayFees,
   netAmount,
   explorerUrl,
   onDone,
@@ -49,7 +50,11 @@ export function ShieldCompleteStep({
           <span className={reviewStyles.currencyLabel}>USDC</span>
         </div>
       </div>
-      <ShieldDepositSummary fromChainId={fromChainId} amount={amount} fee={fee} />
+      <ShieldDepositSummary
+        fromChainId={fromChainId}
+        amount={amount}
+        displayFees={displayFees}
+      />
       <div className={depositOverlayShellStyles.buttonRow}>
         <Button
           variant="secondary"

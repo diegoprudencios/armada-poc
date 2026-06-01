@@ -93,6 +93,12 @@
 .chainName,
 .tokenName,
 .balanceText,
+.feeGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--primitives-spacing-1);
+}
+
 .feeText,
 .chainOptionLabel {
   font-family: var(--primitives-fontFamily-ui), sans-serif;

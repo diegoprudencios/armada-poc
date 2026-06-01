@@ -7,7 +7,7 @@
 // the first time initRailgunEngine() runs.
 import { getDefaultStore } from 'jotai'
 import { createWebDatabase } from './database'
-import { createBrowserArtifactStore } from './artifacts'
+import { clearArtifactCache, createBrowserArtifactStore } from './artifacts'
 import { initializeProver } from './prover'
 import { syncStateAtom } from '@/state/wallet'
 
@@ -81,7 +81,7 @@ export async function initRailgunEngine(): Promise<void> {
   if (lastError) throw lastError
   if (inFlight) return inFlight
   setEngineState('warming')
-  inFlight = doInit()
+  inFlight = doInitWithArtifactRetry()
   try {
     await inFlight
     initialized = true
@@ -92,6 +92,22 @@ export async function initRailgunEngine(): Promise<void> {
     throw lastError
   } finally {
     inFlight = null
+  }
+}
+
+function isArtifactJsonError(err: unknown): boolean {
+  if (err instanceof SyntaxError) return true
+  return err instanceof Error && /Unexpected token/i.test(err.message)
+}
+
+/** One automatic retry after clearing a bad IPFS artifact cache (common on first download). */
+async function doInitWithArtifactRetry(): Promise<void> {
+  try {
+    await doInit()
+  } catch (first) {
+    if (!isArtifactJsonError(first)) throw first
+    await clearArtifactCache()
+    await doInit()
   }
 }
 
@@ -122,6 +138,15 @@ async function doInit(): Promise<void> {
 
   const db = createWebDatabase(ENGINE_DB_NAME)
   const artifactStore = await createBrowserArtifactStore()
+
+  // Prefer bundled /public/artifacts over IPFS in dev — IPFS often returns HTML/rate-limit
+  // bodies that break JSON.parse (the "Unexpected token ']'" signup error).
+  const { checkTestArtifactsAvailable, loadTestArtifacts } = await import('./test-artifacts')
+  const hasBundledArtifacts = await checkTestArtifactsAvailable()
+  if (hasBundledArtifacts) {
+    await clearArtifactCache()
+    await loadTestArtifacts()
+  }
 
   await startRailgunEngine(
     ENGINE_WALLET_SOURCE,
@@ -196,4 +221,11 @@ export function resetInitState(): void {
   inFlight = null
   lastError = null
   setEngineState('cold')
+}
+
+/** User-triggered retry after a failed engine warm-up (Sign step). */
+export async function retryRailgunEngineInit(): Promise<void> {
+  resetInitState()
+  await clearArtifactCache()
+  await initRailgunEngine()
 }

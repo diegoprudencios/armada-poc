@@ -8,6 +8,8 @@ import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useAtomValue } from 'jotai'
 import { HeadingSm } from '@armada/ui'
 import { FlowFooter } from '@/components/flow/FlowFooter'
+import { normalizeEnrollmentError } from '@/lib/railgun/enrollmentErrors'
+import { retryRailgunEngineInit } from '@/lib/railgun/init'
 import { railgunEngineAtom } from '@/state/wallet'
 import styles from './WelcomeStep.module.css'
 
@@ -22,6 +24,7 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
   const { openConnectModal } = useConnectModal()
   const engine = useAtomValue(railgunEngineAtom)
   const [submitting, setSubmitting] = useState(false)
+  const [retryingEngine, setRetryingEngine] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // While submitting, the parent's enroll() runs initRailgunEngine first (engine state goes
@@ -36,7 +39,7 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
     try {
       await onSign()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Signing failed.')
+      setError(normalizeEnrollmentError(err).message)
     } finally {
       setSubmitting(false)
     }
@@ -77,6 +80,27 @@ export function SignEnrollmentStep({ onSign, onBack }: SignEnrollmentStepProps) 
       ) : null}
       {error ? (
         <div role="alert" style={{ color: 'var(--semantic-color-status-error)' }}>{error}</div>
+      ) : null}
+      {engine.state === 'failed' ? (
+        <button
+          type="button"
+          className={styles.body}
+          style={{ color: 'var(--semantic-color-text-link)', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+          disabled={submitting || retryingEngine}
+          onClick={async () => {
+            setRetryingEngine(true)
+            setError(null)
+            try {
+              await retryRailgunEngineInit()
+            } catch (err) {
+              setError(normalizeEnrollmentError(err).message)
+            } finally {
+              setRetryingEngine(false)
+            }
+          }}
+        >
+          {retryingEngine ? 'Retrying engine setup…' : 'Retry engine setup'}
+        </button>
       ) : null}
       <FlowFooter
         className={styles.footer}

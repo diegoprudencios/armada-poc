@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { ZERO_DISPLAY_FEES } from '@/test/fixtures/displayFees'
 import { SendInputStep, type SendTab } from './SendInputStep'
 
 const VALID_EVM = '0x1234567890abcdef1234567890abcdef12345678'
@@ -14,6 +15,7 @@ function setup(extras?: {
   amountStr?: string
   max?: bigint
 }) {
+  const max = extras?.max ?? 5_000_000n
   const props = {
     tab: extras?.tab ?? 'private' as SendTab,
     onTabChange: vi.fn(),
@@ -23,14 +25,15 @@ function setup(extras?: {
     onRecipientChange: vi.fn(),
     amountStr: extras?.amountStr ?? '',
     onAmountChange: vi.fn(),
-    max: extras?.max ?? 5_000_000n,
-    fee: null as bigint | null,
-    netAmount: 0n,
+    max,
+    maxInput: max,
+    displayFees: ZERO_DISPLAY_FEES,
+    gasChainId: extras?.destChainId ?? 31337,
     onCancel: vi.fn(),
     onContinue: vi.fn(),
   }
-  render(<SendInputStep {...props} />)
-  return props
+  const view = render(<SendInputStep {...props} />)
+  return { props, container: view.container }
 }
 
 describe('<SendInputStep>', () => {
@@ -41,31 +44,31 @@ describe('<SendInputStep>', () => {
   })
 
   it('private tab: hides the chain selector', () => {
-    setup({ tab: 'private' })
-    expect(screen.queryByLabelText('To chain')).toBeNull()
+    const { container } = setup({ tab: 'private' })
+    expect(container.querySelector('[aria-haspopup="listbox"]')).toBeNull()
   })
 
   it('external tab: shows the chain selector', () => {
-    setup({ tab: 'external' })
-    expect(screen.getByLabelText('To chain')).toBeInTheDocument()
+    const { container } = setup({ tab: 'external' })
+    expect(container.querySelector('[aria-haspopup="listbox"]')).toBeTruthy()
   })
 
   it('private tab: rejects an EVM address with an inline error', () => {
     setup({ tab: 'private', recipient: VALID_EVM, amountStr: '1' })
     expect(screen.getByRole('alert')).toHaveTextContent(/valid shielded address/i)
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).toBeDisabled()
   })
 
   it('private tab: accepts a 0zk address', () => {
     setup({ tab: 'private', recipient: VALID_0ZK, amountStr: '1' })
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.getByRole('button', { name: /Continue/ })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).not.toBeDisabled()
   })
 
   it('external tab: rejects a 0zk address', () => {
     setup({ tab: 'external', recipient: VALID_0ZK, amountStr: '1' })
     expect(screen.getByRole('alert')).toHaveTextContent(/valid EVM address/i)
-    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Review/ })).toBeDisabled()
   })
 
   it('external tab + hub destination: no xchain notice', () => {
@@ -79,14 +82,14 @@ describe('<SendInputStep>', () => {
   })
 
   it('fires onTabChange when a tab is clicked', () => {
-    const props = setup({ tab: 'private' })
+    const { props } = setup({ tab: 'private' })
     fireEvent.click(screen.getByRole('tab', { name: /External wallet/ }))
     expect(props.onTabChange).toHaveBeenCalledWith('external')
   })
 
   it('fires onContinue when valid', () => {
-    const props = setup({ tab: 'private', recipient: VALID_0ZK, amountStr: '2' })
-    fireEvent.click(screen.getByRole('button', { name: /Continue/ }))
+    const { props } = setup({ tab: 'private', recipient: VALID_0ZK, amountStr: '2' })
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
     expect(props.onContinue).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,7 +1,7 @@
-// ABOUTME: EarnModal — vault deposit + withdrawal. Add Funds tab uses yield-deposit; Withdraw tab uses yield-withdraw.
-// ABOUTME: Matches either openModalAtom === 'yield-deposit' or === 'yield-withdraw'; the entry point picks the initial tab.
+// ABOUTME: EarnModal — vault deposit + withdrawal using full-viewport overlay shell.
+// ABOUTME: Matches openModalAtom yield-deposit or yield-withdraw for initial tab.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { openModalAtom, type ModalKind } from '@/state/ui'
 import { shieldedUsdcAtom, yieldSharesAtom } from '@/state/wallet'
@@ -10,22 +10,25 @@ import { useFees } from '@/hooks/useFees'
 import { useSpendableSyncGate } from '@/hooks/useSpendableSyncGate'
 import { useYieldRate } from '@/hooks/useYieldRate'
 import { parseUsdcInput } from '@/lib/format'
-import { userFeeForKind } from '@/lib/relayer'
+import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
+import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
+import { getNetworkConfig } from '@/config/network'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
 import { sharesToUsdc } from '@/lib/yield'
+import { DepositOverlayShell } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import {
-  ActionFlowShell,
   ProgressStep,
   ErrorStep,
+  overlayIndicatorStep,
+  overlayIndicatorStatus,
   type FlowStep,
   type FlowVisibleStep,
 } from '@/components/flow'
-import { EarnInputStep, type EarnTab } from './EarnInputStep'
-import { EarnReviewStep } from './EarnReviewStep'
+import { EarnInputStepContent, EarnInputStepFooter, type EarnTab } from './EarnInputStep'
+import { EarnReviewStepContent, EarnReviewStepFooter } from './EarnReviewStep'
 import { EarnCompleteStep } from './EarnCompleteStep'
 
 type LocalStep = FlowStep
-const STEPS: ReadonlyArray<FlowVisibleStep> = ['input', 'review', 'progress', 'complete']
 
 const EARN_KINDS: ReadonlyArray<ModalKind> = ['yield-deposit', 'yield-withdraw']
 
@@ -34,36 +37,35 @@ export function EarnModal() {
   const isOpen = EARN_KINDS.includes(openModal)
   const initialTab: EarnTab = openModal === 'yield-withdraw' ? 'withdraw' : 'add'
 
-  // Form state
   const [tab, setTab] = useState<EarnTab>(initialTab)
   const [amountStr, setAmountStr] = useState<string>('')
 
-  // Flow state
   const [step, setStep] = useState<LocalStep>('input')
   const [errorAtStep, setErrorAtStep] = useState<FlowVisibleStep | undefined>(undefined)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submittedKind, setSubmittedKind] = useState<'yield-deposit' | 'yield-withdraw' | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Source data
   const shieldedUsdc = useAtomValue(shieldedUsdcAtom)
   const yieldShares = useAtomValue(yieldSharesAtom)
   const { rate: yieldRate, refresh: refreshYieldRate } = useYieldRate()
-  // Earning balance (USDC) requires both shares + rate to compute.
   const earningUsdc =
     yieldShares !== null && yieldRate !== null ? sharesToUsdc(yieldShares, yieldRate.rate) : null
   const max = tab === 'add' ? shieldedUsdc ?? 0n : earningUsdc ?? 0n
 
   const { value: amount } = parseUsdcInput(amountStr)
   const { quote, isStale, refresh } = useFees()
-  // Yield ops spend the user's shielded USDC (deposit) or shielded yield shares (withdraw).
-  // Either way, we need a successful first sync before letting the user submit.
   const syncGate = useSpendableSyncGate()
-  // Display fee for yield ops is 0 today — user submits via own wallet, no relayer leg.
+  const hubChainId = getNetworkConfig().hub.chainId
   const yieldKind: 'yield-deposit' | 'yield-withdraw' = tab === 'add' ? 'yield-deposit' : 'yield-withdraw'
-  const fee: bigint = userFeeForKind(yieldKind, amount)
-  const netAmount = amount > fee ? amount - fee : 0n
+  const displayFees = useMemo(
+    () => computeDisplayFees(yieldKind, amount, quote ?? null),
+    [yieldKind, amount, quote],
+  )
+  const maxInput = maxInputAmount(max, displayFees.totalFee)
+  const feeLoading = !quote
+  const netAmount = amount > displayFees.totalFee ? amount - displayFees.totalFee : 0n
 
-  // Two useTx hooks; only one gets a record per flow.
   const txDeposit = useTx({ kind: 'yield-deposit' })
   const txWithdraw = useTx({ kind: 'yield-withdraw' })
   const activeTx =
@@ -72,9 +74,6 @@ export function EarnModal() {
     : null
   const record = activeTx?.record ?? null
 
-  // Reset on close + sync initial tab when the entry-point modal kind changes.
-  // Also pull a fresh rate on open so the APY hint + max-balance reflect current state — the
-  // background poll only ticks every 5 min and a user opening the modal expects "now" data.
   useEffect(() => {
     if (!isOpen) return
     setStep('input')
@@ -82,17 +81,12 @@ export function EarnModal() {
     setErrorAtStep(undefined)
     setAmountStr('')
     setSubmittedKind(null)
+    setIsSubmitting(false)
     setTab(initialTab)
     void refreshYieldRate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
-  // Watch the submitted record for terminal transitions. On completed, refresh the rate so the
-  // post-tx balance / APY view reflects the new vault state immediately (rather than waiting up
-  // to 5 min for the next poll tick). Dep is `record?.executionState` rather than `record` so
-  // artifact patches during proof-progress updates don't re-fire — the body only branches on
-  // executionState. The `refreshYieldRate` reference is intentionally elided from deps (same as
-  // the open-side effect above) since its identity can churn without semantic change.
   useEffect(() => {
     if (!record) return
     if (record.executionState === 'completed') {
@@ -111,13 +105,11 @@ export function EarnModal() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return
+    setIsSubmitting(true)
     setSubmitError(null)
     try {
-      const activeQuote = quote && !isStale ? quote : await refresh()
-      if (!activeQuote) {
-        throw new Error('Could not fetch a current fee quote — please try again.')
-      }
-      const feeCacheId = activeQuote.cacheId
+      const feeCacheId = await resolveFeeCacheId({ quote, isStale, refresh })
       if (tab === 'add') {
         setSubmittedKind('yield-deposit')
         await txDeposit.submit({
@@ -126,10 +118,6 @@ export function EarnModal() {
         })
       } else {
         setSubmittedKind('yield-withdraw')
-        // Slippage protection: re-read the vault rate just before computing shares so the
-        // submitted shares reflect the freshest possible exchange ratio. The residual window
-        // (this submit-block → execution-block) is ~1 block — at any realistic APY that's well
-        // below USDC's display precision.
         const freshRate = await refreshYieldRate()
         const effectiveRate = freshRate ?? yieldRate
         const shares =
@@ -147,60 +135,100 @@ export function EarnModal() {
       setSubmitError(err instanceof Error ? err.message : 'Submit failed.')
       setStep('error')
       setErrorAtStep('review')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
+  const indicatorStep = overlayIndicatorStep(step)
+  const indicatorStatus = overlayIndicatorStatus(step)
+  const progressTitle = tab === 'add' ? 'Deposit to vault in progress' : 'Withdrawal from vault in progress'
+
   return (
-    <ActionFlowShell
+    <DepositOverlayShell
       open={isOpen}
-      onClose={close}
-      title="Earn"
-      step={step}
-      steps={STEPS}
-      errorAtStep={errorAtStep}
+      flowLabel="Earn"
+      currentStep={indicatorStep}
+      status={indicatorStatus}
     >
-      {step === 'input' && (
-        <EarnInputStep
+      {step === 'input' ? (
+        <EarnInputStepContent
           tab={tab}
           onTabChange={t => {
             setTab(t)
-            setAmountStr('') // amount caps differ per tab
+            setAmountStr('')
           }}
           amountStr={amountStr}
           onAmountChange={setAmountStr}
           max={max}
+          maxInput={maxInput}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          gasChainId={hubChainId}
           rate={yieldRate}
-          fee={fee}
-          netAmount={netAmount}
-          isFeeRefreshing={isStale}
-          onCancel={close}
-          onContinue={() => setStep('review')}
         />
-      )}
-      {step === 'review' && (
-        <EarnReviewStep
+      ) : null}
+
+      {step === 'review' ? (
+        <EarnReviewStepContent
           tab={tab}
           amount={amount}
           rate={yieldRate}
-          fee={fee}
-          netAmount={netAmount}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          submitBlockedReason={syncGate.reason}
+        />
+      ) : null}
+
+      {step === 'input' ? (
+        <EarnInputStepFooter
+          amountStr={amountStr}
+          maxInput={maxInput}
+          onCancel={close}
+          onContinue={() => setStep('review')}
+        />
+      ) : null}
+
+      {step === 'review' ? (
+        <EarnReviewStepFooter
+          tab={tab}
           submitBlockedReason={syncGate.reason}
           onBack={() => setStep('input')}
           onConfirm={handleSubmit}
+          isSubmitting={isSubmitting}
         />
-      )}
-      {step === 'progress' && <ProgressStep record={record} />}
-      {step === 'complete' && (
-        <EarnCompleteStep tab={tab} netAmount={netAmount} onDone={close} />
-      )}
-      {step === 'error' && (
+      ) : null}
+
+      {step === 'progress' ? (
+        <ProgressStep
+          record={record}
+          title={progressTitle}
+          onClose={close}
+        />
+      ) : null}
+      {step === 'complete' ? (
+        <EarnCompleteStep
+          tab={tab}
+          amount={amount}
+          rate={yieldRate}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          netAmount={netAmount}
+          explorerUrl={txExplorerUrl(
+            record?.walletContext.sourceChainId,
+            displayTxHash(record),
+          )}
+          onDone={close}
+        />
+      ) : null}
+      {step === 'error' ? (
         <ErrorStep
           error={record?.artifacts.error ?? null}
           message={submitError ?? undefined}
           explorerUrl={txExplorerUrl(record?.walletContext.sourceChainId, displayTxHash(record))}
           onRetry={errorAtStep === 'review' ? () => setStep('review') : () => activeTx?.retry()}
         />
-      )}
-    </ActionFlowShell>
+      ) : null}
+    </DepositOverlayShell>
   )
 }

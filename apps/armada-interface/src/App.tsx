@@ -19,6 +19,10 @@ import { useTxHistory } from '@/hooks/useTxHistory'
 import { useUsdcBalances } from '@/hooks/useUsdcBalances'
 import { useWallet } from '@/hooks/useWallet'
 import { isLocalMode } from '@/config/network'
+import {
+  DEFAULT_DEV_MOCK_BALANCE,
+  devMockBalanceAtom,
+} from '@/state/devMockBalance'
 // Side-effect imports: register each feature's stage handler with the tx executor at module load.
 // Per-feature handlers each have their own side-effect entry point under features/<area>/index.ts.
 import '@/features/shield'
@@ -29,7 +33,6 @@ import '@/features/transfer-shielded'
 import '@/features/yield-deposit'
 import '@/features/yield-withdraw'
 import { startEngine } from '@/lib/tx/executor'
-import { initRailgunEngine } from '@/lib/railgun/init'
 import { clearStoredWalletIdentity, readStoredWalletId } from '@/lib/railgun/wallet'
 import {
   activeRailgunWalletIdAtom,
@@ -63,16 +66,22 @@ export function App() {
   // modal opens (otherwise the first modal sees `quote=null` briefly).
   useFees()
 
+  const setDevMockBalance = useSetAtom(devMockBalanceAtom)
+
+  // First local boot: enable mock USDC unless opted out (VITE_DEV_MOCK_BALANCE=false) or Debug saved a preference.
+  useEffect(() => {
+    if (!isLocalMode()) return
+    if (import.meta.env.VITE_DEV_MOCK_BALANCE === 'false') return
+    if (localStorage.getItem('armada-interface.devMockBalance') != null) return
+    setDevMockBalance({ ...DEFAULT_DEV_MOCK_BALANCE, enabled: true })
+  }, [setDevMockBalance])
+
   useEffect(() => {
     // Start the tx execution engine. Idempotent + module-scope, so this runs
     // safely under StrictMode's double-mount and never spawns a second engine.
     startEngine()
-    // Opportunistically pre-warm the Railgun engine — loads the WASM proving stack + IDB DB +
-    // artifact store in the background while the user is still onboarding or browsing. Without
-    // this, the first proof-generating tx pays a 1-2s warmup before the SDK can do anything.
-    // Idempotent: a later enroll/unlock call also goes through ensureRailgunReady() which is a
-    // no-op once initialized.
-    void initRailgunEngine()
+    // Pre-warm is deferred until onboarding/unlock — eager init pulled a ~20MB Railgun dep
+    // chunk on first paint and could blank the app if Vite's dep cache was corrupt.
   }, [])
 
   const wallet = useAtomValue(shieldedWalletAtom)

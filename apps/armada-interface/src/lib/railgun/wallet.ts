@@ -37,15 +37,17 @@ import { getCurrentHubBlock, loadHubNetwork } from './network'
  * loadHubNetwork failure is non-fatal during enrollment (the wallet can still be created
  * without a network; balance scanning just won't work until the network is loaded).
  */
-async function ensureRailgunReady(): Promise<void> {
+async function ensureRailgunReady(options?: { requireHubNetwork?: boolean }): Promise<void> {
   await initRailgunEngine()
   try {
     await loadHubNetwork()
   } catch (err) {
-    // Surface but don't block — wallet creation/load doesn't strictly need the network.
-    // Balance scans + tx submission will fail downstream until the user fixes the underlying
-    // problem (RPC down, contracts not deployed, etc.).
     trackError('railgun.network.load', err, { scope: 'shielded.unlock', message: 'hub network load failed' })
+    if (options?.requireHubNetwork) {
+      throw err instanceof Error ? err : new Error(String(err))
+    }
+    // Non-enrollment paths: surface but don't block — wallet creation/load doesn't strictly
+    // need the network until balance scans / tx submission.
   }
 }
 

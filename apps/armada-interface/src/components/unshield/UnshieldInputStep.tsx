@@ -1,101 +1,165 @@
-// ABOUTME: Unshield input step — destination chain + recipient + amount + fee summary, with cross-chain notice when the destination is a client chain.
-// ABOUTME: Validates amount > 0 ≤ max AND recipient is a valid EVM address; disables Continue until both hold.
+// ABOUTME: Unshield amount step — DepositAmountCard + locked recipient row (full-viewport withdraw flow).
 
-import { AmountInput, ChainSelect, FeeSummary, RecipientInput } from '@/components/ui'
-import { FlowFooter } from '@/components/flow/FlowFooter'
-import { parseUsdcInput, usdcInputErrorMessage } from '@/lib/format'
+import { useMemo } from 'react'
+import { Button } from '@armada/ui'
+import { DepositAmountCard } from '@/components/deposit/DepositAmountCard/DepositAmountCard'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
+import { GasBalanceNotice } from '@/components/ui/GasBalanceNotice'
+import { getAllChainIdentities, getNetworkConfig } from '@/config/network'
+import { formatUsdcPlain, parseUsdcInput, usdcInputErrorMessage } from '@/lib/format'
 import { isEvmAddress } from '@/lib/address'
-import { getNetworkConfig } from '@/config/network'
+import type { DisplayFees } from '@/lib/fees/displayFees'
+import { useGasBalanceWarning } from '@/hooks/useGasBalanceWarning'
+import { hasActiveAmount } from '@/utils/amountInput'
+import shieldStyles from '@/components/shield/ShieldInputStep.module.css'
+import { WithdrawRecipientField } from './WithdrawRecipientField'
 import styles from './UnshieldInputStep.module.css'
+
+const questionClass = shieldStyles.question
 
 export interface UnshieldInputStepProps {
   destChainId: number
   onDestChainIdChange: (chainId: number) => void
-  recipient: string
-  onRecipientChange: (next: string) => void
+  walletAddress: string | null
   amountStr: string
   onAmountChange: (next: string) => void
-  /** Max from shieldedUsdcAtom. */
   max: bigint
-  fee: bigint | null
-  netAmount: bigint
-  isFeeRefreshing?: boolean
+  maxInput: bigint
+  balanceLabel: string
+  balanceSyncing: boolean
+  displayFees: DisplayFees
+  feeLoading?: boolean
+  gasChainId: number
   onCancel: () => void
   onContinue: () => void
 }
 
-export function UnshieldInputStep({
+export function UnshieldInputStepContent({
   destChainId,
   onDestChainIdChange,
-  recipient,
-  onRecipientChange,
+  walletAddress,
   amountStr,
   onAmountChange,
-  max,
-  fee,
-  netAmount,
-  isFeeRefreshing,
-  onCancel,
-  onContinue,
-}: UnshieldInputStepProps) {
+  maxInput,
+  balanceLabel,
+  balanceSyncing,
+  displayFees,
+  feeLoading = false,
+  gasChainId,
+}: Pick<
+  UnshieldInputStepProps,
+  | 'destChainId'
+  | 'onDestChainIdChange'
+  | 'walletAddress'
+  | 'amountStr'
+  | 'onAmountChange'
+  | 'maxInput'
+  | 'balanceLabel'
+  | 'balanceSyncing'
+  | 'displayFees'
+  | 'feeLoading'
+  | 'gasChainId'
+>) {
   const hubChainId = getNetworkConfig().hub.chainId
   const isXchain = destChainId !== hubChainId
+  const chains = useMemo(
+    () => getAllChainIdentities().map((c) => ({ chainId: c.chainId, label: c.name })),
+    [],
+  )
+  const gasWarning = useGasBalanceWarning(gasChainId)
 
   const { value: amount, error: parseError } = parseUsdcInput(amountStr)
-  const tooMuch = amount > max
-  // Parser-side errors (too-many-decimals etc) take precedence over balance-bound errors.
+  const tooMuch = amount > maxInput
   const amountError = usdcInputErrorMessage(parseError)
-    ?? (tooMuch ? 'Amount exceeds your private balance.' : undefined)
-
-  const recipientTrimmed = recipient.trim()
-  // Empty recipient is allowed (no error shown); validation only kicks in once the user types something.
-  const recipientInvalid = recipientTrimmed.length > 0 && !isEvmAddress(recipientTrimmed)
-  const recipientError = recipientInvalid ? 'Enter a valid EVM address (0x… 42 chars).' : undefined
-
-  const isValid =
-    amount > 0n &&
-    !tooMuch &&
-    !parseError &&
-    isEvmAddress(recipientTrimmed)
+    ?? (tooMuch ? 'Amount exceeds your private balance after fees.' : undefined)
 
   return (
-    <div className={styles.root}>
-      <ChainSelect
-        label="To chain"
-        value={destChainId}
-        onChange={onDestChainIdChange}
-      />
+    <div className={styles.withdrawContent}>
+      <div className={styles.amountGroup}>
+        <p className={questionClass}>How much USDC do you want to withdraw?</p>
+        <DepositAmountCard
+          chains={chains}
+          chainId={destChainId}
+          onChainIdChange={onDestChainIdChange}
+          amount={amountStr}
+          onAmountChange={onAmountChange}
+          balance={balanceLabel}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          onMax={
+            balanceSyncing
+              ? undefined
+              : () => onAmountChange(formatUsdcPlain(maxInput))
+          }
+          error={amountError}
+          amountAriaLabel="Withdrawal amount"
+        />
+        {gasWarning.show ? (
+          <GasBalanceNotice
+            nativeSymbol={gasWarning.nativeSymbol}
+            formattedBalance={gasWarning.formattedBalance}
+          />
+        ) : null}
+      </div>
+      <div className={styles.recipientSlot}>
+        <WithdrawRecipientField address={walletAddress} />
+      </div>
       {isXchain ? (
         <div className={styles.xchainNotice}>
           Cross-chain withdrawal takes a few minutes for the CCTP confirmation.
         </div>
       ) : null}
-      <RecipientInput
-        label="Recipient address"
-        value={recipient}
-        onValueChange={onRecipientChange}
-        error={recipientError}
-        placeholder="0x…"
+    </div>
+  )
+}
+
+export function UnshieldInputStepFooter({
+  walletAddress,
+  amountStr,
+  maxInput,
+  balanceSyncing,
+  onCancel,
+  onContinue,
+}: Pick<
+  UnshieldInputStepProps,
+  'walletAddress' | 'amountStr' | 'maxInput' | 'balanceSyncing' | 'onCancel' | 'onContinue'
+>) {
+  const { value: amount, error: parseError } = parseUsdcInput(amountStr)
+  const tooMuch = amount > maxInput
+  const recipientTrimmed = walletAddress?.trim() ?? ''
+  const canReview =
+    !balanceSyncing &&
+    hasActiveAmount(amountStr) &&
+    !tooMuch &&
+    !parseError &&
+    isEvmAddress(recipientTrimmed)
+
+  return (
+    <div className={depositOverlayShellStyles.buttonRow}>
+      <Button
+        variant="secondary"
+        size="lg"
+        label="Cancel"
+        showIcon={false}
+        onClick={onCancel}
       />
-      <AmountInput
-        variant="display"
-        label="How much USDC?"
-        value={amountStr}
-        onValueChange={onAmountChange}
-        max={max}
-        error={amountError}
-      />
-      <FeeSummary
-        fee={fee}
-        netAmount={netAmount}
-        netLabel="You'll receive"
-        isRefreshing={isFeeRefreshing}
-      />
-      <FlowFooter
-        className={styles.footer}
-        primary={{ label: 'Continue', onClick: onContinue, disabled: !isValid }}
-        secondary={{ label: 'Cancel', onClick: onCancel }}
+      <Button
+        variant="primary"
+        size="lg"
+        label="Review"
+        showIcon={false}
+        disabled={!canReview}
+        onClick={onContinue}
       />
     </div>
+  )
+}
+
+export function UnshieldInputStep(props: UnshieldInputStepProps) {
+  return (
+    <>
+      <UnshieldInputStepContent {...props} />
+      <UnshieldInputStepFooter {...props} />
+    </>
   )
 }

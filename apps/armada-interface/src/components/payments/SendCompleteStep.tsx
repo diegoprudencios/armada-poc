@@ -1,18 +1,22 @@
-// ABOUTME: Send complete step — success copy adapts to private vs external mode + chain (when external).
-// ABOUTME: Mirrors the Shield/Unshield CompleteStep shape so success states across flows feel consistent.
+// ABOUTME: Send complete step — confirmation with hero amount, summary, explorer + Done.
 
-import { CheckCircle2 } from 'lucide-react'
-import { FlowFooter } from '@/components/flow/FlowFooter'
-import { formatUsdcAmount, truncateAddress } from '@/lib/format'
-import { getChainById } from '@/config/network'
+import { Button } from '@armada/ui'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
+import { FlowAmountHero } from '@/components/flow/FlowAmountHero'
+import type { DisplayFees } from '@/lib/fees/displayFees'
+import { SendTransferSummary } from './SendTransferSummary'
 import type { SendTab } from './SendInputStep'
-import styles from './SendCompleteStep.module.css'
+import reviewStyles from '@/components/shield/ShieldReviewStep.module.css'
 
 export interface SendCompleteStepProps {
   tab: SendTab
   destChainId: number
   recipient: string
+  amount: bigint
+  displayFees: DisplayFees
+  isXchain: boolean
   netAmount: bigint
+  explorerUrl?: string
   onDone: () => void
 }
 
@@ -20,29 +24,47 @@ export function SendCompleteStep({
   tab,
   destChainId,
   recipient,
+  amount,
+  displayFees,
+  isXchain,
   netAmount,
+  explorerUrl,
   onDone,
 }: SendCompleteStepProps) {
-  const destChain = tab === 'external' ? getChainById(destChainId) : null
-  const short = recipient.startsWith('0zk') && recipient.length > 14
-    ? `${recipient.slice(0, 7)}…${recipient.slice(-4)}`
-    : truncateAddress(recipient)
+  function openExplorer() {
+    if (!explorerUrl) return
+    window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+  }
 
   return (
-    <div className={styles.root}>
-      <div className={styles.icon} aria-hidden="true">
-        <CheckCircle2 size={40} />
-      </div>
-      <h3 className={styles.title}>Sent</h3>
-      <p className={styles.body}>
-        {tab === 'private'
-          ? <>Sent {formatUsdcAmount(netAmount)} USDC privately to {short}.</>
-          : <>Sent {formatUsdcAmount(netAmount)} USDC to {short} on {destChain?.name ?? `chain ${destChainId}`}.</>}
-      </p>
-      <FlowFooter
-        className={styles.footer}
-        primary={{ label: 'Done', onClick: onDone }}
+    <div className={reviewStyles.contentZone}>
+      <h2 className={reviewStyles.title}>Send complete</h2>
+      <FlowAmountHero amount={netAmount} />
+      <SendTransferSummary
+        tab={tab}
+        destChainId={destChainId}
+        recipient={recipient}
+        amount={amount}
+        displayFees={displayFees}
+        isXchain={isXchain}
       />
+      <div className={depositOverlayShellStyles.buttonRow}>
+        <Button
+          variant="secondary"
+          size="lg"
+          label="View on explorer"
+          showIcon={false}
+          disabled={!explorerUrl}
+          onClick={openExplorer}
+        />
+        <Button
+          variant="primary"
+          size="lg"
+          label="Done"
+          showIcon={false}
+          onClick={onDone}
+        />
+      </div>
     </div>
   )
 }

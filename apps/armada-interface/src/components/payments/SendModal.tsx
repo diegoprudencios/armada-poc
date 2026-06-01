@@ -1,7 +1,7 @@
-// ABOUTME: SendModal — pay someone in USDC, either privately (0zk → 0zk) or to an external wallet (0x). Picks among three kinds based on the tab + destination chain.
-// ABOUTME: Mounts three useTx hooks (transfer-shielded / unshield-local / unshield-xchain); submitted-kind state locks the subscription for the rest of the flow. External-tab + xchain reuses unshield-xchain — same contract path, different UI entry.
+// ABOUTME: SendModal — pay USDC privately or to an external wallet using full-viewport overlay shell.
+// ABOUTME: Picks transfer-shielded / unshield-local / unshield-xchain based on tab + destination chain.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { openModalAtom } from '@/state/ui'
 import { shieldedUsdcAtom } from '@/state/wallet'
@@ -15,22 +15,24 @@ import {
   type ResolvedDeployments,
 } from '@/config/deployments'
 import { parseUsdcInput } from '@/lib/format'
-import { userFeeForKind } from '@/lib/relayer'
+import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
+import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
 import { trackError } from '@/lib/telemetry'
+import { DepositOverlayShell } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import {
-  ActionFlowShell,
   ProgressStep,
   ErrorStep,
+  overlayIndicatorStep,
+  overlayIndicatorStatus,
   type FlowStep,
   type FlowVisibleStep,
 } from '@/components/flow'
-import { SendInputStep, type SendTab } from './SendInputStep'
-import { SendReviewStep } from './SendReviewStep'
+import { SendInputStepContent, SendInputStepFooter, type SendTab } from './SendInputStep'
+import { SendReviewStepContent, SendReviewStepFooter } from './SendReviewStep'
 import { SendCompleteStep } from './SendCompleteStep'
 
 type LocalStep = FlowStep
-const STEPS: ReadonlyArray<FlowVisibleStep> = ['input', 'review', 'progress', 'complete']
 
 type SubmittedKind = 'transfer-shielded' | 'unshield-local' | 'unshield-xchain'
 
@@ -43,30 +45,24 @@ export function SendModal() {
   const [openModal, setOpenModal] = useAtom(openModalAtom)
   const isOpen = openModal === 'payment'
 
-  // Form state
   const hubChainId = getNetworkConfig().hub.chainId
   const [tab, setTab] = useState<SendTab>('private')
   const [destChainId, setDestChainId] = useState<number>(hubChainId)
   const [recipient, setRecipient] = useState<string>('')
   const [amountStr, setAmountStr] = useState<string>('')
 
-  // Flow state
   const [step, setStep] = useState<LocalStep>('input')
   const [errorAtStep, setErrorAtStep] = useState<FlowVisibleStep | undefined>(undefined)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submittedKind, setSubmittedKind] = useState<SubmittedKind | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Source data
   const shieldedUsdc = useAtomValue(shieldedUsdcAtom)
   const max = shieldedUsdc ?? 0n
   const { value: amount } = parseUsdcInput(amountStr)
   const { quote, isStale, refresh } = useFees()
-  // Gate Confirm while the initial shielded-balance sync is incomplete. Both Send tabs
-  // (private + external) spend the user's shielded USDC, so the same gate applies.
   const syncGate = useSpendableSyncGate()
 
-  // Deployment manifests — used to validate that the chosen destination chain actually has a
-  // deployment present. Otherwise the user could pick a chain that the submit step would throw on.
   const [deployments, setDeployments] = useState<ResolvedDeployments | null>(null)
   useEffect(() => {
     if (!isOpen) return
@@ -74,10 +70,6 @@ export function SendModal() {
     void loadDeployments()
       .then(d => { if (!cancelled) setDeployments(d) })
       .catch(err => {
-        // Leave `deployments` null — `destHasDeployment` below stays `true` until the manifest
-        // is known, so the user can still proceed through the form; the submit step's own
-        // error path will surface the real failure if it persists. Telemetry is the only signal
-        // we have here, since the user wouldn't otherwise know loadDeployments tried and failed.
         trackError('SendModal.loadDeployments', err, {
           scope: 'send.deployments',
           message: 'failed to load deployment manifests for destination-chain check',
@@ -93,7 +85,6 @@ export function SendModal() {
     ? undefined
     : 'This destination chain has no deployment manifest. Pick another chain.'
 
-  // Three useTx hooks mounted; only one gets a record per flow.
   const txTransfer = useTx({ kind: 'transfer-shielded' })
   const txUnshieldLocal = useTx({ kind: 'unshield-local' })
   const txUnshieldXchain = useTx({ kind: 'unshield-xchain' })
@@ -107,12 +98,17 @@ export function SendModal() {
 
   const computedKind: SubmittedKind = computeKind(tab, destChainId, hubChainId)
   const isXchain = computedKind === 'unshield-xchain'
-  // Display fee is a pure function of (kind, amount). transfer-shielded + unshield-local = 0
-  // (user submits via own wallet); unshield-xchain = CCTP fast-fee estimate (~2 bps).
-  const fee: bigint = userFeeForKind(computedKind, amount)
-  const netAmount = amount > fee ? amount - fee : 0n
+  const displayFees = useMemo(
+    () => computeDisplayFees(computedKind, amount, quote ?? null),
+    [computedKind, amount, quote],
+  )
+  const maxInput = maxInputAmount(max, displayFees.totalFee)
+  const feeLoading = !quote
+  const gasChainId =
+    computedKind === 'unshield-local' ? destChainId : hubChainId
+  const netAmount =
+    amount > displayFees.totalFee ? amount - displayFees.totalFee : 0n
 
-  // Reset local state when opening.
   useEffect(() => {
     if (!isOpen) return
     setStep('input')
@@ -122,11 +118,9 @@ export function SendModal() {
     setRecipient('')
     setTab('private')
     setSubmittedKind(null)
+    setIsSubmitting(false)
   }, [isOpen])
 
-  // Watch the submitted record for terminal transitions. Dep is `record?.executionState` rather
-  // than `record` so artifact patches during xchain polling don't re-fire this needlessly — the
-  // body only branches on executionState.
   useEffect(() => {
     if (!record) return
     if (record.executionState === 'completed') setStep('complete')
@@ -141,14 +135,11 @@ export function SendModal() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return
+    setIsSubmitting(true)
     setSubmitError(null)
     try {
-      // Re-quote if the cached fee is stale — see ShieldModal for the rationale.
-      const activeQuote = quote && !isStale ? quote : await refresh()
-      if (!activeQuote) {
-        throw new Error('Could not fetch a current fee quote — please try again.')
-      }
-      const feeCacheId = activeQuote.cacheId
+      const feeCacheId = await resolveFeeCacheId({ quote, isStale, refresh })
       if (computedKind === 'transfer-shielded') {
         setSubmittedKind('transfer-shielded')
         await txTransfer.submit({
@@ -177,24 +168,27 @@ export function SendModal() {
       setSubmitError(err instanceof Error ? err.message : 'Submit failed.')
       setStep('error')
       setErrorAtStep('review')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
+  const indicatorStep = overlayIndicatorStep(step)
+  const indicatorStatus = overlayIndicatorStatus(step)
+
   return (
-    <ActionFlowShell
+    <DepositOverlayShell
       open={isOpen}
-      onClose={close}
-      title="Send"
-      step={step}
-      steps={STEPS}
-      errorAtStep={errorAtStep}
+      flowLabel="Send"
+      currentStep={indicatorStep}
+      status={indicatorStatus}
     >
-      {step === 'input' && (
-        <SendInputStep
+      {step === 'input' ? (
+        <SendInputStepContent
           tab={tab}
-          onTabChange={t => {
-            setTab(t)
-            setRecipient('') // recipient format differs between tabs; clear on switch
+          onTabChange={next => {
+            setTab(next)
+            setRecipient('')
           }}
           destChainId={destChainId}
           onDestChainIdChange={setDestChainId}
@@ -203,46 +197,79 @@ export function SendModal() {
           amountStr={amountStr}
           onAmountChange={setAmountStr}
           max={max}
-          fee={fee}
-          netAmount={netAmount}
-          isFeeRefreshing={isStale}
+          maxInput={maxInput}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          gasChainId={gasChainId}
           destDeploymentError={destDeploymentError}
-          onCancel={close}
-          onContinue={() => setStep('review')}
         />
-      )}
-      {step === 'review' && (
-        <SendReviewStep
+      ) : null}
+
+      {step === 'review' ? (
+        <SendReviewStepContent
           tab={tab}
           destChainId={destChainId}
           recipient={recipient}
           amount={amount}
-          fee={fee}
-          netAmount={netAmount}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
           isXchain={isXchain}
+          submitBlockedReason={syncGate.reason}
+        />
+      ) : null}
+
+      {step === 'input' ? (
+        <SendInputStepFooter
+          tab={tab}
+          recipient={recipient}
+          amountStr={amountStr}
+          maxInput={maxInput}
+          destDeploymentError={destDeploymentError}
+          onCancel={close}
+          onContinue={() => setStep('review')}
+        />
+      ) : null}
+
+      {step === 'review' ? (
+        <SendReviewStepFooter
           submitBlockedReason={syncGate.reason}
           onBack={() => setStep('input')}
           onConfirm={handleSubmit}
+          isSubmitting={isSubmitting}
         />
-      )}
-      {step === 'progress' && <ProgressStep record={record} />}
-      {step === 'complete' && (
+      ) : null}
+
+      {step === 'progress' ? (
+        <ProgressStep
+          record={record}
+          title="Send in progress"
+          onClose={close}
+        />
+      ) : null}
+      {step === 'complete' ? (
         <SendCompleteStep
           tab={tab}
           destChainId={destChainId}
           recipient={recipient}
+          amount={amount}
+          displayFees={displayFees}
+          isXchain={isXchain}
           netAmount={netAmount}
+          explorerUrl={txExplorerUrl(
+            record?.walletContext.sourceChainId,
+            displayTxHash(record),
+          )}
           onDone={close}
         />
-      )}
-      {step === 'error' && (
+      ) : null}
+      {step === 'error' ? (
         <ErrorStep
           error={record?.artifacts.error ?? null}
           message={submitError ?? undefined}
           explorerUrl={txExplorerUrl(record?.walletContext.sourceChainId, displayTxHash(record))}
           onRetry={errorAtStep === 'review' ? () => setStep('review') : () => activeTx?.retry()}
         />
-      )}
-    </ActionFlowShell>
+      ) : null}
+    </DepositOverlayShell>
   )
 }

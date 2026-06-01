@@ -3,3 +3,12 @@
 
 import '@testing-library/jest-dom'
 import 'fake-indexeddb/auto'
+import { vi } from 'vitest'
+
+vi.mock('@/hooks/useGasBalanceWarning', () => ({
+  useGasBalanceWarning: () => ({
+    show: false,
+    nativeSymbol: 'ETH',
+    formattedBalance: '0',
+  }),
+}))

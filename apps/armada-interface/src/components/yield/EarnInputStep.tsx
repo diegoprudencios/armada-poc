@@ -1,11 +1,18 @@
-// ABOUTME: Earn input step — tab switcher (Add Funds / Withdraw) + amount + APY hint + fee summary.
-// ABOUTME: APY display is honest about its source: shows "—" with disclaimer when useYieldRate is unwired or rateToApy returns 0.
+// ABOUTME: Earn amount step — tab switcher, DepositAmountCard, APY hint (full-viewport earn flow).
 
-import { AmountInput, FeeSummary, Tabs } from '@/components/ui'
-import { FlowFooter } from '@/components/flow/FlowFooter'
-import { parseUsdcInput, usdcInputErrorMessage } from '@/lib/format'
+import { useMemo } from 'react'
+import { Button } from '@armada/ui'
+import { DepositAmountCard } from '@/components/deposit/DepositAmountCard/DepositAmountCard'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
+import { GasBalanceNotice, Tabs } from '@/components/ui'
+import type { DisplayFees } from '@/lib/fees/displayFees'
+import { useGasBalanceWarning } from '@/hooks/useGasBalanceWarning'
+import { getNetworkConfig } from '@/config/network'
+import { formatUsdcPlain, parseUsdcInput, usdcInputErrorMessage } from '@/lib/format'
 import { rateToApy } from '@/lib/yield'
 import type { YieldRate } from '@/hooks/useYieldRate'
+import { hasActiveAmount } from '@/utils/amountInput'
+import shieldStyles from '@/components/shield/ShieldInputStep.module.css'
 import styles from './EarnInputStep.module.css'
 
 export type EarnTab = 'add' | 'withdraw'
@@ -20,13 +27,12 @@ export interface EarnInputStepProps {
   onTabChange: (next: EarnTab) => void
   amountStr: string
   onAmountChange: (next: string) => void
-  /** Max amount for the active tab — shieldedUsdc for Add, earning balance for Withdraw. */
   max: bigint
-  /** Current yield rate; null while syncing. Drives the APY hint copy. */
+  maxInput: bigint
+  displayFees: DisplayFees
+  feeLoading?: boolean
+  gasChainId: number
   rate: YieldRate | null
-  fee: bigint | null
-  netAmount: bigint
-  isFeeRefreshing?: boolean
   onCancel: () => void
   onContinue: () => void
 }
@@ -38,42 +44,74 @@ function formatApy(rate: YieldRate | null): string {
   return `~${apy.toFixed(2)}%`
 }
 
-export function EarnInputStep({
+export function EarnInputStepContent({
   tab,
   onTabChange,
   amountStr,
   onAmountChange,
   max,
+  maxInput,
+  displayFees,
+  feeLoading = false,
+  gasChainId,
   rate,
-  fee,
-  netAmount,
-  isFeeRefreshing,
-  onCancel,
-  onContinue,
-}: EarnInputStepProps) {
+}: Pick<
+  EarnInputStepProps,
+  | 'tab'
+  | 'onTabChange'
+  | 'amountStr'
+  | 'onAmountChange'
+  | 'max'
+  | 'maxInput'
+  | 'displayFees'
+  | 'feeLoading'
+  | 'gasChainId'
+  | 'rate'
+>) {
+  const hub = getNetworkConfig().hub
+  const chains = useMemo(
+    () => [{ chainId: hub.chainId, label: hub.name }],
+    [hub.chainId, hub.name],
+  )
+
+  const gasWarning = useGasBalanceWarning(gasChainId)
   const { value: amount, error: parseError } = parseUsdcInput(amountStr)
-  const tooMuch = amount > max
+  const tooMuch = amount > maxInput
   const amountError =
     usdcInputErrorMessage(parseError)
     ?? (tooMuch
       ? tab === 'add'
-        ? 'Amount exceeds your private balance.'
-        : 'Amount exceeds your earning balance.'
+        ? 'Amount exceeds your private balance after fees.'
+        : 'Amount exceeds your earning balance after fees.'
       : undefined)
 
-  const isValid = amount > 0n && !tooMuch && !parseError
+  const question =
+    tab === 'add'
+      ? 'How much USDC do you want to add to the vault?'
+      : 'How much USDC do you want to withdraw from the vault?'
 
   return (
-    <div className={styles.root}>
+    <div className={shieldStyles.contentZone}>
       <Tabs items={TABS} selected={tab} onSelect={onTabChange} ariaLabel="Earn mode" />
-      <AmountInput
-        variant="display"
-        label={tab === 'add' ? 'How much to add?' : 'How much to withdraw?'}
-        value={amountStr}
-        onValueChange={onAmountChange}
-        max={max}
+      <p className={shieldStyles.question}>{question}</p>
+      <DepositAmountCard
+        chains={chains}
+        chainId={hub.chainId}
+        amount={amountStr}
+        onAmountChange={onAmountChange}
+        balance={formatUsdcPlain(max)}
+        displayFees={displayFees}
+        feeLoading={feeLoading}
+        onMax={() => onAmountChange(formatUsdcPlain(maxInput))}
         error={amountError}
+        amountAriaLabel={tab === 'add' ? 'Vault deposit amount' : 'Vault withdrawal amount'}
       />
+      {gasWarning.show ? (
+        <GasBalanceNotice
+          nativeSymbol={gasWarning.nativeSymbol}
+          formattedBalance={gasWarning.formattedBalance}
+        />
+      ) : null}
       <div className={styles.apyBlock}>
         <div className={styles.apyLabel}>Estimated APY</div>
         <div className={styles.apyValue}>{formatApy(rate)}</div>
@@ -81,17 +119,46 @@ export function EarnInputStep({
           Based on the vault's recent rate; the actual yield earned will vary.
         </div>
       </div>
-      <FeeSummary
-        fee={fee}
-        netAmount={netAmount}
-        netLabel={tab === 'add' ? "You'll be earning on" : "You'll receive"}
-        isRefreshing={isFeeRefreshing}
+    </div>
+  )
+}
+
+export function EarnInputStepFooter({
+  amountStr,
+  maxInput,
+  onCancel,
+  onContinue,
+}: Pick<EarnInputStepProps, 'amountStr' | 'maxInput' | 'onCancel' | 'onContinue'>) {
+  const { value: amount, error: parseError } = parseUsdcInput(amountStr)
+  const tooMuch = amount > maxInput
+  const canReview = hasActiveAmount(amountStr) && !tooMuch && !parseError
+
+  return (
+    <div className={depositOverlayShellStyles.buttonRow}>
+      <Button
+        variant="secondary"
+        size="lg"
+        label="Cancel"
+        showIcon={false}
+        onClick={onCancel}
       />
-      <FlowFooter
-        className={styles.footer}
-        primary={{ label: 'Continue', onClick: onContinue, disabled: !isValid }}
-        secondary={{ label: 'Cancel', onClick: onCancel }}
+      <Button
+        variant="primary"
+        size="lg"
+        label="Review"
+        showIcon={false}
+        disabled={!canReview}
+        onClick={onContinue}
       />
     </div>
+  )
+}
+
+export function EarnInputStep(props: EarnInputStepProps) {
+  return (
+    <>
+      <EarnInputStepContent {...props} />
+      <EarnInputStepFooter {...props} />
+    </>
   )
 }

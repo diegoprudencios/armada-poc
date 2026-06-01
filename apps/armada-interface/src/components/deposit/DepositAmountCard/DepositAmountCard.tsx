@@ -6,6 +6,9 @@ import { ChevronDownIcon, WalletIcon } from '@heroicons/react/24/solid'
 import TokenUSDC from '@web3icons/react/icons/tokens/TokenUSDC'
 import { hasActiveAmount, sanitizeAmountInput } from '@/utils/amountInput'
 import { chainIconForChainId } from '@/components/deposit/depositChainIcons'
+import { FeeBreakdownTooltip } from '@/components/ui/FeeBreakdownTooltip'
+import { formatUsdcPlain } from '@/lib/format'
+import type { DisplayFees } from '@/lib/fees/displayFees'
 import styles from './DepositAmountCard.module.css'
 
 const ICON_SIZE = 32
@@ -23,9 +26,13 @@ export interface DepositAmountCardProps {
   amount: string
   onAmountChange: (value: string) => void
   balance?: string
-  fee?: string
+  /** When set, fee row shows total + breakdown tooltip. */
+  displayFees?: DisplayFees
+  feeLoading?: boolean
   onMax?: () => void
   error?: string
+  /** Accessible name for the amount field (e.g. "Deposit amount", "Withdrawal amount"). */
+  amountAriaLabel?: string
 }
 
 function ChainIcon({ chainId, label }: { chainId: number; label: string }) {
@@ -52,9 +59,11 @@ export function DepositAmountCard({
   amount,
   onAmountChange,
   balance = '0.00',
-  fee = '0.00',
+  displayFees,
+  feeLoading = false,
   onMax,
   error,
+  amountAriaLabel = 'Amount',
 }: DepositAmountCardProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const chainRootRef = useRef<HTMLDivElement>(null)
@@ -140,7 +149,7 @@ export function DepositAmountCard({
       </div>
 
       <label className={styles.amountWrapper} htmlFor={amountInputId}>
-        <span className={styles.visuallyHidden}>Deposit amount</span>
+        <span className={styles.visuallyHidden}>{amountAriaLabel}</span>
         <span
           className={[styles.amountField, showActiveAmount && styles.amountFieldHasValue]
             .filter(Boolean)
@@ -161,7 +170,7 @@ export function DepositAmountCard({
             className={styles.amountInput}
             value={amount}
             onChange={(e) => handleAmountInput(e.target.value)}
-            aria-label="Deposit amount"
+            aria-label={amountAriaLabel}
             aria-invalid={Boolean(error)}
           />
         </span>
@@ -183,9 +192,16 @@ export function DepositAmountCard({
             </button>
           ) : null}
         </div>
-        <span className={styles.feeText}>
-          FEE {fee} {token}
-        </span>
+        {displayFees ? (
+          <span className={styles.feeGroup}>
+            <span className={styles.feeText}>
+              FEE {formatUsdcPlain(displayFees.totalFee)} {token}
+            </span>
+            <FeeBreakdownTooltip fees={displayFees} isLoading={feeLoading} />
+          </span>
+        ) : (
+          <span className={styles.feeText}>FEE — {token}</span>
+        )}
       </div>
     </div>
   )

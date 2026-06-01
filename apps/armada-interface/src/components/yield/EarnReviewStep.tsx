@@ -1,68 +1,53 @@
-// ABOUTME: Earn review step — echoes the requested amount, the resolved mode (Add Funds / Withdraw), the APY used for the quote, and the fee summary.
-// ABOUTME: Same hero-numeral + facts layout as the other review steps for visual consistency.
+// ABOUTME: Earn review step — vault action summary with Back / Confirm CTAs.
 
-import { FlowFooter } from '@/components/flow/FlowFooter'
-import { FeeSummary } from '@/components/ui'
-import { formatUsdcAmount } from '@/lib/format'
-import { rateToApy } from '@/lib/yield'
+import { Button } from '@armada/ui'
+import { depositOverlayShellStyles } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
+import { FlowAmountHero } from '@/components/flow/FlowAmountHero'
+import { EarnActionSummary } from './EarnActionSummary'
+import type { DisplayFees } from '@/lib/fees/displayFees'
 import type { YieldRate } from '@/hooks/useYieldRate'
 import type { EarnTab } from './EarnInputStep'
-import styles from './EarnReviewStep.module.css'
+import styles from '@/components/shield/ShieldReviewStep.module.css'
+import earnStyles from './EarnReviewStep.module.css'
 
 export interface EarnReviewStepProps {
   tab: EarnTab
   amount: bigint
   rate: YieldRate | null
-  fee: bigint | null
-  netAmount: bigint
+  displayFees: DisplayFees | null
+  feeLoading?: boolean
   submitBlockedReason?: string | null
   onBack: () => void
   onConfirm: () => void
+  isSubmitting?: boolean
 }
 
-function formatApy(rate: YieldRate | null): string {
-  if (!rate) return 'syncing…'
-  const apy = rateToApy(rate.apyBps)
-  if (apy === 0) return 'unavailable'
-  return `~${apy.toFixed(2)}%`
-}
-
-export function EarnReviewStep({
+export function EarnReviewStepContent({
   tab,
   amount,
   rate,
-  fee,
-  netAmount,
+  displayFees,
+  feeLoading,
   submitBlockedReason,
-  onBack,
-  onConfirm,
-}: EarnReviewStepProps) {
-  const modeLabel = tab === 'add' ? 'Add to vault' : 'Withdraw from vault'
-
+}: Pick<
+  EarnReviewStepProps,
+  'tab' | 'amount' | 'rate' | 'displayFees' | 'feeLoading' | 'submitBlockedReason'
+>) {
   return (
-    <div className={styles.root}>
-      <div className={styles.headline}>Review {tab === 'add' ? 'deposit' : 'withdrawal'}</div>
-      <div className={styles.amountBlock}>
-        <span className={styles.amount}>{formatUsdcAmount(amount)}</span>
-        <span className={styles.unit}>USDC</span>
-      </div>
-      <dl className={styles.facts}>
-        <div>
-          <dt>Mode</dt>
-          <dd>{modeLabel}</dd>
-        </div>
-        <div>
-          <dt>Estimated APY</dt>
-          <dd>{formatApy(rate)}</dd>
-        </div>
-      </dl>
-      <FeeSummary
-        fee={fee}
-        netAmount={netAmount}
-        netLabel={tab === 'add' ? "You'll be earning on" : "You'll receive"}
+    <div className={styles.contentZone}>
+      <h2 className={styles.title}>
+        Review {tab === 'add' ? 'your deposit' : 'your withdrawal'}
+      </h2>
+      <FlowAmountHero amount={amount} />
+      <EarnActionSummary
+        tab={tab}
+        amount={amount}
+        rate={rate}
+        displayFees={displayFees}
+        feeLoading={feeLoading}
       />
       {tab === 'withdraw' ? (
-        <div className={styles.slippageNotice}>
+        <div className={earnStyles.slippageNotice}>
           The vault rate moves with each new block. Your final USDC may differ slightly from
           this quote.
         </div>
@@ -72,15 +57,53 @@ export function EarnReviewStep({
           {submitBlockedReason}
         </div>
       ) : null}
-      <FlowFooter
-        className={styles.footer}
-        primary={{
-          label: tab === 'add' ? 'Confirm deposit' : 'Confirm withdrawal',
-          onClick: onConfirm,
-          disabled: Boolean(submitBlockedReason),
-        }}
-        secondary={{ label: 'Back', onClick: onBack }}
+    </div>
+  )
+}
+
+export function EarnReviewStepFooter({
+  tab,
+  submitBlockedReason,
+  onBack,
+  onConfirm,
+  isSubmitting = false,
+}: Pick<
+  EarnReviewStepProps,
+  'tab' | 'submitBlockedReason' | 'onBack' | 'onConfirm' | 'isSubmitting'
+>) {
+  return (
+    <div className={depositOverlayShellStyles.buttonRow}>
+      <Button
+        variant="secondary"
+        size="lg"
+        label="Back"
+        showIcon={false}
+        onClick={onBack}
+        disabled={isSubmitting}
+      />
+      <Button
+        variant="primary"
+        size="lg"
+        label={
+          isSubmitting
+            ? 'Confirming…'
+            : tab === 'add'
+              ? 'Confirm deposit'
+              : 'Confirm withdrawal'
+        }
+        showIcon={false}
+        disabled={Boolean(submitBlockedReason) || isSubmitting}
+        onClick={onConfirm}
       />
     </div>
+  )
+}
+
+export function EarnReviewStep(props: EarnReviewStepProps) {
+  return (
+    <>
+      <EarnReviewStepContent {...props} />
+      <EarnReviewStepFooter {...props} />
+    </>
   )
 }

@@ -3,16 +3,19 @@
 
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { ZERO_DISPLAY_FEES } from '@/test/fixtures/displayFees'
 import { ShieldInputStep } from './ShieldInputStep'
 
 function setup(extras?: { max?: bigint; amountStr?: string }) {
+  const max = extras?.max ?? 5_000_000n
   const props = {
     fromChainId: 31337,
     onFromChainIdChange: vi.fn(),
     amountStr: extras?.amountStr ?? '',
     onAmountChange: vi.fn(),
-    max: extras?.max ?? 5_000_000n,
-    fee: 0n,
+    max,
+    maxInput: max,
+    displayFees: ZERO_DISPLAY_FEES,
     onCancel: vi.fn(),
     onContinue: vi.fn(),
   }

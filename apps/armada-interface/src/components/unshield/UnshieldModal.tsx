@@ -1,31 +1,36 @@
-// ABOUTME: UnshieldModal — withdraw private USDC to an EVM address. Selects unshield-local or unshield-xchain based on destination chain.
-// ABOUTME: Two useTx hooks are mounted (one per kind); submit picks the right one. Record subscription follows the kind that was submitted.
+// ABOUTME: UnshieldModal — withdraw private USDC to an EVM address using full-viewport overlay shell.
+// ABOUTME: Selects unshield-local or unshield-xchain based on destination chain.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAtom, useAtomValue } from 'jotai'
 import { openModalAtom } from '@/state/ui'
-import { evmAddressAtom, shieldedUsdcAtom } from '@/state/wallet'
+import { evmAddressAtom, yieldSharesAtom } from '@/state/wallet'
+import { usePrivateUsdcDisplay } from '@/hooks/usePrivateUsdcDisplay'
+import { useYieldRate } from '@/hooks/useYieldRate'
+import { formatUsdcAmount } from '@/lib/format'
+import { sharesToUsdc } from '@/lib/yield'
 import { useTx } from '@/hooks/useTx'
 import { useFees } from '@/hooks/useFees'
 import { useSpendableSyncGate } from '@/hooks/useSpendableSyncGate'
 import { getNetworkConfig } from '@/config/network'
 import { parseUsdcInput } from '@/lib/format'
 import { displayTxHash, txExplorerUrl } from '@/lib/explorer'
-import { userFeeForKind } from '@/lib/relayer'
+import { resolveFeeCacheId } from '@/lib/relayer/resolveFeeCacheId'
+import { computeDisplayFees, maxInputAmount } from '@/lib/fees/displayFees'
+import { DepositOverlayShell } from '@/components/deposit/DepositOverlayShell/DepositOverlayShell'
 import {
-  ActionFlowShell,
   ProgressStep,
   ErrorStep,
+  overlayIndicatorStep,
+  overlayIndicatorStatus,
   type FlowStep,
   type FlowVisibleStep,
 } from '@/components/flow'
-import { UnshieldInputStep } from './UnshieldInputStep'
-import { UnshieldReviewStep } from './UnshieldReviewStep'
+import { UnshieldInputStepContent, UnshieldInputStepFooter } from './UnshieldInputStep'
+import { UnshieldReviewStepContent, UnshieldReviewStepFooter } from './UnshieldReviewStep'
 import { UnshieldCompleteStep } from './UnshieldCompleteStep'
 
 type LocalStep = FlowStep
-
-const STEPS: ReadonlyArray<FlowVisibleStep> = ['input', 'review', 'progress', 'complete']
 
 type SubmittedKind = 'unshield-local' | 'unshield-xchain'
 
@@ -33,70 +38,57 @@ export function UnshieldModal() {
   const [openModal, setOpenModal] = useAtom(openModalAtom)
   const isOpen = openModal === 'unshield'
 
-  // Form state.
   const hubChainId = getNetworkConfig().hub.chainId
   const connectedEvm = useAtomValue(evmAddressAtom)
   const [destChainId, setDestChainId] = useState<number>(hubChainId)
-  const [recipient, setRecipient] = useState<string>('')
   const [amountStr, setAmountStr] = useState<string>('')
+  const recipient = connectedEvm ?? ''
 
-  // Flow state.
   const [step, setStep] = useState<LocalStep>('input')
   const [errorAtStep, setErrorAtStep] = useState<FlowVisibleStep | undefined>(undefined)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submittedKind, setSubmittedKind] = useState<SubmittedKind | null>(null)
-  // One-shot guard so the connected-EVM prefill only runs on the modal's rising
-  // edge — otherwise clearing the recipient would immediately refill from the effect.
-  const didPrefillRef = useRef(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Source data.
-  const shieldedUsdc = useAtomValue(shieldedUsdcAtom)
-  const max = shieldedUsdc ?? 0n
+  const { displayBalance, isSyncing: balanceSyncing } = usePrivateUsdcDisplay()
+  const yieldShares = useAtomValue(yieldSharesAtom)
+  const { rate: yieldRate } = useYieldRate()
+  const earningUsdc =
+    yieldShares !== null && yieldRate !== null
+      ? sharesToUsdc(yieldShares, yieldRate.rate)
+      : null
   const { value: amount } = parseUsdcInput(amountStr)
   const { quote, isStale, refresh } = useFees()
-  // Gate Confirm while the initial shielded-balance sync is incomplete (or failed). Reading
-  // here so the Review step always reflects the current state — if sync completes while the
-  // user is on Review, the button un-disables on the next render.
   const syncGate = useSpendableSyncGate()
+  const totalPrivateUsdc = displayBalance + (earningUsdc ?? 0n)
+  const max = totalPrivateUsdc
+  const balanceLabel = balanceSyncing ? 'Syncing…' : formatUsdcAmount(totalPrivateUsdc)
 
-  // Two hooks mounted; whichever kind we submit to gets a record. The other stays idle.
   const txLocal = useTx({ kind: 'unshield-local' })
   const txXchain = useTx({ kind: 'unshield-xchain' })
   const activeTx = submittedKind === 'unshield-local' ? txLocal : submittedKind === 'unshield-xchain' ? txXchain : null
   const record = activeTx?.record ?? null
 
   const computedKind: SubmittedKind = destChainId === hubChainId ? 'unshield-local' : 'unshield-xchain'
-  // Display fee is a pure function of (kind, amount). unshield-local = 0 (user submits via own
-  // wallet, gas paid in native); unshield-xchain = CCTP fast-fee estimate (~2 bps).
-  const fee: bigint = userFeeForKind(computedKind, amount)
-  const netAmount = amount > fee ? amount - fee : 0n
+  const displayFees = useMemo(
+    () => computeDisplayFees(computedKind, amount, quote ?? null),
+    [computedKind, amount, quote],
+  )
+  const maxInput = maxInputAmount(max, displayFees.totalFee)
+  const feeLoading = !quote
+  const netAmount = amount > displayFees.totalFee ? amount - displayFees.totalFee : 0n
+  const isXchain = computedKind === 'unshield-xchain'
 
-  // Pre-fill recipient from the connected EVM wallet on the modal's rising edge only,
-  // so the user can clear the field afterwards without it getting repopulated.
   useEffect(() => {
     if (!isOpen) return
-    if (didPrefillRef.current) return
-    didPrefillRef.current = true
-    if (!recipient && connectedEvm) setRecipient(connectedEvm)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
-
-  // Reset local state when opening; clear prefill guard when fully closed.
-  useEffect(() => {
-    if (!isOpen) {
-      didPrefillRef.current = false
-      return
-    }
     setStep('input')
     setSubmitError(null)
     setErrorAtStep(undefined)
     setAmountStr('')
     setSubmittedKind(null)
+    setIsSubmitting(false)
   }, [isOpen])
 
-  // Watch the submitted record for terminal transitions. Dep is `record?.executionState` rather
-  // than `record` so artifact patches during xchain polling don't re-fire this needlessly — the
-  // body only branches on executionState.
   useEffect(() => {
     if (!record) return
     if (record.executionState === 'completed') setStep('complete')
@@ -111,13 +103,11 @@ export function UnshieldModal() {
   }
 
   async function handleSubmit() {
+    if (isSubmitting) return
+    setIsSubmitting(true)
     setSubmitError(null)
     try {
-      const activeQuote = quote && !isStale ? quote : await refresh()
-      if (!activeQuote) {
-        throw new Error('Could not fetch a current fee quote — please try again.')
-      }
-      const feeCacheId = activeQuote.cacheId
+      const feeCacheId = await resolveFeeCacheId({ quote, isStale, refresh })
       if (computedKind === 'unshield-local') {
         setSubmittedKind('unshield-local')
         await txLocal.submit({
@@ -139,64 +129,99 @@ export function UnshieldModal() {
       setSubmitError(err instanceof Error ? err.message : 'Submit failed.')
       setStep('error')
       setErrorAtStep('review')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
+  const indicatorStep = overlayIndicatorStep(step)
+  const indicatorStatus = overlayIndicatorStatus(step)
+
   return (
-    <ActionFlowShell
+    <DepositOverlayShell
       open={isOpen}
-      onClose={close}
-      title="Withdraw"
-      step={step}
-      steps={STEPS}
-      errorAtStep={errorAtStep}
+      flowLabel="Withdraw"
+      currentStep={indicatorStep}
+      status={indicatorStatus}
     >
-      {step === 'input' && (
-        <UnshieldInputStep
+      {step === 'input' ? (
+        <UnshieldInputStepContent
           destChainId={destChainId}
           onDestChainIdChange={setDestChainId}
-          recipient={recipient}
-          onRecipientChange={setRecipient}
+          walletAddress={connectedEvm}
           amountStr={amountStr}
           onAmountChange={setAmountStr}
-          max={max}
-          fee={fee}
-          netAmount={netAmount}
-          isFeeRefreshing={isStale}
-          onCancel={close}
-          onContinue={() => setStep('review')}
+          maxInput={maxInput}
+          balanceLabel={balanceLabel}
+          balanceSyncing={balanceSyncing}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          gasChainId={hubChainId}
         />
-      )}
-      {step === 'review' && (
-        <UnshieldReviewStep
+      ) : null}
+
+      {step === 'review' ? (
+        <UnshieldReviewStepContent
           destChainId={destChainId}
           recipient={recipient}
           amount={amount}
-          fee={fee}
-          netAmount={netAmount}
-          isXchain={computedKind === 'unshield-xchain'}
+          displayFees={displayFees}
+          feeLoading={feeLoading}
+          isXchain={isXchain}
+          submitBlockedReason={syncGate.reason}
+        />
+      ) : null}
+
+      {step === 'input' ? (
+        <UnshieldInputStepFooter
+          walletAddress={connectedEvm}
+          amountStr={amountStr}
+          maxInput={maxInput}
+          balanceSyncing={balanceSyncing}
+          onCancel={close}
+          onContinue={() => setStep('review')}
+        />
+      ) : null}
+
+      {step === 'review' ? (
+        <UnshieldReviewStepFooter
           submitBlockedReason={syncGate.reason}
           onBack={() => setStep('input')}
           onConfirm={handleSubmit}
+          isSubmitting={isSubmitting}
         />
-      )}
-      {step === 'progress' && <ProgressStep record={record} />}
-      {step === 'complete' && (
+      ) : null}
+
+      {step === 'progress' ? (
+        <ProgressStep
+          record={record}
+          title="Withdrawal in progress"
+          onClose={close}
+        />
+      ) : null}
+      {step === 'complete' ? (
         <UnshieldCompleteStep
           destChainId={destChainId}
           recipient={recipient}
+          amount={amount}
+          displayFees={displayFees}
+          isXchain={isXchain}
           netAmount={netAmount}
+          explorerUrl={txExplorerUrl(
+            record?.walletContext.sourceChainId,
+            displayTxHash(record),
+          )}
           onDone={close}
         />
-      )}
-      {step === 'error' && (
+      ) : null}
+      {step === 'error' ? (
         <ErrorStep
           error={record?.artifacts.error ?? null}
           message={submitError ?? undefined}
           explorerUrl={txExplorerUrl(record?.walletContext.sourceChainId, displayTxHash(record))}
           onRetry={errorAtStep === 'review' ? () => setStep('review') : () => activeTx?.retry()}
         />
-      )}
-    </ActionFlowShell>
+      ) : null}
+    </DepositOverlayShell>
   )
 }
