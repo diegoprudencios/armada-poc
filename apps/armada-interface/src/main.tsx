@@ -9,6 +9,7 @@ import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MotionConfig } from 'framer-motion'
 import { Toaster } from 'sonner'
+import { Analytics } from '@vercel/analytics/react'
 
 import { wagmiConfig } from '@/config/wagmi'
 import { installBisectingGetLogs } from '@/lib/rpc-bisecting'
@@ -70,6 +71,7 @@ createRoot(document.getElementById('root')!).render(
                 </Route>
               </Routes>
               <Toaster theme="dark" position="bottom-right" />
+              <Analytics />
             </MotionConfig>
           </BrowserRouter>
         </RainbowKitProvider>

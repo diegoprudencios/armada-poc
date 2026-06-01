@@ -1,5 +1,7 @@
 # Deploying armada-interface (Vercel / Netlify)
 
+> **Local vs deployed invariants (relayer, fees, env):** [`LOCAL_VS_DEPLOY.md`](./LOCAL_VS_DEPLOY.md) — read before changing `network.ts`, fee hooks, or hosting config.
+
 ## Required environment variables
 
 | Variable | Vercel / Netlify | Purpose |

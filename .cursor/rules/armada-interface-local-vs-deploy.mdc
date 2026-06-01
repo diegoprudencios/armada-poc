@@ -1,0 +1,28 @@
+---
+description: Local vs hosted env invariants for armada-interface (relayer, VITE_NETWORK)
+globs: apps/armada-interface/**/*
+alwaysApply: false
+---
+
+# armada-interface — local vs deployed
+
+Before editing config, fees, relayer, or deploy files, read **`apps/armada-interface/LOCAL_VS_DEPLOY.md`**.
+
+## Do not change
+
+- **`sepolia` relayer default** — never fall back to `http://localhost:3001` in `network.ts` / `sepoliaConfig()`. Hosted browsers cannot reach localhost.
+- **`resolveRelayerUrl()`** — local → localhost when unset; sepolia → empty string when unset.
+- **`useFees` / `resolveFeeCacheId`** — when `!isRelayerConfigured()`, use offline fee schedule (`offline-fees`); do not require live `/fees` for wallet-submit flows.
+- **`vercel.json`** — keep `build.env.VITE_NETWORK = "sepolia"` for production previews.
+- **`netlify.toml`** — keep `VITE_NETWORK = "sepolia"` in `[build.environment]`.
+
+## Safe changes
+
+- Set `VITE_RELAYER_URL` in hosting UI to a **public HTTPS** relayer when available.
+- Local-only: `.env.development`, mock balance, Debug drip, `isLocalMode()` UX gates.
+
+## Verify after touching this area
+
+```bash
+npm test --workspace=@armada/interface -- --run network.relayer resolveFeeCacheId useFees
+```

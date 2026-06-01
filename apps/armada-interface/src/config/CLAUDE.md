@@ -2,6 +2,8 @@
 
 Env-driven configuration. **All env-var reads happen here.** Hooks and components import typed config objects, never `import.meta.env` directly.
 
+**Local vs hosted:** See [`LOCAL_VS_DEPLOY.md`](../../LOCAL_VS_DEPLOY.md). Sepolia must not default relayer URL to localhost; use `isRelayerConfigured()` + offline fees when unset.
+
 | File | Responsibility |
 |---|---|
 | `network.ts` | Resolves `VITE_NETWORK` (local/sepolia) → hub + client chain identities, RPC URLs, relayer/iris/indexer URLs, polling cadence. `getNetworkConfig()` is the single entry point. |
