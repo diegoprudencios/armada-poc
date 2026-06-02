@@ -59,3 +59,9 @@
 .actions :global(button) {
   width: auto;
 }
+
+@media (max-width: 767px) {
+  .actions {
+    margin-top: var(--primitives-spacing-4);
+  }
+}

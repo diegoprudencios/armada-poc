@@ -15,6 +15,14 @@
   overflow: hidden;
 }
 
+.brandPanelMobileHidden {
+  /* no-op on desktop; mobile override below */
+}
+
+.mobileBrandRow {
+  display: none;
+}
+
 .brandCard {
   position: absolute;
   top: 32px;
@@ -63,6 +71,10 @@
   overflow-y: auto;
 }
 
+.contentPanelNoLogo {
+  /* no-op on desktop; mobile override below */
+}
+
 .contentInner {
   width: 100%;
   flex: 1;
@@ -78,26 +90,38 @@
     grid-template-rows: auto 1fr;
     height: 100vh;
     height: 100dvh;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
   .brandPanel {
     height: auto;
     flex-shrink: 0;
-    padding: var(--primitives-spacing-6);
+    padding: var(--primitives-spacing-6) var(--primitives-spacing-6) 0;
     box-sizing: border-box;
   }
 
+  .brandPanelMobileHidden {
+    display: none;
+  }
+
   .brandCard {
-    position: relative;
-    top: auto;
-    bottom: auto;
-    left: auto;
-    right: auto;
+    display: none;
+  }
+
+  .mobileBrandRow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
-    min-height: 200px;
-    aspect-ratio: 5 / 3;
-    border-radius: 16px;
+    padding: var(--primitives-spacing-4) 0 var(--primitives-spacing-3);
+  }
+
+  .mobileLogo {
+    width: 150px;
+    height: auto;
+    max-width: 78vw;
+    pointer-events: none;
+    user-select: none;
   }
 
   .symbol {
@@ -115,9 +139,24 @@
   }
 
   .contentPanel {
-    height: auto;
+    height: 100%;
     min-height: 0;
     flex: 1;
-    padding: var(--primitives-spacing-6);
+    /* Ensure logo → eyebrow spacing totals 40px:
+       mobileBrandRow bottom padding (12px) + contentPanel top padding (28px) = 40px. */
+    padding: calc(var(--primitives-spacing-6) + var(--primitives-spacing-1))
+      var(--primitives-spacing-6) var(--primitives-spacing-6);
+    overflow-y: auto;
+  }
+
+  .contentPanelNoLogo {
+    /* No logo — step header owns 24px inset; avoid doubling contentPanel horizontal pad */
+    padding-top: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .contentInner {
+    height: 100%;
   }
 }

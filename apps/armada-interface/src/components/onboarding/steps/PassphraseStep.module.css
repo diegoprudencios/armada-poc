@@ -87,3 +87,9 @@
   align-self: stretch;
   margin-top: var(--primitives-spacing-8);
 }
+
+@media (max-width: 767px) {
+  .footer {
+    margin-top: var(--primitives-spacing-5);
+  }
+}

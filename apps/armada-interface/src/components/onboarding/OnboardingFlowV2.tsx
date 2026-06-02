@@ -51,8 +51,8 @@ export function OnboardingFlowV2({ onDone, onRestore }: OnboardingFlowV2Props) {
   const checksum = state?.checksum ?? null
 
   return (
-    <OnboardingLayout>
-      <div className={flowStyles.flow}>
+    <OnboardingLayout showMobileLogo={step === 'welcome'}>
+      <div className={[flowStyles.flow, step === 'welcome' && flowStyles.flowWelcome].filter(Boolean).join(' ')}>
         {step !== 'welcome' ? (
           <FlowStepIndicator
             className={flowStyles.indicator}

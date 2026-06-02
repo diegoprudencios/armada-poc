@@ -36,12 +36,18 @@
 
 @media (max-width: 480px) {
   .root {
-    flex-direction: column-reverse;
+    flex-direction: column;
     align-items: stretch;
     gap: var(--primitives-spacing-2);
   }
   .left, .right {
     width: 100%;
+  }
+  .right {
+    order: 1;
+  }
+  .left {
+    order: 2;
   }
   .left :global(button), .right :global(button) {
     width: 100%;

@@ -1,4 +1,4 @@
-/* ABOUTME: Inner layout for OnboardingFlowV2 — step indicator header, step body centered below. */
+/* ABOUTME: Inner layout for OnboardingFlowV2 — step indicator header, step body below. */
 
 .flow {
   display: flex;
@@ -8,6 +8,10 @@
   flex: 1;
   min-height: 0;
   justify-content: flex-start;
+}
+
+.flowWelcome {
+  /* default: no-op (desktop) */
 }
 
 .indicator {
@@ -26,4 +30,43 @@
   justify-content: center;
   overflow-y: auto;
   align-self: center;
+}
+
+@media (max-width: 767px) {
+  .flow {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    /* 56px between step indicator and step content (32 + 24) */
+    gap: calc(var(--primitives-spacing-8) + var(--primitives-spacing-6));
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .flowWelcome {
+    gap: var(--primitives-spacing-6);
+  }
+
+  .indicator {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex-shrink: 0;
+    background: var(--semantic-color-surface-bg);
+    padding: var(--primitives-spacing-6);
+  }
+
+  .flow:not(.flowWelcome) .step {
+    padding-inline: var(--primitives-spacing-6);
+  }
+
+  .step {
+    flex: 0 0 auto;
+    min-height: auto;
+    height: auto;
+    justify-content: flex-start;
+    overflow: visible;
+    align-self: stretch;
+  }
 }

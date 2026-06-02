@@ -5,12 +5,32 @@ import styles from './OnboardingLayout.module.css'
 
 export interface OnboardingLayoutProps {
   children: ReactNode
+  /** Mobile-only: show the Armada logo row above content. */
+  showMobileLogo?: boolean
 }
 
-export function OnboardingLayout({ children }: OnboardingLayoutProps) {
+export function OnboardingLayout({ children, showMobileLogo = true }: OnboardingLayoutProps) {
   return (
     <div className={styles.root}>
-      <aside className={styles.brandPanel} aria-hidden="true">
+      <aside
+        className={[
+          styles.brandPanel,
+          !showMobileLogo && styles.brandPanelMobileHidden,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        aria-hidden="true"
+      >
+        {showMobileLogo ? (
+          <div className={styles.mobileBrandRow}>
+            <img
+              className={styles.mobileLogo}
+              src="/assets/armada-logo-lockup-white.png"
+              alt="ARMADA"
+              decoding="async"
+            />
+          </div>
+        ) : null}
         <div className={styles.brandCard}>
           <img
             className={styles.symbol}
@@ -26,7 +46,14 @@ export function OnboardingLayout({ children }: OnboardingLayoutProps) {
           />
         </div>
       </aside>
-      <div className={styles.contentPanel}>
+      <div
+        className={[
+          styles.contentPanel,
+          !showMobileLogo && styles.contentPanelNoLogo,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         <div className={styles.contentInner}>{children}</div>
       </div>
     </div>
