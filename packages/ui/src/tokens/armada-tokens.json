@@ -93,81 +93,105 @@
         "0": {
           "value": "#0e0d0f",
           "type": "color",
-          "description": "Background"
+          "description": "Background",
+          "light": "#f1eeee"
         },
         "50": {
           "value": "#151416",
           "type": "color",
-          "description": "Surface default"
+          "description": "Surface default",
+          "light": "#ffffff"
         },
         "100": {
           "value": "#1d1c1f",
           "type": "color",
-          "description": "Surface raised"
+          "description": "Surface raised",
+          "light": "#f7f5f5"
         },
         "200": {
           "value": "#2a2830",
-          "type": "color"
+          "type": "color",
+          "light": "#e8e3e3"
         },
         "300": {
           "value": "#3d3a45",
-          "type": "color"
+          "type": "color",
+          "light": "#ccc1c1"
         },
         "400": {
           "value": "#5c5869",
-          "type": "color"
+          "type": "color",
+          "light": "#a99393"
         },
         "500": {
           "value": "#7d7a8a",
-          "type": "color"
+          "type": "color",
+          "light": "#8d7272"
         },
         "600": {
           "value": "#9d9aaa",
-          "type": "color"
+          "type": "color",
+          "light": "#6c5656"
         },
         "700": {
           "value": "#c0bece",
-          "type": "color"
+          "type": "color",
+          "light": "#4b3a3a"
         },
         "800": {
           "value": "#e0deea",
-          "type": "color"
+          "type": "color",
+          "light": "#2e2323"
         }
       },
       "white": {
         "low": {
           "value": "rgba(255,255,255,0.18)",
-          "type": "color"
+          "type": "color",
+          "light": "rgba(0,0,0,0.08)"
         },
         "mid": {
           "value": "rgba(255,255,255,0.45)",
-          "type": "color"
+          "type": "color",
+          "light": "rgba(0,0,0,0.45)"
         },
         "high": {
           "value": "rgba(255,255,255,0.87)",
-          "type": "color"
+          "type": "color",
+          "light": "rgba(0,0,0,0.78)"
         },
         "full": {
           "value": "#ffffff",
-          "type": "color"
+          "type": "color",
+          "light": "#2e2323"
+        },
+        "70": {
+          "value": "rgba(255,255,255,0.7)",
+          "type": "color",
+          "light": "rgba(0,0,0,0.70)",
+          "description": "Was missing from JSON despite being used in shipped tokens.css (semantic.color.text.secondary). Added here to close the drift."
         }
       },
       "status": {
         "success": {
           "value": "#34d399",
-          "type": "color"
+          "type": "color",
+          "light": "#1aab74"
         },
         "warning": {
           "value": "#fbbf24",
-          "type": "color"
+          "type": "color",
+          "light": "#b8860f"
         },
         "error": {
           "value": "#f87171",
-          "type": "color"
+          "type": "color",
+          "light": "#dc2626"
         },
         "info": {
           "value": "#60a5fa",
-          "type": "color"
+          "type": "color",
+          "light": "#2563eb"
         }
       }
     },
@@ -350,10 +374,6 @@
         "value": "40",
         "type": "spacing"
       },
-      "11": {
-        "value": "44",
-        "type": "spacing"
-      },
       "12": {
         "value": "48",
         "type": "spacing"
@@ -446,19 +466,23 @@
       "border": {
         "default": {
           "value": "rgba(255,255,255,0.07)",
-          "type": "color"
+          "type": "color",
+          "light": "rgba(46,35,35,0.10)"
         },
         "lavender": {
           "value": "rgba(196,145,229,0.14)",
-          "type": "color"
+          "type": "color",
+          "light": "rgba(107,63,160,0.18)"
         },
         "amber": {
           "value": "rgba(243,208,160,0.14)",
-          "type": "color"
+          "type": "color",
+          "light": "rgba(143,94,28,0.18)"
         },
         "focus": {
           "value": "{color.purple.500}",
-          "type": "color"
+          "type": "color",
+          "light": "{color.purple.700}"
         }
       },
       "text": {
@@ -467,8 +491,9 @@
           "type": "color"
         },
         "secondary": {
-          "value": "{color.white.high}",
-          "type": "color"
+          "value": "{color.white.70}",
+          "type": "color",
+          "description": "Corrected from {color.white.high} (87%) to {color.white.70} (70%) to match what's actually shipped in tokens.css. JSON was out of sync with CSS before this fix \u2014 pre-existing drift, not introduced by light mode work."
         },
         "muted": {
           "value": "{color.white.mid}",
@@ -480,29 +505,35 @@
         },
         "lavender": {
           "value": "{color.purple.500}",
-          "type": "color"
+          "type": "color",
+          "light": "{color.purple.700}"
         },
         "amber": {
           "value": "{color.amber.300}",
-          "type": "color"
+          "type": "color",
+          "light": "{color.amber.700}"
         }
       },
       "status": {
         "success": {
           "value": "#34d399",
-          "type": "color"
+          "type": "color",
+          "light": "#1aab74"
         },
         "warning": {
           "value": "#fbbf24",
-          "type": "color"
+          "type": "color",
+          "light": "#b8860f"
         },
         "error": {
           "value": "#f87171",
-          "type": "color"
+          "type": "color",
+          "light": "#dc2626"
         },
         "info": {
           "value": "#60a5fa",
-          "type": "color"
+          "type": "color",
+          "light": "#2563eb"
         }
       }
     },
@@ -587,27 +618,16 @@
           "type": "typography",
           "description": "20px \u2014 card titles"
         },
-        "heading-xl": {
-          "value": {
-            "fontFamily": "{fontFamily.ui}",
-            "fontWeight": "{fontWeight.medium}",
-            "fontSize": "{fontSize.3xl}",
-            "lineHeight": "{lineHeight.snug}",
-            "letterSpacing": "{letterSpacing.tight}"
-          },
-          "type": "typography",
-          "description": "32px \u2014 prominent step titles"
-        },
         "heading-sm": {
           "value": {
             "fontFamily": "{fontFamily.ui}",
             "fontWeight": "{fontWeight.medium}",
             "fontSize": "{fontSize.lg}",
-            "lineHeight": "{spacing.6}",
+            "lineHeight": "{lineHeight.snug}",
             "letterSpacing": "{letterSpacing.tight}"
           },
           "type": "typography",
-          "description": "17px / 24px line-height \u2014 step titles, subheadings"
+          "description": "17px \u2014 subheadings"
         },
         "body-lg": {
           "value": {
@@ -910,11 +930,13 @@
           },
           "border": {
             "value": "rgba(255,255,255,0.14)",
-            "type": "color"
+            "type": "color",
+            "light": "rgba(46,35,35,0.14)"
           },
           "border-hover": {
             "value": "rgba(255,255,255,0.28)",
-            "type": "color"
+            "type": "color",
+            "light": "rgba(46,35,35,0.28)"
           },
           "sm": {
             "height": {
@@ -1168,7 +1190,8 @@
           },
           "bg-hover": {
             "value": "#211f24",
-            "type": "color"
+            "type": "color",
+            "light": "#ebe5e5"
           },
           "text": {
             "value": "{color.white.mid}",
@@ -1214,11 +1237,13 @@
       "tag": {
         "bg": {
           "value": "#202022",
-          "type": "color"
+          "type": "color",
+          "light": "#ebe5e5"
         },
         "label": {
           "value": "{color.white.full}",
-          "type": "color"
+          "type": "color",
+          "light": "{color.neutral.800}"
         },
         "padding-x": {
           "value": "12",
