@@ -144,6 +144,56 @@
           "light": "#2e2323"
         }
       },
+      "gray": {
+        "50": {
+          "value": "#121316",
+          "type": "color",
+          "light": "#f8f9fb",
+          "description": "Cool gray scale (slate) — distinct from warm neutral"
+        },
+        "100": {
+          "value": "#1a1c21",
+          "type": "color",
+          "light": "#f1f3f6",
+          "description": "Cool gray raised / table body"
+        },
+        "200": {
+          "value": "#262930",
+          "type": "color",
+          "light": "#e5e8ed",
+          "description": "Cool gray emphasized band"
+        },
+        "300": {
+          "value": "#3a3e48",
+          "type": "color",
+          "light": "#c9ced6"
+        },
+        "400": {
+          "value": "#5c6270",
+          "type": "color",
+          "light": "#9aa1ad"
+        },
+        "500": {
+          "value": "#8b919e",
+          "type": "color",
+          "light": "#6b7280"
+        },
+        "600": {
+          "value": "#a8adb8",
+          "type": "color",
+          "light": "#525866"
+        },
+        "700": {
+          "value": "#c5c9d1",
+          "type": "color",
+          "light": "#3d4450"
+        },
+        "800": {
+          "value": "#e2e4e8",
+          "type": "color",
+          "light": "#2a2f38"
+        }
+      },
       "white": {
         "low": {
           "value": "rgba(255,255,255,0.18)",

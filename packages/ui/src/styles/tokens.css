@@ -45,6 +45,15 @@
   --primitives-color-neutral-600: #9d9aaa;
   --primitives-color-neutral-700: #c0bece;
   --primitives-color-neutral-800: #e0deea;
+  --primitives-color-gray-50: #121316;
+  --primitives-color-gray-100: #1a1c21;
+  --primitives-color-gray-200: #262930;
+  --primitives-color-gray-300: #3a3e48;
+  --primitives-color-gray-400: #5c6270;
+  --primitives-color-gray-500: #8b919e;
+  --primitives-color-gray-600: #a8adb8;
+  --primitives-color-gray-700: #c5c9d1;
+  --primitives-color-gray-800: #e2e4e8;
   --primitives-color-white-low: rgba(255,255,255,0.18);
   --primitives-color-white-mid: rgba(255, 255, 255, 0.45);
   --primitives-color-white-high: rgba(255,255,255,0.87);
