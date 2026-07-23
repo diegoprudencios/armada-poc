@@ -45,6 +45,23 @@
           "description": "Brand deep"
         }
       },
+      "violet": {
+        "500": {
+          "value": "#5227ca",
+          "type": "color",
+          "description": "Brand action (CTA fill)"
+        },
+        "600": {
+          "value": "#431fb0",
+          "type": "color",
+          "description": "Brand action hover"
+        },
+        "700": {
+          "value": "#361894",
+          "type": "color",
+          "description": "Brand action active"
+        }
+      },
       "amber": {
         "50": {
           "value": "#fdf6ec",
@@ -93,155 +110,122 @@
         "0": {
           "value": "#0e0d0f",
           "type": "color",
-          "description": "Background",
-          "light": "#f1eeee"
+          "description": "Background"
         },
         "50": {
           "value": "#151416",
           "type": "color",
-          "description": "Surface default",
-          "light": "#ffffff"
+          "description": "Surface default"
         },
         "100": {
           "value": "#1d1c1f",
           "type": "color",
-          "description": "Surface raised",
-          "light": "#f7f5f5"
+          "description": "Surface raised"
         },
         "200": {
           "value": "#2a2830",
-          "type": "color",
-          "light": "#e8e3e3"
+          "type": "color"
         },
         "300": {
           "value": "#3d3a45",
-          "type": "color",
-          "light": "#ccc1c1"
+          "type": "color"
         },
         "400": {
           "value": "#5c5869",
-          "type": "color",
-          "light": "#a99393"
+          "type": "color"
         },
         "500": {
           "value": "#7d7a8a",
-          "type": "color",
-          "light": "#8d7272"
+          "type": "color"
         },
         "600": {
           "value": "#9d9aaa",
-          "type": "color",
-          "light": "#6c5656"
+          "type": "color"
         },
         "700": {
           "value": "#c0bece",
-          "type": "color",
-          "light": "#4b3a3a"
+          "type": "color"
         },
         "800": {
           "value": "#e0deea",
-          "type": "color",
-          "light": "#2e2323"
+          "type": "color"
         }
       },
       "gray": {
         "50": {
           "value": "#121316",
           "type": "color",
-          "light": "#f8f9fb",
-          "description": "Cool gray scale (slate) — distinct from warm neutral"
+          "description": "Cool gray — lightest dark fill / darkest light fill pair via theme"
         },
         "100": {
           "value": "#1a1c21",
           "type": "color",
-          "light": "#f1f3f6",
-          "description": "Cool gray raised / table body"
+          "description": "Cool gray raised surface (e.g. table body on white)"
         },
         "200": {
           "value": "#262930",
           "type": "color",
-          "light": "#e5e8ed",
-          "description": "Cool gray emphasized band"
+          "description": "Cool gray emphasized band (e.g. table total)"
         },
         "300": {
           "value": "#3a3e48",
-          "type": "color",
-          "light": "#c9ced6"
+          "type": "color"
         },
         "400": {
           "value": "#5c6270",
-          "type": "color",
-          "light": "#9aa1ad"
+          "type": "color"
         },
         "500": {
           "value": "#8b919e",
-          "type": "color",
-          "light": "#6b7280"
+          "type": "color"
         },
         "600": {
           "value": "#a8adb8",
-          "type": "color",
-          "light": "#525866"
+          "type": "color"
         },
         "700": {
           "value": "#c5c9d1",
-          "type": "color",
-          "light": "#3d4450"
+          "type": "color"
         },
         "800": {
           "value": "#e2e4e8",
-          "type": "color",
-          "light": "#2a2f38"
+          "type": "color"
         }
       },
       "white": {
         "low": {
           "value": "rgba(255,255,255,0.18)",
-          "type": "color",
-          "light": "rgba(0,0,0,0.08)"
+          "type": "color"
         },
         "mid": {
           "value": "rgba(255,255,255,0.45)",
-          "type": "color",
-          "light": "rgba(0,0,0,0.45)"
+          "type": "color"
         },
         "high": {
           "value": "rgba(255,255,255,0.87)",
-          "type": "color",
-          "light": "rgba(0,0,0,0.78)"
+          "type": "color"
         },
         "full": {
           "value": "#ffffff",
-          "type": "color",
-          "light": "#2e2323"
-        },
-        "70": {
-          "value": "rgba(255,255,255,0.7)",
-          "type": "color",
-          "light": "rgba(0,0,0,0.70)",
-          "description": "Was missing from JSON despite being used in shipped tokens.css (semantic.color.text.secondary). Added here to close the drift."
+          "type": "color"
         }
       },
       "status": {
         "success": {
           "value": "#34d399",
-          "type": "color",
-          "light": "#1aab74"
+          "type": "color"
         },
         "warning": {
           "value": "#fbbf24",
-          "type": "color",
-          "light": "#b8860f"
+          "type": "color"
         },
         "error": {
           "value": "#f87171",
-          "type": "color",
-          "light": "#dc2626"
+          "type": "color"
         },
         "info": {
           "value": "#60a5fa",
-          "type": "color",
-          "light": "#2563eb"
+          "type": "color"
         }
       }
     },
@@ -483,6 +467,24 @@
           "type": "color",
           "description": "#c491e5 \u2014 never as surface"
         },
+        "action": {
+          "value": "{color.violet.500}",
+          "type": "color",
+          "description": "#5227ca \u2014 CTA / primary action fill, never as surface"
+        },
+        "action-muted": {
+          "value": "rgba(82,39,202,0.15)",
+          "type": "color",
+          "description": "Soft action tint (dashboard action buttons)"
+        },
+        "action-muted-hover": {
+          "value": "rgba(82,39,202,0.25)",
+          "type": "color"
+        },
+        "action-muted-active": {
+          "value": "rgba(82,39,202,0.35)",
+          "type": "color"
+        },
         "amber": {
           "value": "{color.amber.300}",
           "type": "color",
@@ -516,23 +518,19 @@
       "border": {
         "default": {
           "value": "rgba(255,255,255,0.07)",
-          "type": "color",
-          "light": "rgba(46,35,35,0.10)"
+          "type": "color"
         },
         "lavender": {
           "value": "rgba(196,145,229,0.14)",
-          "type": "color",
-          "light": "rgba(107,63,160,0.18)"
+          "type": "color"
         },
         "amber": {
           "value": "rgba(243,208,160,0.14)",
-          "type": "color",
-          "light": "rgba(143,94,28,0.18)"
+          "type": "color"
         },
         "focus": {
           "value": "{color.purple.500}",
-          "type": "color",
-          "light": "{color.purple.700}"
+          "type": "color"
         }
       },
       "text": {
@@ -541,9 +539,8 @@
           "type": "color"
         },
         "secondary": {
-          "value": "{color.white.70}",
-          "type": "color",
-          "description": "Corrected from {color.white.high} (87%) to {color.white.70} (70%) to match what's actually shipped in tokens.css. JSON was out of sync with CSS before this fix \u2014 pre-existing drift, not introduced by light mode work."
+          "value": "{color.white.high}",
+          "type": "color"
         },
         "muted": {
           "value": "{color.white.mid}",
@@ -555,35 +552,29 @@
         },
         "lavender": {
           "value": "{color.purple.500}",
-          "type": "color",
-          "light": "{color.purple.700}"
+          "type": "color"
         },
         "amber": {
           "value": "{color.amber.300}",
-          "type": "color",
-          "light": "{color.amber.700}"
+          "type": "color"
         }
       },
       "status": {
         "success": {
           "value": "#34d399",
-          "type": "color",
-          "light": "#1aab74"
+          "type": "color"
         },
         "warning": {
           "value": "#fbbf24",
-          "type": "color",
-          "light": "#b8860f"
+          "type": "color"
         },
         "error": {
           "value": "#f87171",
-          "type": "color",
-          "light": "#dc2626"
+          "type": "color"
         },
         "info": {
           "value": "#60a5fa",
-          "type": "color",
-          "light": "#2563eb"
+          "type": "color"
         }
       }
     },
@@ -851,15 +842,15 @@
       "button": {
         "primary": {
           "bg": {
-            "value": "{color.purple.500}",
+            "value": "{color.violet.500}",
             "type": "color"
           },
           "bg-hover": {
-            "value": "{color.purple.400}",
+            "value": "{color.violet.600}",
             "type": "color"
           },
           "bg-active": {
-            "value": "{color.purple.600}",
+            "value": "{color.violet.700}",
             "type": "color"
           },
           "bg-disabled": {
@@ -867,7 +858,7 @@
             "type": "color"
           },
           "text": {
-            "value": "{color.neutral.0}",
+            "value": "#ffffff",
             "type": "color"
           },
           "text-disabled": {
@@ -980,13 +971,11 @@
           },
           "border": {
             "value": "rgba(255,255,255,0.14)",
-            "type": "color",
-            "light": "rgba(46,35,35,0.14)"
+            "type": "color"
           },
           "border-hover": {
             "value": "rgba(255,255,255,0.28)",
-            "type": "color",
-            "light": "rgba(46,35,35,0.28)"
+            "type": "color"
           },
           "sm": {
             "height": {
@@ -1240,8 +1229,7 @@
           },
           "bg-hover": {
             "value": "#211f24",
-            "type": "color",
-            "light": "#ebe5e5"
+            "type": "color"
           },
           "text": {
             "value": "{color.white.mid}",
@@ -1287,13 +1275,11 @@
       "tag": {
         "bg": {
           "value": "#202022",
-          "type": "color",
-          "light": "#ebe5e5"
+          "type": "color"
         },
         "label": {
           "value": "{color.white.full}",
-          "type": "color",
-          "light": "{color.neutral.800}"
+          "type": "color"
         },
         "padding-x": {
           "value": "12",
