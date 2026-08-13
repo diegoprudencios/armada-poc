@@ -146,6 +146,8 @@
   --semantic-spacing-card-padding: var(--primitives-spacing-6);
   --semantic-spacing-section-gap: var(--primitives-spacing-10);
   --semantic-spacing-component-gap: var(--primitives-spacing-3);
+  --semantic-spacing-site-title-to-body: calc(var(--semantic-typography-title-font-size) * 0.5);
+  --semantic-spacing-site-body-to-cta: calc(var(--semantic-typography-body-font-size) * 1.6);
   --semantic-borderRadius-card: var(--primitives-borderRadius-lg);
   --semantic-borderRadius-button: var(--primitives-borderRadius-full);
   --semantic-borderRadius-input: var(--primitives-borderRadius-md);

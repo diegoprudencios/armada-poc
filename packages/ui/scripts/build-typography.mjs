@@ -67,6 +67,8 @@ function resolveValue(raw) {
 }
 
 function slug(group, name) {
+  // Marketing site roles emit short class names: .armada-text-title|body|detail
+  if (group === 'site') return name
   return `${group}-${name}`
 }
 
@@ -116,6 +118,33 @@ for (const [group, composites] of Object.entries(semantic.typography)) {
     )
   }
 }
+
+/* Site stack gaps track site title/body sizes — change type scale, gaps follow. */
+const SITE_TITLE_TO_BODY_RATIO = 0.5
+const SITE_BODY_TO_CTA_RATIO = 1.6
+lines.push(
+  `  /* Site stack: ${SITE_TITLE_TO_BODY_RATIO}× title size, ${SITE_BODY_TO_CTA_RATIO}× body size */`,
+  `  --semantic-spacing-site-title-to-body: calc(var(--semantic-typography-title-font-size) * ${SITE_TITLE_TO_BODY_RATIO});`,
+  `  --semantic-spacing-site-body-to-cta: calc(var(--semantic-typography-body-font-size) * ${SITE_BODY_TO_CTA_RATIO});`,
+)
+
+/* Marketing site stack — title→body / body→CTA rhythm (pairs with site typography). */
+classBlocks.push(
+  '/* Site stack: title→body uses title-to-body; body→CTA uses body-to-cta; title→CTA (no body) uses title-to-body. */',
+  '.armada-site-stack {',
+  '  display: flex;',
+  '  flex-direction: column;',
+  '}',
+  '',
+  '.armada-site-stack > * + * {',
+  '  margin-top: var(--semantic-spacing-site-title-to-body);',
+  '}',
+  '',
+  '.armada-site-stack > .armada-text-body + * {',
+  '  margin-top: var(--semantic-spacing-site-body-to-cta);',
+  '}',
+  '',
+)
 
 lines.push('}', '', ...classBlocks)
 

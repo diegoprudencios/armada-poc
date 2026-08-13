@@ -659,16 +659,27 @@
           "type": "typography",
           "description": "20px \u2014 card titles"
         },
+        "heading-xl": {
+          "value": {
+            "fontFamily": "{fontFamily.ui}",
+            "fontWeight": "{fontWeight.medium}",
+            "fontSize": "{fontSize.3xl}",
+            "lineHeight": "{lineHeight.snug}",
+            "letterSpacing": "{letterSpacing.tight}"
+          },
+          "type": "typography",
+          "description": "32px \u2014 large UI headings"
+        },
         "heading-sm": {
           "value": {
             "fontFamily": "{fontFamily.ui}",
             "fontWeight": "{fontWeight.medium}",
             "fontSize": "{fontSize.lg}",
-            "lineHeight": "{lineHeight.snug}",
+            "lineHeight": "{spacing.6}",
             "letterSpacing": "{letterSpacing.tight}"
           },
           "type": "typography",
-          "description": "17px \u2014 subheadings"
+          "description": "17px / 24px \u2014 subheadings"
         },
         "body-lg": {
           "value": {
@@ -794,6 +805,41 @@
           "type": "typography",
           "description": "11px \u2014 reserved"
         }
+      },
+      "site": {
+        "title": {
+          "value": {
+            "fontFamily": "{fontFamily.display}",
+            "fontWeight": "{fontWeight.regular}",
+            "fontSize": "clamp(2rem, 1.252rem + 1.56vw, 2.75rem)",
+            "lineHeight": "{lineHeight.tight}",
+            "letterSpacing": "{letterSpacing.tight}"
+          },
+          "type": "typography",
+          "description": "Marketing headlines \u2014 fluid 32px (3xl) at 767px \u2192 44px (4xl) at 1536px"
+        },
+        "body": {
+          "value": {
+            "fontFamily": "{fontFamily.ui}",
+            "fontWeight": "{fontWeight.medium}",
+            "fontSize": "{fontSize.md}",
+            "lineHeight": "{lineHeight.normal}",
+            "letterSpacing": "{letterSpacing.normal}"
+          },
+          "type": "typography",
+          "description": "Marketing body \u2014 15px"
+        },
+        "detail": {
+          "value": {
+            "fontFamily": "{fontFamily.ui}",
+            "fontWeight": "{fontWeight.medium}",
+            "fontSize": "{fontSize.base}",
+            "lineHeight": "{lineHeight.snug}",
+            "letterSpacing": "{letterSpacing.normal}"
+          },
+          "type": "typography",
+          "description": "Marketing detail/caption \u2014 13px"
+        }
       }
     },
     "spacing": {
@@ -808,6 +854,16 @@
       "component-gap": {
         "value": "{spacing.3}",
         "type": "spacing"
+      },
+      "site-title-to-body": {
+        "value": "calc(var(--semantic-typography-title-font-size) * 0.5)",
+        "type": "spacing",
+        "description": "Marketing title\u2192body (or title\u2192CTA) \u2014 0.5\u00d7 site title size"
+      },
+      "site-body-to-cta": {
+        "value": "calc(var(--semantic-typography-body-font-size) * 1.6)",
+        "type": "spacing",
+        "description": "Marketing body\u2192CTA \u2014 1.6\u00d7 site body size"
       }
     },
     "borderRadius": {

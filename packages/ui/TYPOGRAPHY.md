@@ -58,6 +58,25 @@ Or add the global class in JSX: `className="armada-text-ui-body-sm"`.
 | `ui/label-md` | 12px | 100% | Medium | UI labels |
 | `ui/button` | 14px | 100% | Medium | Button labels (see button tokens too) |
 
+### Site / marketing composites
+
+Short class names (no `site-` prefix): `.armada-text-title`, `.armada-text-body`, `.armada-text-detail`.
+
+| Composite | Size | Line height | Weight | Typical use |
+|-----------|------|-------------|--------|-------------|
+| `site/title` | fluid clamp 32→44px | 110% | Regular | Marketing headlines |
+| `site/body` | 15px (`fontSize-md`) | 140% | Medium | Marketing body |
+| `site/detail` | 13px (`fontSize-base`) | 120% | Medium | Captions, badge labels |
+
+Fluid copy stack spacing (derived from site title/body — updates when type scale changes):
+
+| Token | Formula | Use |
+|-------|---------|-----|
+| `--semantic-spacing-site-title-to-body` | `0.5 ×` title size | Title→body / title→CTA |
+| `--semantic-spacing-site-body-to-cta` | `1.6 ×` body size | Body→CTA |
+
+Use `.armada-site-stack` on the column that holds title → body → CTA.
+
 Display and mono composites are also generated — see `armada-tokens.json` → `semantic.typography`.
 
 ## Editing a composite
