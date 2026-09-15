@@ -291,6 +291,7 @@ export function App() {
   // uses the dedicated `?page=participate` page. `openParticipate()` routes
   // based on the active design flag.
   const [participateOpen, setParticipateOpen] = useState(false)
+  const [participateSplash, setParticipateSplash] = useState(false)
   // Crowdfund Progress "Details" — observe cards in a blurred modal overlay.
   const [detailsOpen, setDetailsOpen] = useState(() => detailsOpenFromUrl())
   // True while the participate pipeline is in flight — gates modal close confirm.
@@ -743,7 +744,10 @@ export function App() {
     if (!windowOpen) return
     setParticipateOpen(true)
   }
-  const closeParticipate = () => setParticipateOpen(false)
+  const closeParticipate = () => {
+    setParticipateOpen(false)
+    setParticipateSplash(false)
+  }
 
   const headerRightChrome = (
     <div className="flex items-center gap-3">
@@ -784,12 +788,25 @@ export function App() {
       onClose={closeParticipate}
       ariaLabel="Participate in the Armada crowdfund"
       confirmBeforeClose={participateRunning}
+      showClose={!participateSplash}
+      footer={
+        participateSplash ? (
+          <ArmadaButton
+            variant="ghost"
+            size="md"
+            label="Do it later"
+            showIcon={false}
+            onClick={closeParticipate}
+          />
+        ) : null
+      }
     >
       {participateOpen && (
         <ParticipateFlowV2
           // Remount on account switch so mount-frozen baselines can't mix accounts.
           key={wallet.address ?? 'disconnected'}
           onRunningChange={setParticipateRunning}
+          onSplashActiveChange={setParticipateSplash}
           eventsLoading={eventsLoading}
           secondsLeft={secondsLeft}
           walletConnected={wallet.connected}

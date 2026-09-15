@@ -1,5 +1,5 @@
-// ABOUTME: Modal shell for the Path 2 (hero-entry) Participate flow — portal-rendered backdrop + panel with close button.
-// ABOUTME: Ported byte-identical from the armada-crowdfund mockup (ParticipateFlow/ParticipateFlowModal.tsx).
+// ABOUTME: Modal shell for the Path 2 (hero-entry) Participate flow — portal-rendered backdrop + panel with optional close / footer.
+// ABOUTME: Ported from the armada-crowdfund mockup; keeps confirm-before-close while a tx pipeline runs.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -21,6 +21,10 @@ export interface ParticipateFlowModalProps {
   /** When true, Escape / the X button ask for confirmation before closing —
    *  used while an approve/commit pipeline is in flight. */
   confirmBeforeClose?: boolean
+  /** When false, hides the top-right close control (e.g. invite uses “Do it later”). */
+  showClose?: boolean
+  /** Optional content below the step shell (e.g. “Do it later” text link). */
+  footer?: ReactNode
 }
 
 export function ParticipateFlowModal({
@@ -29,8 +33,11 @@ export function ParticipateFlowModal({
   children,
   ariaLabel,
   confirmBeforeClose = false,
+  showClose = true,
+  footer,
 }: ParticipateFlowModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const footerRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(open)
   const [exiting, setExiting] = useState(false)
   // Hold `onClose` in a ref so the focus + keydown effect below can read the
@@ -97,7 +104,15 @@ export function ParticipateFlowModal({
     body.style.left = '0'
     body.style.right = '0'
     body.style.width = '100%'
-    closeRef.current?.focus()
+
+    if (showClose) {
+      closeRef.current?.focus()
+    } else {
+      const focusable = footerRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      focusable?.focus()
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -118,7 +133,7 @@ export function ParticipateFlowModal({
       window.scrollTo(0, scrollY)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [mounted, exiting])
+  }, [mounted, exiting, showClose])
 
   if (!mounted) return null
 
@@ -136,21 +151,36 @@ export function ParticipateFlowModal({
         aria-hidden
       />
       <div
-        className={[styles.panel, exiting && styles.panelExit].join(' ')}
+        className={[
+          styles.panel,
+          !showClose && styles.panelNoClose,
+          exiting && styles.panelExit,
+        ]
+          .filter(Boolean)
+          .join(' ')}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
       >
-        <button
-          ref={closeRef}
-          type="button"
-          className={styles.close}
-          onClick={requestClose}
-          aria-label="Close participate flow"
-        >
-          <XMarkIcon width={20} height={20} aria-hidden />
-        </button>
-        <div className={[styles.step, exiting && styles.stepExit].join(' ')}>{children}</div>
+        {showClose ? (
+          <button
+            ref={closeRef}
+            type="button"
+            className={styles.close}
+            onClick={requestClose}
+            aria-label="Close participate flow"
+          >
+            <XMarkIcon width={20} height={20} aria-hidden />
+          </button>
+        ) : null}
+        <div className={[styles.step, exiting && styles.stepExit].filter(Boolean).join(' ')}>
+          {children}
+        </div>
+        {footer ? (
+          <div ref={footerRef} className={styles.footer}>
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body,

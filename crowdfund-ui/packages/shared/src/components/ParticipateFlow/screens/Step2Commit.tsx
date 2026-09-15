@@ -436,7 +436,9 @@ function SingleHopVariant({
               )}
             </div>
             <div className={styles.barScale}>
-              <span className={styles.barScaleMin}>0 USDC</span>
+              <span className={styles.barScaleMin}>
+                {totalCommitted.toLocaleString('en-US')} USDC
+              </span>
               <span className={styles.barScaleMax}>
                 MAX {maxAmount.toLocaleString('en-US')} USDC
               </span>
@@ -720,7 +722,9 @@ function MultiHopVariant({
               )}
             </div>
             <div className={styles.barScale}>
-              <span className={styles.barScaleMin}>0 USDC</span>
+              <span className={styles.barScaleMin}>
+                {(totalExisting + totalNew).toLocaleString('en-US')} USDC
+              </span>
               <span className={styles.barScaleMax}>
                 MAX {totalCap.toLocaleString('en-US')} USDC
               </span>
