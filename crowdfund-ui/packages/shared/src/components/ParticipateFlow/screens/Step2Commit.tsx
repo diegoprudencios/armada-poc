@@ -351,65 +351,67 @@ function SingleHopVariant({
       <div className={styles.content}>
         {maxOut && <MaxOutBanner maxOut={maxOut} />}
         <div className={styles.inputBlock}>
-          <div className={styles.titleBlock}>
-            {hopLabel && (
-              <span className={styles.hopBadge}>
-                {hopColor && (
-                  <span
-                    className={styles.hopBadgeDot}
-                    style={{ background: hopColor }}
-                    aria-hidden
-                  />
-                )}
-                <span className={styles.hopBadgeLabel}>{hopLabel}</span>
-              </span>
-            )}
-            <h2 className={styles.title} id="commit-title">How much USDC?</h2>
-          </div>
-
-          <div className={styles.amountCluster}>
-            <label className={styles.amountWrapper} htmlFor="commit-amount">
-              <span className={styles.visuallyHidden}>Amount in USDC</span>
-              <span className={styles.amountField}>
-                <span
-                  className={[
-                    styles.amountDisplay,
-                    showActiveAmount ? styles.amountDisplayActive : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  aria-hidden="true"
-                >
-                  {showActiveAmount ? amountInput : '0'}
+          <div className={styles.amountGroup}>
+            <div className={styles.titleBlock}>
+              {hopLabel && (
+                <span className={styles.hopBadge}>
+                  {hopColor && (
+                    <span
+                      className={styles.hopBadgeDot}
+                      style={{ background: hopColor }}
+                      aria-hidden
+                    />
+                  )}
+                  <span className={styles.hopBadgeLabel}>{hopLabel}</span>
                 </span>
-                <input
-                  id="commit-amount"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={amountInput}
-                  onChange={(e) => handleInput(e.target.value)}
-                  className={styles.amountInput}
-                  aria-labelledby="commit-title"
-                  aria-describedby="commit-balance"
-                />
-              </span>
-            </label>
+              )}
+              <h2 className={styles.title} id="commit-title">How much USDC?</h2>
+            </div>
 
-            <p className={styles.balanceLabel} id="commit-balance">
-              Balance {formatBalance(availableBalance)}
-            </p>
-            {overBalance && hasNewAmount && (
-              <p className={styles.overBalance}>Amount exceeds your wallet balance.</p>
-            )}
-            {belowMin && !overBalance && (
-              <p className={styles.overBalance}>
-                Minimum {MIN_COMMIT_USD.toLocaleString()} USDC per commit.
+            <div className={styles.amountCluster}>
+              <label className={styles.amountWrapper} htmlFor="commit-amount">
+                <span className={styles.visuallyHidden}>Amount in USDC</span>
+                <span className={styles.amountField}>
+                  <span
+                    className={[
+                      styles.amountDisplay,
+                      showActiveAmount ? styles.amountDisplayActive : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    aria-hidden="true"
+                  >
+                    {showActiveAmount ? amountInput : '0'}
+                  </span>
+                  <input
+                    id="commit-amount"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    value={amountInput}
+                    onChange={(e) => handleInput(e.target.value)}
+                    className={styles.amountInput}
+                    aria-labelledby="commit-title"
+                    aria-describedby="commit-balance"
+                  />
+                </span>
+              </label>
+
+              <p className={styles.balanceLabel} id="commit-balance">
+                Balance {formatBalance(availableBalance)}
               </p>
-            )}
-            {commaError && (
-              <p className={styles.overBalance}>Use a period for decimals.</p>
-            )}
+              {overBalance && hasNewAmount && (
+                <p className={styles.overBalance}>Amount exceeds your wallet balance.</p>
+              )}
+              {belowMin && !overBalance && (
+                <p className={styles.overBalance}>
+                  Minimum {MIN_COMMIT_USD.toLocaleString()} USDC per commit.
+                </p>
+              )}
+              {commaError && (
+                <p className={styles.overBalance}>Use a period for decimals.</p>
+              )}
+            </div>
           </div>
         </div>
 
