@@ -389,6 +389,10 @@
   flex: 1;
 }
 
+.ctaBlocked {
+  cursor: not-allowed;
+}
+
 /* Mobile (≤767px) — stack the action buttons full-width, primary on top.
  * Ported from the armada-crowdfund mockup mobile rework. */
 @media (max-width: 767px) {

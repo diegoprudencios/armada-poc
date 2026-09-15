@@ -482,10 +482,14 @@ function SingleHopVariant({
         <Button
           variant="primary"
           size="lg"
-          label="Review"
+          label={hasNewAmount ? 'Review' : 'Insert amount'}
           showIcon={false}
-          onClick={() => onNext(amount)}
-          disabled={amount < MIN_COMMIT_USD || overBalance}
+          className={amount < MIN_COMMIT_USD || overBalance ? styles.ctaBlocked : undefined}
+          aria-disabled={amount < MIN_COMMIT_USD || overBalance || undefined}
+          onClick={() => {
+            if (amount < MIN_COMMIT_USD || overBalance) return
+            onNext(amount)
+          }}
         />
       </div>
     </div>
@@ -777,10 +781,14 @@ function MultiHopVariant({
         <Button
           variant="primary"
           size="lg"
-          label="Review"
+          label={totalNew > 0 ? 'Review' : 'Insert amount'}
           showIcon={false}
-          onClick={handleNext}
-          disabled={!canReview}
+          className={!canReview ? styles.ctaBlocked : undefined}
+          aria-disabled={!canReview || undefined}
+          onClick={() => {
+            if (!canReview) return
+            handleNext()
+          }}
         />
       </div>
     </div>
