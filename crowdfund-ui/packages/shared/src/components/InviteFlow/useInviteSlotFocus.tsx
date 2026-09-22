@@ -1,37 +1,55 @@
-// ABOUTME: State + transitions for Invite method-picker UX (list ↔ action screen + picker).
+// ABOUTME: State + transitions for hop invite UX (list ↔ picker ↔ in-place action).
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { InviteMethod } from '../../lib/inviteUx'
-import type { SlotCardEnsResult } from './screens/SlotCard'
+import {
+  formatInviteeHop,
+  type InviteeHop,
+} from '../MyPosition/inviteModel'
 import { InviteActionScreen } from './InviteActionScreen'
 import { InviteMethodPicker } from './InviteMethodPicker'
 import focusStyles from './inviteSlotFocus.module.css'
 
-const TRANSITION_MS = 240
+/** List ↔ action crossfade duration (matches inviteExit / goBack timer). */
+export const INVITE_FOCUS_TRANSITION_MS = 240
+/** List frame enter duration (matches inviteEnter in CSS). */
+export const INVITE_LIST_ENTER_MS = 320
+/** Delay after list mounts before hop count starts rolling. */
+export const INVITE_COUNT_ROLL_DELAY_MS = 260
+/** Hop thumb odometer roll duration. */
+export const INVITE_COUNT_ROLL_MS = 480
+
+const TRANSITION_MS = INVITE_FOCUS_TRANSITION_MS
 
 export type InviteFocusView = 'list' | 'action'
 
-export interface InviteSlotFocus {
+export interface InviteHopFocus {
   view: InviteFocusView
   fading: boolean
-  focus: { slotId: number; method: InviteMethod } | null
-  pickerSlotId: number | null
+  /** Target hop while the invite action screen is open. */
+  focusHop: InviteeHop | null
+  /** Method chosen via picker (set when entering action). */
+  focusMethod: InviteMethod | null
+  /** Hop whose Invite CTA currently has the method picker open. */
+  pickerHop: InviteeHop | null
   pickerAnchor: HTMLElement | null
-  openPicker: (slotId: number, anchor: HTMLElement) => void
-  registerInviteButton: (slotId: number, el: HTMLButtonElement | null) => void
+  openPicker: (hop: InviteeHop, anchor: HTMLElement) => void
   closePicker: () => void
   selectMethod: (method: InviteMethod) => void
   goBack: () => void
   frameClassName: string
+  registerInviteButton: (hop: InviteeHop, el: HTMLButtonElement | null) => void
+  restoreFocusToInvite: () => void
 }
 
-export function useInviteSlotFocus(): InviteSlotFocus {
+export function useInviteHopFocus(): InviteHopFocus {
   const [renderView, setRenderView] = useState<InviteFocusView>('list')
   const [fading, setFading] = useState(false)
-  const [focus, setFocus] = useState<{ slotId: number; method: InviteMethod } | null>(null)
-  const [pickerSlotId, setPickerSlotId] = useState<number | null>(null)
+  const [focusHop, setFocusHop] = useState<InviteeHop | null>(null)
+  const [focusMethod, setFocusMethod] = useState<InviteMethod | null>(null)
+  const [pickerHop, setPickerHop] = useState<InviteeHop | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null)
-  const inviteBtnRefs = useRef<Map<number, HTMLElement>>(new Map())
+  const inviteBtnRefs = useRef<Map<InviteeHop, HTMLElement>>(new Map())
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearTimer = () => {
@@ -51,32 +69,41 @@ export function useInviteSlotFocus(): InviteSlotFocus {
     }, TRANSITION_MS)
   }, [])
 
-  const openPicker = useCallback((slotId: number, anchor: HTMLElement) => {
-    inviteBtnRefs.current.set(slotId, anchor)
-    setPickerSlotId(slotId)
+  const registerInviteButton = useCallback((hop: InviteeHop, el: HTMLButtonElement | null) => {
+    if (el) inviteBtnRefs.current.set(hop, el)
+    else inviteBtnRefs.current.delete(hop)
+  }, [])
+
+  const openPicker = useCallback((hop: InviteeHop, anchor: HTMLElement) => {
+    inviteBtnRefs.current.set(hop, anchor)
+    setPickerHop(hop)
     setPickerAnchor(anchor)
   }, [])
 
-  const registerInviteButton = useCallback((slotId: number, el: HTMLButtonElement | null) => {
-    if (el) inviteBtnRefs.current.set(slotId, el)
-    else inviteBtnRefs.current.delete(slotId)
-  }, [])
-
   const closePicker = useCallback(() => {
-    setPickerSlotId(null)
+    setPickerHop(null)
     setPickerAnchor(null)
   }, [])
 
   const selectMethod = useCallback(
     (method: InviteMethod) => {
-      if (pickerSlotId == null) return
-      const slotId = pickerSlotId
-      setFocus({ slotId, method })
+      if (pickerHop == null) return
+      const hop = pickerHop
+      setFocusHop(hop)
+      setFocusMethod(method)
       closePicker()
       transitionTo('action')
     },
-    [pickerSlotId, closePicker, transitionTo],
+    [pickerHop, closePicker, transitionTo],
   )
+
+  const restoreFocusToInvite = useCallback(() => {
+    const hop = focusHop
+    if (hop == null) return
+    requestAnimationFrame(() => {
+      inviteBtnRefs.current.get(hop)?.focus()
+    })
+  }, [focusHop])
 
   const goBack = useCallback(() => {
     clearTimer()
@@ -84,16 +111,17 @@ export function useInviteSlotFocus(): InviteSlotFocus {
     timerRef.current = setTimeout(() => {
       setRenderView('list')
       setFading(false)
-      const id = focus?.slotId
-      setFocus(null)
+      const hop = focusHop
+      setFocusHop(null)
+      setFocusMethod(null)
       timerRef.current = null
-      if (id != null) {
+      if (hop != null) {
         requestAnimationFrame(() => {
-          inviteBtnRefs.current.get(id)?.focus()
+          inviteBtnRefs.current.get(hop)?.focus()
         })
       }
     }, TRANSITION_MS)
-  }, [focus?.slotId])
+  }, [focusHop])
 
   const frameClassName = [
     focusStyles.frame,
@@ -103,40 +131,62 @@ export function useInviteSlotFocus(): InviteSlotFocus {
   return {
     view: renderView,
     fading,
-    focus,
-    pickerSlotId,
+    focusHop,
+    focusMethod,
+    pickerHop,
     pickerAnchor,
     openPicker,
-    registerInviteButton,
     closePicker,
     selectMethod,
     goBack,
     frameClassName,
+    registerInviteButton,
+    restoreFocusToInvite,
   }
 }
 
-export interface InviteFocusChromeProps {
-  focusApi: InviteSlotFocus
-  loadingSlotId?: number | null
-  onGenerateLink: (slotId: number) => Promise<void>
-  onInviteOnchain: (slotId: number, address: string, ensName?: string) => Promise<void>
-  resolveEns?: (input: string) => Promise<SlotCardEnsResult>
+export interface InviteHopFocusChromeProps {
+  focusApi: InviteHopFocus
+  loadingHop?: InviteeHop | null
+  onGenerateLink: (
+    hop: InviteeHop,
+  ) => Promise<{ id: number; link: string; expiresAt: Date } | void>
+  onInviteOnchain: (
+    hop: InviteeHop,
+    address: string,
+    ensName?: string,
+  ) => Promise<{ id: number; address: string; ensName?: string } | void>
+  onCopy?: (id: number, link: string) => void
+  onRevoke?: (id: number) => void | Promise<void>
+  onConfirmCreated?: (id: number) => void
+  onDiscardCreated?: (id: number) => void
+  copiedInviteId?: number | null
+  resolveEns?: (
+    input: string,
+  ) => Promise<import('./screens/SlotCard').SlotCardEnsResult>
   list: ReactNode
 }
 
-export function InviteFocusChrome({
+/** Renders hop list or in-place invite action + method picker portal. */
+export function InviteHopFocusChrome({
   focusApi,
-  loadingSlotId = null,
+  loadingHop = null,
   onGenerateLink,
   onInviteOnchain,
+  onCopy,
+  onRevoke,
+  onConfirmCreated,
+  onDiscardCreated,
+  copiedInviteId = null,
   resolveEns,
   list,
-}: InviteFocusChromeProps) {
+}: InviteHopFocusChromeProps) {
   const {
     view,
     fading,
-    focus,
-    pickerSlotId,
+    focusHop,
+    focusMethod,
+    pickerHop,
     pickerAnchor,
     closePicker,
     selectMethod,
@@ -168,6 +218,9 @@ export function InviteFocusChrome({
     }
   }, [view, fading])
 
+  const pickerTitle =
+    pickerHop != null ? `Invite to ${formatInviteeHop(pickerHop)}` : 'Whitelist a friend'
+
   return (
     <div
       ref={shellRef}
@@ -176,25 +229,41 @@ export function InviteFocusChrome({
     >
       <div key={view} className={frameClassName}>
         {view === 'list' && list}
-        {view === 'action' && focus && (
+        {view === 'action' && focusHop != null && focusMethod != null && (
           <InviteActionScreen
-            slotId={focus.slotId}
-            method={focus.method}
-            loading={loadingSlotId === focus.slotId}
+            hop={focusHop}
+            method={focusMethod}
+            loading={loadingHop === focusHop}
             onBack={goBack}
-            onGenerateLink={onGenerateLink}
-            onInviteOnchain={onInviteOnchain}
+            onGenerateLink={async (target) => onGenerateLink(target as InviteeHop)}
+            onInviteOnchain={async (target, address, ensName) =>
+              onInviteOnchain(target as InviteeHop, address, ensName)
+            }
+            onCopy={onCopy}
+            onRevoke={onRevoke}
+            onConfirmCreated={onConfirmCreated}
+            onDiscardCreated={onDiscardCreated}
+            copiedInviteId={copiedInviteId}
             resolveEns={resolveEns}
           />
         )}
       </div>
       <InviteMethodPicker
-        open={pickerSlotId != null}
+        open={pickerHop != null}
         anchorEl={pickerAnchor}
-        slotId={pickerSlotId ?? 0}
+        slotId={pickerHop ?? 0}
+        title={pickerTitle}
         onSelect={handleSelect}
         onClose={closePicker}
       />
     </div>
   )
 }
+
+/** @deprecated Prefer useInviteHopFocus — kept for InviteSlots / ParticipateFlowInviteSlots. */
+export {
+  useInviteSlotFocus,
+  InviteFocusChrome,
+  type InviteSlotFocus,
+  type InviteFocusChromeProps,
+} from './useInviteSlotFocusLegacy'

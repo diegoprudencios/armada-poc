@@ -18,5 +18,17 @@ export {
   DEMO_WALLET,
   DEMO_WALLET_DISPLAY,
   DEMO_SLOTS,
+  DEMO_INVITE_ALLOWANCE,
+  countAvailableInviteSlots,
   buildInvitePinnedNodes,
 } from './myPositionDemo'
+export { InvitesCard } from './InvitesCard'
+export type { InvitesCardProps, InvitesCardVariant } from './InvitesCard'
+export {
+  allowanceFromPositions,
+  availableForHop,
+  hopsWithAllowance,
+  type InviteAllowance,
+  type InviteeHop,
+  type InviteListKind,
+} from './inviteModel'

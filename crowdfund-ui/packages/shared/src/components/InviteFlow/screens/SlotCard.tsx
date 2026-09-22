@@ -18,7 +18,13 @@ import { MOBILE_LAYOUT_MAX_WIDTH_PX } from '../../../lib/viewportBreakpoints'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type SlotStatus = 'empty' | 'link-active' | 'onchain-pending' | 'redeemed'
+export type SlotStatus =
+  | 'empty'
+  | 'link-active'
+  | 'onchain-pending'
+  | 'redeemed'
+  | 'expired'
+  | 'revoked'
 type ExpandedAction = 'link' | 'onchain' | null
 type EnsState = 'idle' | 'resolving' | 'resolved' | 'error'
 
@@ -42,8 +48,20 @@ export interface SlotData {
   isSelf?: boolean
   /** When the invitee joined / redeemed (shown as “Joined on …”). */
   joinedAt?: Date
-  /** Hop the invitee joined as (0 = HOP-0 / seed, 1 = HOP-1, 2 = HOP-2). */
+  /** When an onchain address invite was issued. */
+  invitedAt?: Date
+  /** When a link expired or was revoked. */
+  closedAt?: Date
+  /**
+   * Hop the invitee joins at (1 = Hop-1, 2 = Hop-2).
+   * Prefer 1 | 2 for new invites; 0 kept for legacy showcase fixtures.
+   */
   inviteeHop?: 0 | 1 | 2
+  /**
+   * When true, invite counts toward allowance but stays off the sent list
+   * until the create confirmation is dismissed (Done / close).
+   */
+  hideFromList?: boolean
 }
 
 /**
@@ -57,7 +75,10 @@ export type SlotCardEnsResult =
 
 interface SlotCardProps {
   slot: SlotData
-  onGenerateLink: (slotId: number) => Promise<void>
+  onGenerateLink: (slotId: number) => Promise<
+    | void
+    | { id: number; link: string; expiresAt: Date; nonce?: number }
+  >
   onCopy: (slotId: number, link: string) => void
   onRevoke: (slotId: number) => void
   onInviteOnchain: (slotId: number, address: string, ensName?: string) => Promise<void>

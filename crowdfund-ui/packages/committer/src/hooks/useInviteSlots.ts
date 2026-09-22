@@ -175,7 +175,14 @@ function useHopSection(args: {
       if (!guardNetwork()) return
       setLoadingId(slotId)
       try {
-        await inviteLinks.createLink(hop)
+        const created = await inviteLinks.createLink(hop)
+        if (!created) return
+        return {
+          id: slotId,
+          link: created.url,
+          expiresAt: new Date(created.deadline * 1000),
+          nonce: created.nonce,
+        }
       } finally {
         setLoadingId((cur) => (cur === slotId ? null : cur))
       }

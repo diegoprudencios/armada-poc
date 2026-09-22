@@ -204,6 +204,8 @@ export interface NodeSphereProps {
    * crowdfund hero uses this to drop the graph card on mobile).
    */
   onWebglUnavailable?: () => void
+  /** Hide hover / selection tooltips (e.g. when an overlay list is expanded). */
+  hideNodePopover?: boolean
 }
 
 export function NodeSphere({
@@ -223,6 +225,7 @@ export function NodeSphere({
   inviteGraph = false,
   etherscanBaseUrl,
   onWebglUnavailable,
+  hideNodePopover = false,
 }: NodeSphereProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [hover, setHover] = useState<HoverState | null>(null)
@@ -1249,7 +1252,7 @@ export function NodeSphere({
       {/* Hover tooltip — follows the cursor over selectable nodes. Mirrors
           the selected-tip's "Your wallet" eyebrow + truncated-address
           rendering so live 40-hex addresses don't overflow the 272px box. */}
-      {SHOW_HOVER_POPUP && hover && hover.visible && (() => {
+      {!hideNodePopover && SHOW_HOVER_POPUP && hover && hover.visible && (() => {
         const hoverIsOwnWallet =
           !!walletAddress && hover.address.toLowerCase() === walletAddress.toLowerCase()
         const hoverEyebrow = hoverIsOwnWallet ? 'Your wallet' : hover.kind
@@ -1322,7 +1325,7 @@ export function NodeSphere({
       })()}
 
       {/* Selected tooltip (pinned) */}
-      {selectedTip?.visible && (() => {
+      {!hideNodePopover && selectedTip?.visible && (() => {
         // Derive display fields. When the selected address is the connected
         // wallet, the tooltip's eyebrow swaps from the hop label to "YOUR
         // WALLET" (matches the designer's mockup). The address itself is

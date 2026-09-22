@@ -21,10 +21,12 @@
 
 .frameEnter {
   animation: inviteEnter 320ms ease;
+  animation-fill-mode: backwards;
 }
 
 .frameExit {
   animation: inviteExit 240ms ease forwards;
+  pointer-events: none;
 }
 
 @keyframes inviteEnter {

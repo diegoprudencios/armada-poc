@@ -1,10 +1,9 @@
 // ABOUTME: Ported from the armada-crowdfund mockup (components/CrowdfundExperience/CrowdfundExperience.tsx); designer's '/fleet.png' + '/fleet.mp4' public-folder paths replaced with ESM asset imports so the assets ship with crowdfund-shared.
 // ABOUTME: Header rendering is also exposed via a slot prop (default falls back to @armada/ui's Header) so consuming apps render only one chrome instead of two; view is optionally controllable from outside to keep consumer page state in sync.
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAtomValue } from 'jotai'
 import { InformationCircleIcon } from '@heroicons/react/24/solid'
-import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import { ensMapAtom } from '../../hooks/useENS'
 import { Button, Header, Progress, Tag, Tooltip } from '@armada/ui'
 import { Participate } from '../Participate/Participate'
@@ -15,13 +14,20 @@ import {
   HeroParticipantsMobileStack,
   type HeroParticipant,
 } from '../HeroParticipantsPanel'
-import SlotCard from '../InviteFlow/screens/SlotCard'
-import { InviteFocusChrome, useInviteSlotFocus } from '../InviteFlow/useInviteSlotFocus'
-import { INVITE_METHOD_PICKER_UX } from '../../lib/inviteUx'
+import type { SlotData } from '../InviteFlow/screens/SlotCard'
+import { InvitesCard } from '../MyPosition/InvitesCard'
+import {
+  allowanceFromInviteSections,
+  firstEmptySlotId,
+  issuedSlotsFromInviteSections,
+  sectionForInviteeHop,
+} from '../MyPosition/inviteSectionsToCard'
+import { nextInviteId, type InviteAllowance, type InviteeHop } from '../MyPosition/inviteModel'
 import {
   ARM_ALLOCATION,
   CAP,
   COMMITTED,
+  DEMO_INVITE_ALLOWANCE,
   DEMO_SLOTS,
   DEMO_WALLET,
   DEMO_WALLET_DISPLAY,
@@ -33,7 +39,6 @@ import { NodeSphere, isWebglForcedOff } from '../NodeSphere/NodeSphere'
 import { hopPillDotColor } from '../../lib/graphHopColors'
 import { CROWDFUND_CONSTANTS } from '../../lib/constants'
 import {
-  LAPTOP_LAYOUT_MAX_WIDTH_PX,
   MOBILE_LAYOUT_MAX_WIDTH_PX,
 } from '../../lib/viewportBreakpoints'
 import {
@@ -62,7 +67,12 @@ export interface CrowdfundInviteSlotConfig {
   slots: import('../InviteFlow/screens/SlotCard').SlotData[]
   copiedId: number | null
   loadingId: number | null
-  onGenerateLink: (slotId: number) => Promise<void>
+  onGenerateLink: (
+    slotId: number,
+  ) => Promise<
+    | void
+    | { id: number; link: string; expiresAt: Date; nonce?: number }
+  >
   onCopy: (slotId: number, link: string) => void
   onRevoke: (slotId: number) => void
   onInviteOnchain: (
@@ -353,11 +363,6 @@ function isMobileLayout() {
 }
 
 /** Open by default at ≥1440px; collapsed below — InvitesCard.tsx. */
-function invitesExpandedByDefault(): boolean {
-  if (typeof window === 'undefined') return true
-  return window.matchMedia(`(min-width: ${LAPTOP_LAYOUT_MAX_WIDTH_PX}px)`).matches
-}
-
 type PanelPhase = 'idle' | 'exit' | 'enter'
 
 function layerClass(visible: boolean, motionReady: boolean, animate: boolean) {
@@ -559,36 +564,17 @@ export function CrowdfundExperience({
   const [filter, setFilter] = useState<'all' | 'seed' | 'hop1' | 'hop2' | 'multi'>('all')
   const [participantsListOpen, setParticipantsListOpen] = useState(false)
   const [copiedId, setCopiedId] = useState<number | null>(null)
-  const [loadingId, setLoadingId] = useState<number | null>(null)
-  const inviteFocusApi = useInviteSlotFocus()
-  const [activeInviteSection, setActiveInviteSection] =
-    useState<CrowdfundInviteSlotSection | null>(null)
-  // My Position invites — open ≥1440px / always open on mobile (InvitesCard hero).
-  const [invitesExpanded, setInvitesExpanded] = useState<boolean>(() => {
-    if (isMobileLayout()) return true
-    return invitesExpandedByDefault()
-  })
-  const invitesListId = useId()
-  const invitesPanelOpen =
-    invitesExpanded || (INVITE_METHOD_PICKER_UX && inviteFocusApi.view === 'action')
+  const [loadingHop, setLoadingHop] = useState<InviteeHop | null>(null)
+  const [inviteListOpen, setInviteListOpen] = useState(false)
+  const [demoSlots, setDemoSlots] = useState<SlotData[]>(() => DEMO_SLOTS)
+  const [demoAllowance] = useState<InviteAllowance>(DEMO_INVITE_ALLOWANCE)
+  const pendingInvitesRef = useRef<Map<number, SlotData>>(new Map())
+  const deferredHideLinksRef = useRef<Set<string>>(new Set())
+  const deferredHideAddressesRef = useRef<Set<string>>(new Set())
+  const [deferredHideEpoch, bumpDeferredHide] = useState(0)
 
-  useEffect(() => {
-    const mobileMq = window.matchMedia(`(max-width: ${MOBILE_LAYOUT_MAX_WIDTH_PX}px)`)
-    const desktopMq = window.matchMedia(`(min-width: ${LAPTOP_LAYOUT_MAX_WIDTH_PX}px)`)
-    const sync = () => {
-      if (mobileMq.matches) {
-        setInvitesExpanded(true)
-      } else {
-        setInvitesExpanded(desktopMq.matches)
-      }
-    }
-    sync()
-    mobileMq.addEventListener('change', sync)
-    desktopMq.addEventListener('change', sync)
-    return () => {
-      mobileMq.removeEventListener('change', sync)
-      desktopMq.removeEventListener('change', sync)
-    }
+  const handleInviteListOpenChange = useCallback((open: boolean) => {
+    setInviteListOpen(open)
   }, [])
 
   const participantsListRef = useRef<HTMLDivElement | null>(null)
@@ -786,23 +772,216 @@ export function CrowdfundExperience({
   const crowdfundPanelAnimates = panelAnimates(view, 'crowdfund', panelPhase, motionReady)
   const myPositionPanelAnimates = panelAnimates(view, 'myposition', panelPhase, motionReady)
 
-  const handleGenerateLink = async (slotId: number) => {
-    setLoadingId(slotId)
-    await new Promise((r) => setTimeout(r, 800))
-    setLoadingId(null)
+  const liveSections = inviteSlotSections
+  const liveAllowance = useMemo(
+    () => (liveSections ? allowanceFromInviteSections(liveSections) : null),
+    [liveSections],
+  )
+  const liveIssuedSlots = useMemo(
+    () => (liveSections ? issuedSlotsFromInviteSections(liveSections) : []),
+    [liveSections],
+  )
+
+  const invitesSlots = useMemo(() => {
+    if (!liveSections) {
+      return [...pendingInvitesRef.current.values(), ...demoSlots]
+    }
+    return liveIssuedSlots.map((slot) => {
+      const hideLink = slot.link != null && deferredHideLinksRef.current.has(slot.link)
+      const hideAddr =
+        slot.invitedAddress != null &&
+        deferredHideAddressesRef.current.has(slot.invitedAddress.toLowerCase())
+      if (!hideLink && !hideAddr) return slot
+      return { ...slot, hideFromList: true }
+    })
+  }, [liveSections, liveIssuedSlots, demoSlots, deferredHideEpoch])
+
+  const invitesAllowance: InviteAllowance | null = liveSections
+    ? liveAllowance
+    : demoAllowance
+
+  const selfWalletForInvites =
+    myPositionReady?.walletAddress ?? (liveSections ? undefined : DEMO_WALLET)
+
+  const allocateInviteId = useCallback(() => {
+    const pending = [...pendingInvitesRef.current.values()]
+    return nextInviteId([...demoSlots, ...pending, ...liveIssuedSlots])
+  }, [demoSlots, liveIssuedSlots])
+
+  const handleGenerateLink = async (hop: InviteeHop) => {
+    setLoadingHop(hop)
+    try {
+      if (liveSections) {
+        const section = sectionForInviteeHop(liveSections, hop)
+        if (!section) return
+        if (section.config.isWrongNetwork) {
+          section.config.onSwitchNetwork?.()
+          return
+        }
+        const emptyId = firstEmptySlotId(section)
+        if (emptyId == null) return
+        const created = await section.config.onGenerateLink(emptyId)
+        if (
+          created &&
+          typeof created === 'object' &&
+          'link' in created &&
+          'expiresAt' in created &&
+          'id' in created &&
+          typeof created.link === 'string' &&
+          created.expiresAt instanceof Date &&
+          typeof created.id === 'number'
+        ) {
+          deferredHideLinksRef.current.add(created.link)
+          bumpDeferredHide((n) => n + 1)
+          return {
+            id: created.id,
+            link: created.link,
+            expiresAt: created.expiresAt,
+          }
+        }
+        return
+      }
+
+      await new Promise((r) => setTimeout(r, 800))
+      const expiresAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000)
+      const link = `https://fund.armada.blue/invite?demo=${Math.random().toString(36).slice(2, 10)}&hop=${hop}`
+      const createdId = allocateInviteId()
+      pendingInvitesRef.current.set(createdId, {
+        id: createdId,
+        status: 'link-active',
+        link,
+        expiresAt,
+        inviteeHop: hop,
+        invitedAt: new Date(),
+      })
+      return { id: createdId, link, expiresAt }
+    } finally {
+      setLoadingHop(null)
+    }
   }
 
   const handleCopy = (slotId: number, link: string) => {
-    navigator.clipboard.writeText(link)
+    void navigator.clipboard.writeText(link).catch(() => {})
     setCopiedId(slotId)
-    setTimeout(() => setCopiedId(null), 2000)
+    setTimeout(() => setCopiedId((cur) => (cur === slotId ? null : cur)), 2000)
   }
 
-  const handleRevoke = async () => {}
-  const handleInviteOnchain = async (slotId: number, _address: string, _ensName?: string) => {
-    setLoadingId(slotId)
-    await new Promise((r) => setTimeout(r, 800))
-    setLoadingId(null)
+  const handleRevoke = async (inviteId: number) => {
+    if (liveSections) {
+      for (const section of liveSections) {
+        const slot = section.config.slots.find((s) => s.id === inviteId)
+        if (slot) {
+          section.config.onRevoke(inviteId)
+          if (slot.link) deferredHideLinksRef.current.delete(slot.link)
+          bumpDeferredHide((n) => n + 1)
+          return
+        }
+      }
+      return
+    }
+    pendingInvitesRef.current.delete(inviteId)
+    setDemoSlots((prev) =>
+      prev.map((slot) =>
+        slot.id === inviteId
+          ? {
+              ...slot,
+              status: 'revoked' as const,
+              closedAt: new Date(),
+              hideFromList: false,
+            }
+          : slot,
+      ),
+    )
+  }
+
+  const revealInviteInList = (id: number) => {
+    const draft = pendingInvitesRef.current.get(id)
+    pendingInvitesRef.current.delete(id)
+    if (draft?.link) deferredHideLinksRef.current.delete(draft.link)
+    if (draft?.invitedAddress) {
+      deferredHideAddressesRef.current.delete(draft.invitedAddress.toLowerCase())
+    }
+    for (const slot of liveIssuedSlots) {
+      if (slot.id === id) {
+        if (slot.link) deferredHideLinksRef.current.delete(slot.link)
+        if (slot.invitedAddress) {
+          deferredHideAddressesRef.current.delete(slot.invitedAddress.toLowerCase())
+        }
+      }
+    }
+    bumpDeferredHide((n) => n + 1)
+    if (!draft) return
+    setDemoSlots((prev) => {
+      if (prev.some((slot) => slot.id === id)) {
+        return prev.map((slot) =>
+          slot.id === id ? { ...slot, hideFromList: false } : slot,
+        )
+      }
+      return [draft, ...prev]
+    })
+  }
+
+  const discardDeferredInvite = (id: number) => {
+    pendingInvitesRef.current.delete(id)
+    if (liveSections) {
+      void handleRevoke(id)
+    } else {
+      setDemoSlots((prev) => prev.filter((slot) => slot.id !== id))
+    }
+    bumpDeferredHide((n) => n + 1)
+  }
+
+  const flushPendingInvites = () => {
+    const drafts = [...pendingInvitesRef.current.values()]
+    pendingInvitesRef.current.clear()
+    deferredHideLinksRef.current.clear()
+    deferredHideAddressesRef.current.clear()
+    bumpDeferredHide((n) => n + 1)
+    if (drafts.length === 0) return
+    setDemoSlots((prev) => {
+      const existing = new Set(prev.map((slot) => slot.id))
+      const fresh = drafts.filter((draft) => !existing.has(draft.id))
+      if (fresh.length === 0) return prev
+      return [...fresh, ...prev]
+    })
+  }
+
+  const handleInviteOnchain = async (
+    hop: InviteeHop,
+    address: string,
+    ensName?: string,
+  ) => {
+    setLoadingHop(hop)
+    try {
+      if (liveSections) {
+        const section = sectionForInviteeHop(liveSections, hop)
+        if (!section) return
+        if (section.config.isWrongNetwork) {
+          section.config.onSwitchNetwork?.()
+          return
+        }
+        const emptyId = firstEmptySlotId(section)
+        if (emptyId == null) return
+        await section.config.onInviteOnchain(emptyId, address, ensName)
+        deferredHideAddressesRef.current.add(address.toLowerCase())
+        bumpDeferredHide((n) => n + 1)
+        return { id: emptyId, address, ensName }
+      }
+
+      await new Promise((r) => setTimeout(r, 800))
+      const createdId = allocateInviteId()
+      pendingInvitesRef.current.set(createdId, {
+        id: createdId,
+        status: 'onchain-pending',
+        invitedAddress: address,
+        ensName,
+        inviteeHop: hop,
+        invitedAt: new Date(),
+      })
+      return { id: createdId, address, ensName }
+    } finally {
+      setLoadingHop(null)
+    }
   }
 
   // Build PinnedNode[] from the dashboard rows (one per unique wallet). Each
@@ -887,6 +1066,7 @@ export function CrowdfundExperience({
               walletAddress={myPositionWalletAddress}
               lockOnWallet={isGraphMyPosition}
               inviteGraph={isGraphMyPosition}
+              hideNodePopover={isGraphMyPosition && inviteListOpen}
               etherscanBaseUrl={etherscanBaseUrl}
             />
           ) : null}
@@ -1148,201 +1328,39 @@ export function CrowdfundExperience({
           className={layerClass(myPositionPanelVisible, motionReady, myPositionPanelAnimates)}
           aria-hidden={!myPositionPanelVisible}
         >
-          {(() => {
-            // Available / total counts shown in the collapsible header. Counts the
-            // raw SlotData arrays across all live sections (or DEMO_SLOTS in the
-            // showcase path) — "available" === `status === 'empty'`.
-            const allSlots = inviteSlotSections
-              ? inviteSlotSections.flatMap((s) => s.config.slots)
-              : DEMO_SLOTS
-            const inviteAvailableCount = allSlots.filter((s) => s.status === 'empty').length
-            const inviteTotalCount = allSlots.length
-            const isInviteAction =
-              INVITE_METHOD_PICKER_UX && inviteFocusApi.view === 'action'
-            return (
-          <section
-            className={[
-              mpStyles.inviteCard,
-              isInviteAction && mpStyles.inviteCardAction,
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            aria-label="Whitelist a friend"
-            data-invite-surface=""
-          >
-            {!isInviteAction && (
-              <button
-                type="button"
-                className={mpStyles.inviteHeader}
-                onClick={() => {
-                  if (isMobileLayout()) return
-                  setInvitesExpanded((open) => !open)
-                }}
-                aria-expanded={invitesPanelOpen}
-                aria-controls={invitesListId}
-                aria-label={`${invitesPanelOpen ? 'Collapse' : 'Expand'} whitelist a friend, ${inviteAvailableCount} of ${inviteTotalCount} available`}
-              >
-                <span className={mpStyles.inviteTitle} role="heading" aria-level={2}>
-                  Whitelist a friend
-                </span>
-              <span className={mpStyles.inviteHeaderActions}>
-                <span className={mpStyles.inviteHeaderCount} aria-hidden>
-                  {inviteAvailableCount} of {inviteTotalCount}
-                </span>
-                <ChevronDownIcon
-                  className={[
-                    mpStyles.inviteHeaderChevron,
-                    !invitesPanelOpen && mpStyles.inviteHeaderChevronCollapsed,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  aria-hidden
-                />
-              </span>
-            </button>
-            )}
-            <div
-              id={invitesListId}
-              className={[
-                !invitesPanelOpen && mpStyles.inviteBodyCollapsed,
-                isInviteAction && mpStyles.inviteBodyAction,
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-            {(() => {
-              // Three render modes:
-              //   1. live sections supplied AND non-empty → render per-hop sections (hop header
-              //      hidden when there's only one section so single-hop UX is unchanged)
-              //   2. live sections supplied but all empty → "no invite slots" message
-              //   3. no live sections (showcase / mock preview) → DEMO_SLOTS with mock handlers
-              if (inviteSlotSections) {
-                const isEmpty =
-                  inviteSlotSections.length === 0 ||
-                  inviteSlotSections.every((s) => s.config.slots.length === 0)
-                if (isEmpty) {
-                  return (
-                    <div className={mpStyles.inviteEmpty} role="status">
-                      <p className={mpStyles.inviteEmptyText}>
-                        You have no invite slots available at this hop.
-                      </p>
-                    </div>
-                  )
-                }
-                const showHeaders = inviteSlotSections.length > 1
-                const sectionsList = (
-                  <div className={mpStyles.slotList}>
-                    {inviteSlotSections.map((section) => (
-                      <div key={section.hop} className={mpStyles.inviteSection}>
-                        {showHeaders && (
-                          <div className={mpStyles.inviteSectionHeader}>
-                            <span
-                              className={mpStyles.inviteSectionDot}
-                              style={{ background: section.hopColor }}
-                              aria-hidden
-                            />
-                            <span className={mpStyles.inviteSectionLabel}>
-                              {section.hopLabel}
-                            </span>
-                            <span className={mpStyles.inviteSectionCount}>
-                              ({section.totalSlots}{' '}
-                              {section.totalSlots === 1 ? 'slot' : 'slots'})
-                            </span>
-                          </div>
-                        )}
-                        {section.config.slots.map((slot) => (
-                          <SlotCard
-                            key={slot.id}
-                            slot={slot}
-                            onGenerateLink={section.config.onGenerateLink}
-                            onCopy={section.config.onCopy}
-                            onRevoke={section.config.onRevoke}
-                            onInviteOnchain={section.config.onInviteOnchain}
-                            copied={section.config.copiedId === slot.id}
-                            loading={section.config.loadingId === slot.id}
-                            resolveEns={section.config.resolveEns}
-                            isWrongNetwork={section.config.isWrongNetwork}
-                            onSwitchNetwork={section.config.onSwitchNetwork}
-                            onInviteClick={
-                              INVITE_METHOD_PICKER_UX
-                                ? (slotId, anchor) => {
-                                    setActiveInviteSection(section)
-                                    inviteFocusApi.openPicker(slotId, anchor)
-                                  }
-                                : undefined
-                            }
-                            onInviteButtonRef={
-                              INVITE_METHOD_PICKER_UX
-                                ? inviteFocusApi.registerInviteButton
-                                : undefined
-                            }
-                            invitePickerOpen={inviteFocusApi.pickerSlotId === slot.id}
-                            onViewRedeemed={(address) =>
-                              startPanelTransition('crowdfund', { selectAddress: address })
-                            }
-                          />
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )
-                if (!INVITE_METHOD_PICKER_UX) return sectionsList
-                const actionCfg = activeInviteSection?.config
-                return (
-                  <InviteFocusChrome
-                    focusApi={inviteFocusApi}
-                    loadingSlotId={actionCfg?.loadingId ?? null}
-                    onGenerateLink={actionCfg?.onGenerateLink ?? (async () => {})}
-                    onInviteOnchain={actionCfg?.onInviteOnchain ?? (async () => {})}
-                    resolveEns={actionCfg?.resolveEns}
-                    list={sectionsList}
-                  />
-                )
+          {liveSections &&
+          (liveSections.length === 0 ||
+            liveSections.every((s) => s.config.slots.length === 0)) ? (
+            <section className={mpStyles.inviteCard} aria-label="Whitelist a friend">
+              <div className={mpStyles.inviteEmpty} role="status">
+                <p className={mpStyles.inviteEmptyText}>
+                  You have no invite slots available at this hop.
+                </p>
+              </div>
+            </section>
+          ) : (
+            <InvitesCard
+              variant="hero"
+              slots={invitesSlots}
+              allowance={invitesAllowance}
+              selfWalletAddress={selfWalletForInvites}
+              resolveEns={liveSections?.[0]?.config.resolveEns}
+              onGenerateLink={handleGenerateLink}
+              onCopy={handleCopy}
+              onRevoke={handleRevoke}
+              onConfirmCreated={revealInviteInList}
+              onDiscardCreated={discardDeferredInvite}
+              onFlushPending={flushPendingInvites}
+              onInviteOnchain={handleInviteOnchain}
+              copiedSlotId={copiedId}
+              loadingHop={loadingHop}
+              onInviteListOpenChange={handleInviteListOpenChange}
+              panelActive={isMyPosition}
+              onViewRedeemed={(address) =>
+                startPanelTransition('crowdfund', { selectAddress: address })
               }
-              // Showcase / mock path (no live sections).
-              const demoList = (
-                <div className={mpStyles.slotList}>
-                  {DEMO_SLOTS.map((slot) => (
-                    <SlotCard
-                      key={slot.id}
-                      slot={slot}
-                      onGenerateLink={handleGenerateLink}
-                      onCopy={handleCopy}
-                      onRevoke={handleRevoke}
-                      onInviteOnchain={handleInviteOnchain}
-                      copied={copiedId === slot.id}
-                      loading={loadingId === slot.id}
-                      onInviteClick={
-                        INVITE_METHOD_PICKER_UX ? inviteFocusApi.openPicker : undefined
-                      }
-                      onInviteButtonRef={
-                        INVITE_METHOD_PICKER_UX
-                          ? inviteFocusApi.registerInviteButton
-                          : undefined
-                      }
-                      invitePickerOpen={inviteFocusApi.pickerSlotId === slot.id}
-                      onViewRedeemed={(address) =>
-                        startPanelTransition('crowdfund', { selectAddress: address })
-                      }
-                    />
-                  ))}
-                </div>
-              )
-              if (!INVITE_METHOD_PICKER_UX) return demoList
-              return (
-                <InviteFocusChrome
-                  focusApi={inviteFocusApi}
-                  loadingSlotId={loadingId}
-                  onGenerateLink={handleGenerateLink}
-                  onInviteOnchain={handleInviteOnchain}
-                  list={demoList}
-                />
-              )
-            })()}
-            </div>
-          </section>
-            )
-          })()}
+            />
+          )}
         </div>
         )}
       </div>

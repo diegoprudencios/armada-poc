@@ -27,6 +27,8 @@ export interface InviteMethodPickerProps {
   open: boolean
   anchorEl: HTMLElement | null
   slotId: number
+  /** Optional heading / aria label override (e.g. hop-based invite). */
+  title?: string
   onSelect: (method: InviteMethod) => void
   onClose: () => void
 }
@@ -51,6 +53,7 @@ export function InviteMethodPicker({
   open,
   anchorEl,
   slotId,
+  title,
   onSelect,
   onClose,
 }: InviteMethodPickerProps) {
@@ -59,6 +62,8 @@ export function InviteMethodPicker({
   const menuRef = useRef<HTMLUListElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const heading = title ?? `Whitelist a friend — slot ${slotId}`
+  const menuLabel = title ?? `Whitelist options for slot ${slotId}`
 
   useLayoutEffect(() => {
     if (!open || isMobile || !anchorEl) {
@@ -151,7 +156,7 @@ export function InviteMethodPicker({
         >
           <div className={styles.sheetHandle} aria-hidden />
           <h2 id={titleId} className={styles.sheetTitle}>
-            Whitelist a friend — slot {slotId}
+            {heading}
           </h2>
           <ul className={styles.sheetList} role="menu">
             {optionButtons}
@@ -169,7 +174,7 @@ export function InviteMethodPicker({
       ref={menuRef}
       className={styles.menu}
       role="menu"
-      aria-label={`Whitelist options for slot ${slotId}`}
+      aria-label={menuLabel}
       style={{ top: menuPos.top, left: menuPos.left }}
     >
       {optionButtons}
