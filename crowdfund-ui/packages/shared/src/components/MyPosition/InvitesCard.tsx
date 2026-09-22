@@ -705,7 +705,7 @@ export function InvitesCard({
 
 // ── Hop available row ───────────────────────────────────────────────────────
 
-interface HopAvailableRowProps {
+export interface HopAvailableRowProps {
   hop: InviteeHop
   available: number
   /** When set (> available), thumb counts down from this value after list re-enters. */
@@ -806,7 +806,7 @@ function HopThumbCount({
   )
 }
 
-function HopAvailableRow({
+export function HopAvailableRow({
   hop,
   available,
   rollFrom,

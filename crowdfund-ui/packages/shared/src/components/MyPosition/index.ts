@@ -22,8 +22,8 @@ export {
   countAvailableInviteSlots,
   buildInvitePinnedNodes,
 } from './myPositionDemo'
-export { InvitesCard } from './InvitesCard'
-export type { InvitesCardProps, InvitesCardVariant } from './InvitesCard'
+export { InvitesCard, HopAvailableRow } from './InvitesCard'
+export type { InvitesCardProps, InvitesCardVariant, HopAvailableRowProps } from './InvitesCard'
 export {
   allowanceFromPositions,
   availableForHop,
