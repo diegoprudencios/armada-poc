@@ -102,7 +102,7 @@ export function ObserveDetailsModal({
             onClick={onClose}
             aria-label="Close crowdfund details"
           >
-            <XMarkIcon width={20} height={20} aria-hidden />
+            <XMarkIcon width={14} height={14} aria-hidden />
           </button>
         </div>
 

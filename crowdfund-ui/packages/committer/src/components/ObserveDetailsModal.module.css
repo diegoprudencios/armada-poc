@@ -60,8 +60,8 @@
 
 .close {
   flex-shrink: 0;
-  width: var(--primitives-spacing-8);
-  height: var(--primitives-spacing-8);
+  width: var(--primitives-spacing-6);
+  height: var(--primitives-spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;

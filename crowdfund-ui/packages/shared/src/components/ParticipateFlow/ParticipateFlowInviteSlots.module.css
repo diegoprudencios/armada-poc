@@ -12,10 +12,9 @@
 .shell {
   width: 100%;
   height: auto;
-  max-height: min(70vh, 520px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .footer {
@@ -29,10 +28,7 @@
 .scroll {
   flex: 1;
   min-height: 0;
-  /* Hop rows are compact — keep a modest cap so the modal doesn't grow on tall viewports. */
-  max-height: 360px;
-  overflow-y: auto;
-  padding-right: var(--primitives-spacing-1);
+  overflow: visible;
 }
 
 .empty {

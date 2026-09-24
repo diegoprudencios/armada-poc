@@ -1,15 +1,21 @@
 /* ABOUTME: Styles for the Participate modal backdrop, panel, close button, and step crossfade. */
-/* ABOUTME: Ported byte-identical from the armada-crowdfund mockup (ParticipateFlow/ParticipateFlowModal.module.css). */
+/* ABOUTME: Backdrop scrolls over the app; panel hugs step content (no inner card scroll). */
 
 .backdrop {
   position: fixed;
   inset: 0;
   z-index: 200;
   display: flex;
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
   padding: var(--primitives-spacing-8);
   box-sizing: border-box;
+  /* Backdrop is the scroll surface — panel hugs content; tall steps scroll
+   * the frosted overlay over the app, not an inner card scroller. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: color-mix(in srgb, var(--semantic-color-surface-bg) 72%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -26,6 +32,7 @@
   align-items: flex-end;
   width: 480px;
   max-width: 100%;
+  flex-shrink: 0;
   gap: var(--primitives-spacing-5);
   animation: modalPanelIn 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -55,8 +62,8 @@
 
 .close {
   flex-shrink: 0;
-  width: var(--primitives-spacing-8);
-  height: var(--primitives-spacing-8);
+  width: var(--primitives-spacing-6);
+  height: var(--primitives-spacing-6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,7 +168,6 @@
     padding: 0;
     /* Stop iOS/Android overscroll from chaining into the page behind. */
     overscroll-behavior: none;
-    touch-action: none;
   }
 
   .mobileLogo {
@@ -176,15 +182,14 @@
     pointer-events: none;
   }
 
-  /* Floating round control, paired with the corner mark top-left. The desktop
-   * close stays our bordered pill; this round-white treatment is mobile-only. */
+  /* Floating round control, paired with the corner mark top-left. */
   .close {
     position: fixed;
     top: var(--primitives-spacing-5);
     right: var(--primitives-spacing-5);
     z-index: 201;
-    width: var(--primitives-spacing-12);
-    height: var(--primitives-spacing-12);
+    width: var(--primitives-spacing-6);
+    height: var(--primitives-spacing-6);
     border: none;
     border-radius: 50%;
     background: color-mix(in srgb, var(--semantic-color-text-primary) 20%, transparent);
@@ -200,15 +205,10 @@
     width: 100%;
     max-width: none;
     min-width: 0;
-    max-height: min(90dvh, calc(100dvh - var(--primitives-spacing-5) - 40px - var(--primitives-spacing-5)));
     align-items: stretch;
     gap: 0;
-    /* Sheet may need internal scroll when a tall step is shown. */
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
+    /* Hug content — tall steps scroll the backdrop, not an inner panel. */
+    overflow: visible;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     animation: modalSheetIn 320ms cubic-bezier(0.22, 1, 0.36, 1);
   }
