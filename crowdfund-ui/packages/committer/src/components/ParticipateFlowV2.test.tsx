@@ -143,8 +143,10 @@ describe('ParticipateFlowV2 pipeline detach/resume', () => {
     const { unmount } = render(<ParticipateFlowV2 {...makeProps()} />)
     const firstRefresh = refreshAllowance
 
-    // First-timer: wallet → splash. Join past it, then enter an amount.
+    // First-timer: wallet → splash → Before you start. Step past both, then
+    // enter an amount.
     fireEvent.click(await screen.findByRole('button', { name: 'Join now' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Commit' }))
     const input = (await screen.findByRole('textbox')) as HTMLInputElement
     fireEvent.change(input, { target: { value: '100' } })
     fireEvent.click(screen.getByRole('button', { name: 'Review' }))
@@ -182,8 +184,10 @@ describe('ParticipateFlowV2 pipeline detach/resume', () => {
 
     const { unmount } = render(<ParticipateFlowV2 {...makeProps()} />)
 
-    // First-timer: wallet → splash. Join past it, then enter an amount.
+    // First-timer: wallet → splash → Before you start. Step past both, then
+    // enter an amount.
     fireEvent.click(await screen.findByRole('button', { name: 'Join now' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Commit' }))
     const input = (await screen.findByRole('textbox')) as HTMLInputElement
     fireEvent.change(input, { target: { value: '100' } })
     fireEvent.click(screen.getByRole('button', { name: 'Review' }))
@@ -233,16 +237,30 @@ describe('ParticipateFlowV2 fully-committed shortcut', () => {
 })
 
 describe('ParticipateFlowV2 splash card', () => {
-  it('shows the join-the-fleet splash to a first-timer, then advances to commit on Join', async () => {
+  it('walks a first-timer splash → Before you start → commit', async () => {
     render(<ParticipateFlowV2 {...makeProps()} />)
 
     // Splash first — no amount input yet.
     expect(await screen.findByText(/invited to join the fleet/i)).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
 
-    // Join → commit input appears.
+    // Join → the pre-commit intro, still no amount input.
     fireEvent.click(screen.getByRole('button', { name: 'Join now' }))
+    expect(await screen.findByText('How to participate')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+
+    // Continue → commit input appears.
+    fireEvent.click(screen.getByRole('button', { name: 'Commit' }))
     expect(await screen.findByRole('textbox')).toBeTruthy()
+  })
+
+  it('returns from Before you start to the splash on Back', async () => {
+    render(<ParticipateFlowV2 {...makeProps()} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Join now' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Back' }))
+
+    expect(await screen.findByText(/invited to join the fleet/i)).toBeTruthy()
   })
 
   it('skips the splash for a returning participant (goes straight to commit)', async () => {
@@ -261,6 +279,50 @@ describe('ParticipateFlowV2 splash card', () => {
     // Straight to the commit input — no splash.
     expect(await screen.findByRole('textbox')).toBeTruthy()
     expect(screen.queryByText(/invited to join the fleet/i)).toBeNull()
+  })
+})
+
+describe('ParticipateFlowV2 modal close handoff', () => {
+  it('hands the close control to the step chrome from Before you start onward', async () => {
+    const onModalCloseChange = vi.fn()
+    render(<ParticipateFlowV2 {...makeProps()} onModalCloseChange={onModalCloseChange} />)
+
+    // Splash uses the modal's "Do it later" footer — no X either way.
+    expect(await screen.findByRole('button', { name: 'Join now' })).toBeTruthy()
+    expect(onModalCloseChange).toHaveBeenLastCalledWith(false)
+
+    // Before you start and commit both draw their own FlowChrome close.
+    fireEvent.click(screen.getByRole('button', { name: 'Join now' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Commit' }))
+    await screen.findByRole('textbox')
+    expect(onModalCloseChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('keeps the modal close while the wallet is disconnected', async () => {
+    const onModalCloseChange = vi.fn()
+    render(
+      <ParticipateFlowV2
+        {...makeProps()}
+        walletConnected={false}
+        onModalCloseChange={onModalCloseChange}
+      />,
+    )
+    await act(async () => {})
+    expect(onModalCloseChange).toHaveBeenLastCalledWith(true)
+  })
+
+  it('keeps the modal close on the invite-slots step', async () => {
+    getDefaultStore().set(pipelinesAtom, {
+      [ADDR]: { rows: [{ label: 'Commit participation', status: 'done' }], phase: 'success' },
+    })
+    const onModalCloseChange = vi.fn()
+    render(<ParticipateFlowV2 {...makeProps()} onModalCloseChange={onModalCloseChange} />)
+
+    // Confirmation owns its chrome; stepping into invite slots hands the close back.
+    expect(onModalCloseChange).toHaveBeenLastCalledWith(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Whitelist a friend' }))
+    await act(async () => {})
+    expect(onModalCloseChange).toHaveBeenLastCalledWith(true)
   })
 })
 

@@ -1,94 +1,172 @@
-// ABOUTME: Confirmation “What happens next” carousel — scenarios after commit (window, under/over, refund, claim).
-// ABOUTME: Manual navigation via chevrons only (no dots / autoplay).
+// ABOUTME: Confirmation “What happens next” FAQ accordion — one topic per row.
+// ABOUTME: Ported from the armada-crowdfund mockup (replaces the old chevron carousel); countdown helpers come from `lib/format`.
 
-import { useCallback, useId, useState } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { ChevronDownIcon } from '@heroicons/react/24/outline'
+import {
+  endsAtToRemainingSeconds,
+  formatTimeLeft,
+  TIME_LEFT_COUNTER_THRESHOLD_S,
+} from '../../../lib/format'
 import styles from './WhatHappensNextSlider.module.css'
 
-const SLIDES: ReadonlyArray<{ id: string; title: string; body: string }> = [
+export interface WhatHappensNextSliderProps {
+  /**
+   * Whole days remaining (demo / URL). Ignored when `endsAt` or `secondsLeft`
+   * is set. Converted to an absolute deadline so the copy can live-tick under 48h.
+   */
+  daysLeft?: number
+  /** Remaining seconds in the commit window. Prefer `endsAt` when available. */
+  secondsLeft?: number
+  /** Absolute end of the commit window (unix ms or Date). */
+  endsAt?: number | Date | null
+}
+
+type Item = { id: string; title: string; body: string }
+
+function resolveEndMs(
+  endsAt: number | Date | null | undefined,
+  secondsLeft: number | undefined,
+  daysLeft: number,
+): number | null {
+  if (endsAt != null) {
+    return typeof endsAt === 'number' ? endsAt : endsAt.getTime()
+  }
+  if (secondsLeft != null && Number.isFinite(secondsLeft)) {
+    return Date.now() + Math.max(0, secondsLeft) * 1000
+  }
+  if (Number.isFinite(daysLeft) && daysLeft > 0) {
+    return Date.now() + daysLeft * 86400 * 1000
+  }
+  return null
+}
+
+function windowOpenBody(remainingLabel: string | null): string {
+  if (remainingLabel) {
+    return `The commitment window closes in ${remainingLabel}. Your USDC will be locked until then.`
+  }
+  return 'The commitment window is closing. Your USDC will be locked until then.'
+}
+
+const STATIC_ITEMS: ReadonlyArray<Omit<Item, 'body'> & { body?: string }> = [
   {
     id: 'window',
-    title: '1. While the window is open',
-    body: 'The commitment window stays open until it closes. Your USDC is locked; estimated ARM isn’t final until then.',
+    title: 'While the window is open',
   },
   {
     id: 'under',
-    title: '2. If undersubscribed',
+    title: 'If undersubscribed',
     body: 'If total demand misses the minimum raise, the sale refunds. You reclaim your full USDC — no ARM is issued.',
   },
   {
     id: 'over',
-    title: '3. If oversubscribed',
+    title: 'If oversubscribed',
     body: 'If demand exceeds supply, ARM is allocated pro-rata. You may receive less than “up to” your estimate; unused USDC is refunded when you claim.',
   },
   {
     id: 'refund',
-    title: '4. If the sale refunds after allocation',
+    title: 'If the sale refunds after allocation',
     body: 'Sometimes demand qualifies but net proceeds still fall short. In that case everyone can reclaim their full USDC — no ARM is issued.',
   },
   {
     id: 'claim',
-    title: '5. Claim & delegate',
+    title: 'Claim & delegate',
     body: 'After a successful finalization, claim your ARM and choose a delegate in one step. Any refund USDC comes back in the same flow.',
   },
 ]
 
-export function WhatHappensNextSlider() {
-  const labelId = useId()
-  const [index, setIndex] = useState(0)
-  const count = SLIDES.length
-  const slide = SLIDES[index]!
+/** @deprecated Name kept for import stability — renders as a FAQ accordion. */
+export function WhatHappensNextSlider({
+  daysLeft = 3,
+  secondsLeft,
+  endsAt = null,
+}: WhatHappensNextSliderProps) {
+  const baseId = useId()
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [nowMs, setNowMs] = useState(() => Date.now())
 
-  const go = useCallback(
-    (next: number) => {
-      setIndex(((next % count) + count) % count)
-    },
-    [count],
+  const endMs = useMemo(
+    () => resolveEndMs(endsAt, secondsLeft, daysLeft),
+    // Re-anchor only when the source countdown inputs change — not every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Date.now() anchor for secondsLeft/daysLeft
+    [endsAt, secondsLeft, daysLeft],
   )
 
-  const goPrev = useCallback(() => go(index - 1), [go, index])
-  const goNext = useCallback(() => go(index + 1), [go, index])
+  const windowOpen = openId === 'window'
+
+  useEffect(() => {
+    if (endMs == null || !windowOpen) return
+    if (endsAtToRemainingSeconds(endMs, Date.now()) <= 0) return
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [endMs, windowOpen])
+
+  const remainingLabel = useMemo(() => {
+    if (endMs == null) return null
+    const remaining = endsAtToRemainingSeconds(endMs, nowMs)
+    const label = formatTimeLeft(remaining)
+    return label || null
+  }, [endMs, nowMs])
+
+  const isLiveCounter = useMemo(() => {
+    if (endMs == null) return false
+    const remaining = endsAtToRemainingSeconds(endMs, nowMs)
+    return remaining > 0 && remaining < TIME_LEFT_COUNTER_THRESHOLD_S
+  }, [endMs, nowMs])
+
+  const items: ReadonlyArray<Item> = useMemo(
+    () =>
+      STATIC_ITEMS.map((item) =>
+        item.id === 'window'
+          ? { id: item.id, title: item.title, body: windowOpenBody(remainingLabel) }
+          : { id: item.id, title: item.title, body: item.body! },
+      ),
+    [remainingLabel],
+  )
 
   return (
-    <div
-      className={styles.root}
-      role="region"
-      aria-roledescription="carousel"
-      aria-labelledby={labelId}
-    >
-      <div className={styles.header}>
-        <span id={labelId} className={styles.eyebrow}>
-          WHAT HAPPENS NEXT
-        </span>
-        <div className={styles.chevronGroup}>
-          <button
-            type="button"
-            className={styles.chevronBtn}
-            aria-label="Previous slide"
-            onClick={goPrev}
-          >
-            <ChevronLeftIcon className={styles.chevronIcon} aria-hidden />
-          </button>
-          <button
-            type="button"
-            className={styles.chevronBtn}
-            aria-label="Next slide"
-            onClick={goNext}
-          >
-            <ChevronRightIcon className={styles.chevronIcon} aria-hidden />
-          </button>
-        </div>
-      </div>
-
-      <div
-        className={styles.slide}
-        aria-live="polite"
-        aria-atomic="true"
-        key={slide.id}
-      >
-        <p className={styles.slideTitle}>{slide.title}</p>
-        <p className={styles.slideBody}>{slide.body}</p>
-      </div>
+    <div className={styles.root}>
+      <p className={styles.sectionLabel} id={`${baseId}-label`}>
+        What happens next
+      </p>
+      <ul className={styles.faqList} aria-labelledby={`${baseId}-label`}>
+        {items.map((item) => {
+          const expanded = openId === item.id
+          const panelId = `${baseId}-${item.id}-panel`
+          const buttonId = `${baseId}-${item.id}-btn`
+          return (
+            <li key={item.id} className={styles.faqItem}>
+              <button
+                type="button"
+                id={buttonId}
+                className={styles.faqToggle}
+                aria-expanded={expanded}
+                aria-controls={panelId}
+                onClick={() => setOpenId(expanded ? null : item.id)}
+              >
+                <span className={styles.faqTitle}>{item.title}</span>
+                <ChevronDownIcon
+                  className={[styles.chevron, expanded && styles.chevronOpen]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-hidden
+                />
+              </button>
+              {expanded ? (
+                <div
+                  id={panelId}
+                  role="region"
+                  aria-labelledby={buttonId}
+                  className={styles.faqPanel}
+                  aria-live={item.id === 'window' && isLiveCounter ? 'off' : 'polite'}
+                >
+                  <p className={styles.faqBody}>{item.body}</p>
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

@@ -122,6 +122,12 @@ export function formatTimeLeft(seconds: number): string {
   return `${days} ${days === 1 ? 'day' : 'days'}`
 }
 
+/** Remaining whole seconds until an absolute deadline (unix ms or Date), floored at 0. */
+export function endsAtToRemainingSeconds(endsAt: number | Date, nowMs = Date.now()): number {
+  const endMs = typeof endsAt === 'number' ? endsAt : endsAt.getTime()
+  return Math.max(0, Math.floor((endMs - nowMs) / 1000))
+}
+
 /** "May 28, 2:42 PM" (local) from a unix timestamp (seconds) — no year, so the
  *  tooltip stays on one line. Returns '' at or before 0. Internal helper for
  *  {@link formatTimeLeftDetail}. */

@@ -1,26 +1,16 @@
-/* ABOUTME: What happens next carousel inside Step 5 confirmation. */
+/* ABOUTME: What happens next FAQ accordion — one expandable topic per row. */
+/* ABOUTME: Ported from the armada-crowdfund mockup (replaces the old carousel styles). */
 
 .root {
-  background: var(--semantic-color-surface-raised);
-  border: 1px solid var(--semantic-color-border-default);
-  border-radius: calc(var(--semantic-borderRadius-item) * 1px);
-  padding: var(--primitives-spacing-5);
   display: flex;
   flex-direction: column;
   gap: var(--primitives-spacing-3);
+  width: 100%;
   min-width: 0;
-  box-sizing: border-box;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--primitives-spacing-3);
-  flex-shrink: 0;
-}
-
-.eyebrow {
+.sectionLabel {
+  margin: 0;
   font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-xs) * 1px);
   font-weight: var(--primitives-fontWeight-medium);
@@ -29,61 +19,76 @@
   color: var(--semantic-color-text-muted);
 }
 
-.chevronGroup {
-  display: flex;
-  align-items: center;
-  gap: var(--primitives-spacing-1);
-  flex-shrink: 0;
-}
-
-.chevronBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--primitives-spacing-6);
-  height: var(--primitives-spacing-6);
+.faqList {
   margin: 0;
   padding: 0;
-  border: 1px solid var(--semantic-color-border-default);
-  border-radius: calc(var(--semantic-borderRadius-button) * 1px);
-  background: transparent;
-  color: var(--semantic-color-text-secondary);
-  cursor: pointer;
-}
-
-.chevronBtn:hover {
-  color: var(--semantic-color-text-primary);
-  border-color: var(--semantic-color-border-lavender);
-}
-
-.chevronBtn:focus-visible {
-  outline: 2px solid var(--semantic-color-brand-lavender);
-  outline-offset: 2px;
-}
-
-.chevronIcon {
-  width: var(--primitives-spacing-4);
-  height: var(--primitives-spacing-4);
-}
-
-.slide {
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--primitives-spacing-2);
-  min-height: calc(var(--primitives-spacing-16) + var(--primitives-spacing-8));
-  animation: slideIn 280ms ease;
+  background: var(--semantic-color-surface-raised);
+  border-radius: calc(var(--semantic-borderRadius-item) * 1px);
+  overflow: hidden;
 }
 
-.slideTitle {
+.faqItem {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--semantic-color-border-default);
+}
+
+.faqItem:last-child {
+  border-bottom: none;
+}
+
+.faqToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--primitives-spacing-3);
+  width: 100%;
   margin: 0;
+  padding: var(--primitives-spacing-4) var(--primitives-spacing-5);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--semantic-color-text-primary);
+}
+
+.faqToggle:hover:not([aria-expanded='true']) {
+  background: color-mix(in srgb, var(--semantic-color-text-primary) 4%, transparent);
+}
+
+.faqToggle:focus-visible {
+  outline: 2px solid var(--semantic-color-border-focus);
+  outline-offset: -2px;
+}
+
+.faqTitle {
   font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-base) * 1px);
   font-weight: var(--primitives-fontWeight-medium);
-  color: var(--semantic-color-text-primary);
   line-height: 1.4;
+  min-width: 0;
 }
 
-.slideBody {
+.chevron {
+  width: var(--primitives-spacing-4);
+  height: var(--primitives-spacing-4);
+  flex-shrink: 0;
+  color: var(--semantic-color-text-muted);
+  transition: transform 200ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.faqPanel {
+  padding: 0 var(--primitives-spacing-5) var(--primitives-spacing-4);
+}
+
+.faqBody {
   margin: 0;
   font-family: var(--primitives-fontFamily-ui), sans-serif;
   font-size: calc(var(--primitives-fontSize-base) * 1px);
@@ -92,19 +97,8 @@
   line-height: 1.6;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .slide {
-    animation: none;
+  .chevron {
+    transition: none;
   }
 }

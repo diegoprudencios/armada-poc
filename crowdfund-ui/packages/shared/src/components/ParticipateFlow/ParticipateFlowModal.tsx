@@ -38,6 +38,7 @@ export function ParticipateFlowModal({
 }: ParticipateFlowModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
+  const stepRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(open)
   const [exiting, setExiting] = useState(false)
   // Hold `onClose` in a ref so the focus + keydown effect below can read the
@@ -105,12 +106,17 @@ export function ParticipateFlowModal({
     body.style.right = '0'
     body.style.width = '100%'
 
+    // Move focus into the dialog. Steps that draw their own chrome (FlowChrome's
+    // back / close) leave `showClose` false and render no footer, so fall
+    // through to the step's first control rather than leaving focus on the
+    // trigger behind the backdrop.
     if (showClose) {
       closeRef.current?.focus()
     } else {
-      const focusable = footerRef.current?.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      )
+      const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      const focusable =
+        footerRef.current?.querySelector<HTMLElement>(FOCUSABLE) ??
+        stepRef.current?.querySelector<HTMLElement>(FOCUSABLE)
       focusable?.focus()
     }
 
@@ -173,7 +179,10 @@ export function ParticipateFlowModal({
             <XMarkIcon width={14} height={14} aria-hidden />
           </button>
         ) : null}
-        <div className={[styles.step, exiting && styles.stepExit].filter(Boolean).join(' ')}>
+        <div
+          ref={stepRef}
+          className={[styles.step, exiting && styles.stepExit].filter(Boolean).join(' ')}
+        >
           {children}
         </div>
         {footer ? (

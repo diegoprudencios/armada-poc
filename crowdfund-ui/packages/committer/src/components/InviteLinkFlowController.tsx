@@ -12,6 +12,7 @@ import {
   Step3Review,
   Step4Approve,
   Step5Confirmation,
+  StepBeforeYouStart,
   MaxOutBanner,
   INVITE_LINK_STEPS,
   type Step3ReviewHopCommit,
@@ -23,6 +24,7 @@ import {
   formatUsdcPlain,
   hopLabel,
   hopPillDotColor,
+  truncateAddress,
   useContractEvents,
   useContractState,
   useGraphState,
@@ -45,7 +47,7 @@ import type { InviteLinkData } from '@/lib/inviteLinks'
 import { resolveSigner, describeSignerError } from '@/lib/resolveSigner'
 import { isMobileBrowser } from '@/lib/isMobileBrowser'
 import { submitTxViaWagmi } from '@/lib/mobileTxSubmit'
-import { hasFreeInviteSlot } from '@/lib/inviteSlots'
+import { countFreeInviteSlots, hasFreeInviteSlot } from '@/lib/inviteSlots'
 import { useWallet } from '@/hooks/useWallet'
 import { useBeforeUnloadGuard } from '@/hooks/useBeforeUnloadGuard'
 import { useTxPipeline, type TxStep } from '@/hooks/useTxPipeline'
@@ -57,10 +59,29 @@ import { effectiveInviteCapUsdc, isAtInviteCap } from '@/lib/inviteCapMath'
 import { useInviteLinks } from '@/hooks/useInviteLinks'
 import { useInviteSlots } from '@/hooks/useInviteSlots'
 
-type FlowStep = 'wallet' | 'commit' | 'review' | 'approve' | 'confirmation' | 'invites'
+type FlowStep =
+  | 'wallet'
+  | 'beforeYouStart'
+  | 'commit'
+  | 'review'
+  | 'approve'
+  | 'confirmation'
+  | 'invites'
 
 const MODAL_STEPS = [...INVITE_LINK_STEPS]
 const STEP_TRANSITION_MS = 240
+
+// "Window closes" value on Before you start. An em dash rather than a guessed
+// date when the deadline hasn't loaded — the screen's own default is demo copy.
+function formatWindowCloses(windowEndUnix: number): string {
+  if (!windowEndUnix || windowEndUnix <= 0) return '—'
+  return new Date(windowEndUnix * 1000).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
 export interface InviteLinkFlowControllerProps {
   inviteData: InviteLinkData
@@ -173,7 +194,13 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
   // ParticipateFlowInviteLink — fading wraps each step swap). Re-attach: a live
   // pipeline lands directly on the tx surface.
   const [step, setStep] = useState<FlowStep>(
-    phase === 'success' ? 'confirmation' : submitting ? 'approve' : walletConnected ? 'commit' : 'wallet',
+    phase === 'success'
+      ? 'confirmation'
+      : submitting
+        ? 'approve'
+        : walletConnected
+          ? 'beforeYouStart'
+          : 'wallet',
   )
   const [renderStep, setRenderStep] = useState<FlowStep>(step)
   const [fading, setFading] = useState(false)
@@ -288,7 +315,7 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
   // Auto-advance past the wallet step once the user connects (matches the
   // ParticipateFlowV2 pattern). Going back to disconnected drops to wallet.
   useEffect(() => {
-    if (walletConnected && step === 'wallet') transitionTo('commit')
+    if (walletConnected && step === 'wallet') transitionTo('beforeYouStart')
     if (!walletConnected && step !== 'wallet') transitionTo('wallet')
     // `transitionTo` is stable across renders — see useCallback below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -470,6 +497,10 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
 
   // ── Step renderers ─────────────────────────────────────────────────────
 
+  // Leave the flow. There's no modal here, so "close" means returning to the
+  // crowdfund page — wired to every step's FlowChrome X.
+  const handleClose = () => navigate('/')
+
   // The confirmation screen, shared by the normal post-commit path and the
   // "already fully committed" shortcut. `maxedOut` swaps in the no-new-commit
   // copy and shows the ARM reserved for the existing position.
@@ -498,6 +529,7 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
           canInvite={hasFreeInviteSlot(inviteSlots.sections)}
           onViewPosition={() => navigate('/?view=myposition')}
           onBackToCrowdfund={() => navigate('/')}
+          onClose={handleClose}
           onInvite={() => {
             // Match ParticipateFlowV2: stay in the flow's slot, swap to the
             // invite-slots step. Falls back to navigating to MyPosition only if
@@ -549,6 +581,25 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
           <Step1Connect
             showSteps
             onConnect={() => wallet.connect()}
+          />
+        )
+
+      case 'beforeYouStart':
+        return (
+          <StepBeforeYouStart
+            hopVariant={targetHop === 2 ? 'hop-2' : 'hop-1'}
+            capUsdc={usdcToNumber(effectiveCapUsdc)}
+            inviteCount={countFreeInviteSlots(inviteSlots.sections)}
+            maxOutCeilingUsdc={maxOutOption?.ceilingUsd}
+            // Empty string rather than undefined — the screen falls back to a
+            // demo address when it gets neither.
+            walletAddress={lowerAddress ?? ''}
+            walletDisplayAddress={lowerAddress ? truncateAddress(lowerAddress) : '—'}
+            windowClosesLabel={formatWindowCloses(contractState.windowEnd)}
+            // No modal to dismiss — Back and the X both leave for the crowdfund.
+            onBack={handleClose}
+            onContinue={() => transitionTo('commit')}
+            onClose={handleClose}
           />
         )
 
@@ -607,7 +658,8 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
               setAmount(nextAmount)
               transitionTo('review')
             }}
-            onBack={() => transitionTo('wallet')}
+            onBack={() => transitionTo('beforeYouStart')}
+            onClose={handleClose}
             maxAmount={maxAmount}
             existingCommittedUsdc={existingCommitted}
             availableBalance={availableBalance}
@@ -663,6 +715,7 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
                 resetMax()
                 transitionTo('confirmation')
               }}
+              onClose={handleClose}
               onNext={() => {
                 transitionTo('approve')
                 void startPipeline()
@@ -680,6 +733,7 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
             estimatedArm={estimatedArm}
             disabled={submitting}
             onBack={() => transitionTo('commit')}
+            onClose={handleClose}
             onNext={() => {
               transitionTo('approve')
               void startPipeline()
@@ -702,13 +756,13 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
             txs={rows.length ? rows : undefined}
             onDone={() => transitionTo('confirmation')}
             onBack={() => {
-              // Back to review preserves the entered amount; also the only escape
-              // on the /invite page (no close button). Reset so a fresh confirm
-              // starts clean.
+              // Back to review preserves the entered amount. Reset so a fresh
+              // confirm starts clean.
               pipeline.reset()
               setAttemptError(null)
               transitionTo('review')
             }}
+            onClose={handleClose}
             onRetry={() => {
               void startPipeline()
             }}
