@@ -292,6 +292,9 @@ export function App() {
   // based on the active design flag.
   const [participateOpen, setParticipateOpen] = useState(false)
   const [participateSplash, setParticipateSplash] = useState(false)
+  // Whether the participate modal renders its own X. The commit steps draw a
+  // FlowChrome close instead, so the flow reports which steps need ours.
+  const [participateModalClose, setParticipateModalClose] = useState(true)
   // Crowdfund Progress "Details" — observe cards in a blurred modal overlay.
   const [detailsOpen, setDetailsOpen] = useState(() => detailsOpenFromUrl())
   // True while the participate pipeline is in flight — gates modal close confirm.
@@ -747,6 +750,7 @@ export function App() {
   const closeParticipate = () => {
     setParticipateOpen(false)
     setParticipateSplash(false)
+    setParticipateModalClose(true)
   }
 
   const headerRightChrome = (
@@ -788,7 +792,9 @@ export function App() {
       onClose={closeParticipate}
       ariaLabel="Participate in the Armada crowdfund"
       confirmBeforeClose={participateRunning}
-      showClose={!participateSplash}
+      // The commit steps carry their own FlowChrome close; the flow tells us
+      // when to fall back to the modal's X (connect, eligibility, invite slots).
+      showClose={participateModalClose}
       footer={
         participateSplash ? (
           <ArmadaButton
@@ -807,8 +813,10 @@ export function App() {
           key={wallet.address ?? 'disconnected'}
           onRunningChange={setParticipateRunning}
           onSplashActiveChange={setParticipateSplash}
+          onModalCloseChange={setParticipateModalClose}
           eventsLoading={eventsLoading}
           secondsLeft={secondsLeft}
+          windowEndUnix={Number(contractState.windowEnd)}
           walletConnected={wallet.connected}
           walletAddress={wallet.address}
           signer={wallet.signer}
@@ -831,6 +839,7 @@ export function App() {
             closeParticipate()
             setPage('network')
           }}
+          onClose={closeParticipate}
           inviteSlotSections={inviteSlots.empty ? undefined : inviteSlots.sections}
           onReceiptLogs={ingestReceiptLogs}
         />
@@ -922,6 +931,7 @@ export function App() {
                 signer={wallet.signer}
                 provider={provider}
                 crowdfundAddress={crowdfundAddress}
+                armTokenAddress={armTokenAddress}
                 phase={contractState.phase}
                 refundMode={contractState.refundMode}
                 blockTimestamp={contractState.blockTimestamp}

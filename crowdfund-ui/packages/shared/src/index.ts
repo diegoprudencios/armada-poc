@@ -325,6 +325,8 @@ export {
   Step3Review,
   Step4Approve,
   Step5Confirmation,
+  StepBeforeYouStart,
+  FlowChrome,
   ParticipateFlowModal,
   ParticipateFlowInviteSlots,
   MaxOutBanner,
@@ -339,11 +341,22 @@ export type {
   Step4ApproveProps,
   Step4Transaction,
   Step4TransactionStatus,
+  StepBeforeYouStartProps,
+  FlowChromeProps,
   ParticipateFlowModalProps,
   ParticipateFlowInviteSlotsProps,
   ParticipateStepsStatus,
   ParticipateStepBarProps,
 } from './components/ParticipateFlow/index.js'
+
+export {
+  WalletConfirmStep,
+} from './components/WalletConfirm/index.js'
+export type {
+  WalletConfirmStepProps,
+  WalletTransactionItem,
+  WalletTransactionStatus,
+} from './components/WalletConfirm/index.js'
 
 export {
   InviteSlots,

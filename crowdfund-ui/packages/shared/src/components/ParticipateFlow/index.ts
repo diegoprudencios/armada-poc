@@ -18,6 +18,10 @@ export type {
   TransactionStatus as Step4TransactionStatus,
 } from './screens/Step4Approve'
 export { default as Step5Confirmation } from './screens/Step5Confirmation'
+export { default as StepBeforeYouStart } from './screens/StepBeforeYouStart'
+export type { StepBeforeYouStartProps } from './screens/StepBeforeYouStart'
+export { FlowChrome } from './FlowChrome'
+export type { FlowChromeProps } from './FlowChrome'
 
 export {
   INVITE_LINK_STEPS,

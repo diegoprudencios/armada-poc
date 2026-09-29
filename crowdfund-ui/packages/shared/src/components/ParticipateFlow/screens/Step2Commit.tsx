@@ -1,12 +1,11 @@
 // ABOUTME: Step 2 of the Participate flow — USDC amount entry. Single-hop path keeps the designer's big centered input; multi-hop path stacks one input row per eligible hop with shared balance / allocation footer.
-// ABOUTME: Ported from the armada-crowdfund mockup (ParticipateFlow/screens/Step2Commit.tsx); @armada/ui primitive imports rewritten to named imports from the package barrel. Multi-hop variant is local extension (designer-silent).
+// ABOUTME: Ported from the armada-crowdfund mockup; FlowChrome replaces the Steps header and carries the screen title. MaxOutBanner + the multi-hop variant are POC extensions (designer-silent).
 
 import { useEffect, useMemo, useState } from 'react'
-import styles from './Step2Commit.module.css'
-import { Steps } from '@armada/ui'
-import { Button } from '@armada/ui'
-import { Tooltip } from '@armada/ui'
 import { InformationCircleIcon } from '@heroicons/react/24/solid'
+import { Button, Tooltip } from '@armada/ui'
+import styles from './Step2Commit.module.css'
+import { FlowChrome } from '../FlowChrome'
 import {
   hasActiveAmount,
   parseActiveAmount,
@@ -142,13 +141,17 @@ interface Step2CommitProps extends ParticipateStepBarProps {
    *  Map keyed by hop (0/1/2) with the per-hop amount the user entered. */
   onNextMulti?: (amounts: Record<0 | 1 | 2, number>) => void
   onBack: () => void
+  /** Close control in the top chrome (preferred over the modal-level X). */
+  onClose?: () => void
   maxAmount?: number
   availableBalance?: number
   maxArm?: number
   /** Already committed USDC — bar shows this before new input. */
   existingCommittedUsdc?: number
+  /** Single-hop only: prefill when returning from Review (parent-held amount). */
+  initialAmount?: number
   /** Single-hop only: label of the hop being committed to (e.g. 'HOP-0',
-   *  'HOP-1', 'HOP-2'). When provided, renders a hop badge above the title.
+   *  'HOP-1', 'HOP-2'). When provided, renders a hop badge above the input.
    *  Ignored in the multi-hop variant (each row already shows its own hop). */
   hopLabel?: string
   /** Single-hop only: dot color for the hop badge, from the canonical hop
@@ -165,9 +168,9 @@ interface Step2CommitProps extends ParticipateStepBarProps {
   hopRows?: ReadonlyArray<Step2CommitHopRow>
   /** Optional "max out" self-fill banner shown above the amount entry. */
   maxOut?: Step2MaxOutOption
+  /** Secondary CTA on the fully-committed card (replaces plain Back). */
+  onViewPosition?: () => void
 }
-
-const DEFAULT_STEPS = ['Connect', 'Commit', 'Review', 'Confirmation']
 
 function formatBalance(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -177,18 +180,19 @@ export default function Step2Commit({
   onNext,
   onNextMulti,
   onBack,
+  onClose,
   maxAmount = 4000,
   availableBalance = 215154.14,
   maxArm = 4000,
   existingCommittedUsdc = 0,
+  initialAmount = 0,
   hopLabel,
   hopColor,
   estimateArm,
   showBack = true,
-  steps = DEFAULT_STEPS,
-  stepIndex = 2,
   hopRows,
   maxOut,
+  onViewPosition,
 }: Step2CommitProps) {
   const isMulti = !!hopRows && hopRows.length > 1
   return isMulti ? (
@@ -196,70 +200,76 @@ export default function Step2Commit({
       hopRows={hopRows!}
       onNextMulti={onNextMulti}
       onBack={onBack}
+      onClose={onClose}
       availableBalance={availableBalance}
       showBack={showBack}
-      steps={steps}
-      stepIndex={stepIndex}
       maxOut={maxOut}
+      onViewPosition={onViewPosition}
     />
   ) : (
     <SingleHopVariant
       onNext={onNext}
       onBack={onBack}
+      onClose={onClose}
       maxAmount={maxAmount}
       availableBalance={availableBalance}
       maxArm={maxArm}
       existingCommittedUsdc={existingCommittedUsdc}
+      initialAmount={initialAmount}
       hopLabel={hopLabel}
       hopColor={hopColor}
       estimateArm={estimateArm}
       showBack={showBack}
-      steps={steps}
-      stepIndex={stepIndex}
       maxOut={maxOut}
+      onViewPosition={onViewPosition}
     />
   )
 }
 
-// ── Single-hop variant (designer-faithful, byte-equivalent to original) ──
+// ── Single-hop variant (designer-faithful) ──
 
 function SingleHopVariant({
   onNext,
   onBack,
+  onClose,
   maxAmount,
   availableBalance,
   maxArm: _maxArm,
   existingCommittedUsdc,
+  initialAmount,
   hopLabel,
   hopColor,
   estimateArm,
   showBack,
-  steps,
-  stepIndex,
   maxOut,
+  onViewPosition,
 }: {
   onNext: (amount: number) => void
   onBack: () => void
+  onClose?: () => void
   maxAmount: number
   availableBalance: number
   maxArm: number
   existingCommittedUsdc: number
+  initialAmount: number
   hopLabel?: string
   hopColor?: string
   estimateArm?: (newAmountUsd: number) => number
   showBack: boolean
-  steps: readonly string[]
-  stepIndex: number
   maxOut?: Step2MaxOutOption
+  onViewPosition?: () => void
 }) {
+  const remainingCap = Math.max(0, maxAmount - existingCommittedUsdc)
   // Free-form string state so the input can hold mid-decimal entries ("0.",
   // "1.") without flickering the bar / ARM allocation numbers. Parsed via
-  // `parseActiveAmount` to a capped numeric for downstream math. Ported from
-  // the armada-crowdfund mockup's Step2Commit (commit 214b972).
-  const [amountInput, setAmountInput] = useState('')
+  // `parseActiveAmount` to a capped numeric for downstream math.
+  const [amountInput, setAmountInput] = useState(() => {
+    if (initialAmount <= 0) return ''
+    const capped = Math.min(initialAmount, remainingCap)
+    return hasActiveAmount(String(capped)) ? String(capped) : ''
+  })
   const [commaError, setCommaError] = useState(false)
 
-  const remainingCap = Math.max(0, maxAmount - existingCommittedUsdc)
   const showActiveAmount = hasActiveAmount(amountInput)
   const amount = parseActiveAmount(amountInput, remainingCap)
   const existingRatio = Math.min(existingCommittedUsdc / maxAmount, 1)
@@ -279,6 +289,7 @@ function SingleHopVariant({
   // $100 of USDC could enter $4,000 and click Review. Mirrors the
   // `overBalance` gate in `MultiHopVariant`.
   const overBalance = amount > availableBalance
+  const canFillMax = remainingCap > 0 && amount < remainingCap
 
   function handleInput(raw: string) {
     setCommaError(isInvalidCommaInput(raw))
@@ -310,11 +321,16 @@ function SingleHopVariant({
   if (fullyCommitted) {
     return (
       <div className={styles.shell} data-flow-shell>
-        <Steps steps={[...steps]} currentStep={stepIndex} />
+        <FlowChrome
+          title="Fully committed"
+          showBack={showBack}
+          onBack={onBack}
+          onClose={onClose}
+        />
 
         <div className={styles.content}>
           <div className={styles.inputBlock}>
-            <div className={styles.titleBlock}>
+            <div className={styles.fullyCommittedGroup}>
               {hopLabel && (
                 <span className={styles.hopBadge}>
                   {hopColor && (
@@ -327,17 +343,33 @@ function SingleHopVariant({
                   <span className={styles.hopBadgeLabel}>{hopLabel}</span>
                 </span>
               )}
-              <h2 className={styles.title}>You're fully committed</h2>
               <p className={styles.maxLabel}>
-                You've committed the maximum {maxAmount.toLocaleString()} USDC for this hop.
+                You&apos;ve committed the maximum {maxAmount.toLocaleString('en-US')} USDC for
+                this hop.
               </p>
             </div>
           </div>
         </div>
 
         <div className={styles.buttonRow}>
-          {showBack && (
-            <Button variant="secondary" size="lg" label="Back" showIcon={false} onClick={onBack} />
+          {onViewPosition ? (
+            <Button
+              variant="secondary"
+              size="lg"
+              label="View your position"
+              showIcon={false}
+              onClick={onViewPosition}
+            />
+          ) : (
+            showBack && (
+              <Button
+                variant="secondary"
+                size="lg"
+                label="Back"
+                showIcon={false}
+                onClick={onBack}
+              />
+            )
           )}
         </div>
       </div>
@@ -345,33 +377,40 @@ function SingleHopVariant({
   }
 
   return (
-    <div className={styles.shell}>
-      <Steps steps={[...steps]} currentStep={stepIndex} />
+    <div className={styles.shell} data-flow-shell>
+      <FlowChrome
+        title="How much USDC?"
+        titleId="commit-title"
+        showBack={showBack}
+        onBack={onBack}
+        onClose={onClose}
+      />
 
       <div className={styles.content}>
         {maxOut && <MaxOutBanner maxOut={maxOut} />}
         <div className={styles.inputBlock}>
           <div className={styles.amountGroup}>
-            <div className={styles.titleBlock}>
-              {hopLabel && (
-                <span className={styles.hopBadge}>
-                  {hopColor && (
-                    <span
-                      className={styles.hopBadgeDot}
-                      style={{ background: hopColor }}
-                      aria-hidden
-                    />
-                  )}
-                  <span className={styles.hopBadgeLabel}>{hopLabel}</span>
-                </span>
-              )}
-              <h2 className={styles.title} id="commit-title">How much USDC?</h2>
-            </div>
+            {hopLabel && (
+              <span className={styles.hopBadge}>
+                {hopColor && (
+                  <span
+                    className={styles.hopBadgeDot}
+                    style={{ background: hopColor }}
+                    aria-hidden
+                  />
+                )}
+                <span className={styles.hopBadgeLabel}>{hopLabel}</span>
+              </span>
+            )}
 
             <div className={styles.amountCluster}>
               <label className={styles.amountWrapper} htmlFor="commit-amount">
                 <span className={styles.visuallyHidden}>Amount in USDC</span>
-                <span className={styles.amountField}>
+                <span
+                  className={[styles.amountField, showActiveAmount && styles.amountFieldHasValue]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
                   <span
                     className={[
                       styles.amountDisplay,
@@ -408,9 +447,7 @@ function SingleHopVariant({
                   Minimum {MIN_COMMIT_USD.toLocaleString()} USDC per commit.
                 </p>
               )}
-              {commaError && (
-                <p className={styles.overBalance}>Use a period for decimals.</p>
-              )}
+              {commaError && <p className={styles.overBalance}>Use a period for decimals.</p>}
             </div>
           </div>
         </div>
@@ -439,9 +476,17 @@ function SingleHopVariant({
               <span className={styles.barScaleMin}>
                 {totalCommitted.toLocaleString('en-US')} USDC
               </span>
-              <span className={styles.barScaleMax}>
+              {/* MAX doubles as a fill-to-cap control (armada-crowdfund
+                  ArmAllocationBlock affordance). */}
+              <button
+                type="button"
+                className={styles.barScaleMaxBtn}
+                onClick={() => setAmountInput(String(remainingCap))}
+                disabled={!canFillMax}
+                aria-label={`Fill maximum ${maxAmount.toLocaleString('en-US')} USDC`}
+              >
                 MAX {maxAmount.toLocaleString('en-US')} USDC
-              </span>
+              </button>
             </div>
           </div>
           <div className={styles.armCard}>
@@ -478,9 +523,6 @@ function SingleHopVariant({
       </div>
 
       <div className={styles.buttonRow}>
-        {showBack && (
-          <Button variant="secondary" size="lg" label="Back" showIcon={false} onClick={onBack} />
-        )}
         <Button
           variant="primary"
           size="lg"
@@ -504,20 +546,20 @@ function MultiHopVariant({
   hopRows,
   onNextMulti,
   onBack,
+  onClose,
   availableBalance,
   showBack,
-  steps,
-  stepIndex,
   maxOut,
+  onViewPosition,
 }: {
   hopRows: ReadonlyArray<Step2CommitHopRow>
   onNextMulti: ((amounts: Record<0 | 1 | 2, number>) => void) | undefined
   onBack: () => void
+  onClose?: () => void
   availableBalance: number
   showBack: boolean
-  steps: readonly string[]
-  stepIndex: number
   maxOut?: Step2MaxOutOption
+  onViewPosition?: () => void
 }) {
   // Amounts are tracked as strings so the user can clear a field without it
   // collapsing to "0" mid-typing. Numeric conversion happens for sums + the
@@ -627,22 +669,43 @@ function MultiHopVariant({
   if (allFullyCommitted) {
     return (
       <div className={styles.shell} data-flow-shell>
-        <Steps steps={[...steps]} currentStep={stepIndex} />
+        <FlowChrome
+          title="Fully committed"
+          showBack={showBack}
+          onBack={onBack}
+          onClose={onClose}
+        />
 
         <div className={styles.content}>
           <div className={styles.inputBlock}>
-            <div className={styles.titleBlock}>
-              <h2 className={styles.title}>You're fully committed</h2>
+            <div className={styles.fullyCommittedGroup}>
               <p className={styles.maxLabel}>
-                You've committed the maximum {totalCap.toLocaleString()} USDC across your hops.
+                You&apos;ve committed the maximum {totalCap.toLocaleString()} USDC across your
+                hops.
               </p>
             </div>
           </div>
         </div>
 
         <div className={styles.buttonRow}>
-          {showBack && (
-            <Button variant="secondary" size="lg" label="Back" showIcon={false} onClick={onBack} />
+          {onViewPosition ? (
+            <Button
+              variant="secondary"
+              size="lg"
+              label="View your position"
+              showIcon={false}
+              onClick={onViewPosition}
+            />
+          ) : (
+            showBack && (
+              <Button
+                variant="secondary"
+                size="lg"
+                label="Back"
+                showIcon={false}
+                onClick={onBack}
+              />
+            )
           )}
         </div>
       </div>
@@ -650,18 +713,18 @@ function MultiHopVariant({
   }
 
   return (
-    <div className={styles.shell}>
-      <Steps steps={[...steps]} currentStep={stepIndex} />
+    <div className={styles.shell} data-flow-shell>
+      <FlowChrome
+        title="How much USDC?"
+        showBack={showBack}
+        onBack={onBack}
+        onClose={onClose}
+      />
 
       <div className={styles.content}>
         {maxOut && <MaxOutBanner maxOut={maxOut} />}
         <div className={styles.multiList}>
-          <div>
-            <h2 className={styles.multiTitle}>How much USDC?</h2>
-            <p className={styles.multiAvailableLabel}>
-              Balance {formatBalance(availableBalance)}
-            </p>
-          </div>
+          <p className={styles.multiAvailableLabel}>Balance {formatBalance(availableBalance)}</p>
 
           {hopRows.map((row) => {
             const remaining = Math.max(0, row.maxAmount - row.existingCommittedUsdc)
@@ -683,9 +746,7 @@ function MultiHopVariant({
                     ? `${remaining.toLocaleString()} remaining`
                     : `Max ${row.maxAmount.toLocaleString()}`}
                 </span>
-                <span className={styles.visuallyHidden}>
-                  USDC amount for {row.hopLabel}
-                </span>
+                <span className={styles.visuallyHidden}>USDC amount for {row.hopLabel}</span>
                 <input
                   id={inputId}
                   type="text"
@@ -763,25 +824,18 @@ function MultiHopVariant({
             </span>
           </div>
           {overBalance && (
-            <p className={styles.overBalance}>
-              Total exceeds your wallet balance.
-            </p>
+            <p className={styles.overBalance}>Total exceeds your wallet balance.</p>
           )}
           {anyBelowMin && !overBalance && (
             <p className={styles.overBalance}>
               Each hop you commit to must be at least {MIN_COMMIT_USD.toLocaleString()} USDC.
             </p>
           )}
-          {commaError && (
-            <p className={styles.overBalance}>Use a period for decimals.</p>
-          )}
+          {commaError && <p className={styles.overBalance}>Use a period for decimals.</p>}
         </div>
       </div>
 
       <div className={styles.buttonRow}>
-        {showBack && (
-          <Button variant="secondary" size="lg" label="Back" showIcon={false} onClick={onBack} />
-        )}
         <Button
           variant="primary"
           size="lg"

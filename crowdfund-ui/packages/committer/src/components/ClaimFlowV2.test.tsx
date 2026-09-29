@@ -20,6 +20,21 @@ function renderClaim(ui: ReactElement) {
   return render(ui, { wrapper })
 }
 
+/** Walk intro → self-delegate → review for the ARM path. */
+async function startArmToReview() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Start' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Review' }))
+  expect(await screen.findByRole('button', { name: 'Claim ARM' })).toBeTruthy()
+}
+
+/** Walk intro → Delegate vote → picker. */
+async function startArmToDelegatePicker() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Start' }))
+  fireEvent.click(await screen.findByRole('radio', { name: /Delegate vote/i }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue' }))
+  return (await screen.findByLabelText('Search delegates')) as HTMLInputElement
+}
+
 // Per-test read implementations, driven by the connected address.
 let claimedFor: (addr: string) => Promise<boolean>
 let allocationFor: (addr: string) => Promise<[bigint, bigint]>
@@ -108,16 +123,15 @@ describe('ClaimFlowV2 account switch', () => {
 
 describe('ClaimFlowV2 delegate field', () => {
   it('stays empty after the user clears it (no auto-refill once edited)', async () => {
-    // A non-zero ARM allocation, not yet claimed → the review step with the
-    // delegate input renders, pre-filled with the connected wallet address.
     claimedFor = () => Promise.resolve(false)
     allocationFor = () => Promise.resolve([1_000_000_000_000_000_000n, 0n])
 
     renderClaim(<ClaimFlowV2 {...baseProps} walletAddress={ADDR_A} />)
 
-    const input = (await screen.findByDisplayValue(ADDR_A)) as HTMLInputElement
+    const input = await startArmToDelegatePicker()
 
-    // User clears the field — it must not snap back to the wallet address.
+    // Prefill may be empty on "other"; type then clear — must not snap back to wallet.
+    fireEvent.change(input, { target: { value: ADDR_A } })
     fireEvent.change(input, { target: { value: '' } })
     expect(input.value).toBe('')
   })
@@ -128,11 +142,13 @@ describe('ClaimFlowV2 delegate field', () => {
 
     renderClaim(<ClaimFlowV2 {...baseProps} signer={{} as never} walletAddress={ADDR_A} />)
 
-    const input = (await screen.findByDisplayValue(ADDR_A)) as HTMLInputElement
+    const input = await startArmToDelegatePicker()
     fireEvent.change(input, { target: { value: '0x' + '0'.repeat(40) } })
 
     expect(await screen.findByText(/zero address/)).toBeTruthy()
-    expect(screen.getByText('Claim ARM').closest('button')!.disabled).toBe(true)
+    // Review CTA is blocked on the picker; Claim ARM is not yet reachable.
+    const reviewBtn = screen.getByRole('button', { name: 'Review' })
+    expect(reviewBtn.getAttribute('aria-disabled')).toBe('true')
   })
 })
 
@@ -150,15 +166,16 @@ describe('ClaimFlowV2 delegate ENS resolution', () => {
       <ClaimFlowV2 {...baseProps} signer={{} as never} provider={provider} walletAddress={ADDR_A} />,
     )
 
-    const input = (await screen.findByDisplayValue(ADDR_A)) as HTMLInputElement
+    const input = await startArmToDelegatePicker()
     fireEvent.change(input, { target: { value: 'vitalik.eth' } })
 
     // The name resolves, the resolved address surfaces, and the claim submits
     // the checksummed resolved address — not the raw ENS string.
-    expect(await screen.findByText(/Resolves to/)).toBeTruthy()
+    expect(await screen.findByText(/Resolves to|Ready to delegate|vitalik\.eth/i)).toBeTruthy()
     expect(resolveName).toHaveBeenCalledWith('vitalik.eth')
 
-    fireEvent.click(screen.getByText('Claim ARM').closest('button')!)
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Claim ARM' }))
     await waitFor(() => expect(lastClaimDelegate).toBe(VITALIK))
   })
 
@@ -171,11 +188,13 @@ describe('ClaimFlowV2 delegate ENS resolution', () => {
       <ClaimFlowV2 {...baseProps} signer={{} as never} provider={provider} walletAddress={ADDR_A} />,
     )
 
-    const input = (await screen.findByDisplayValue(ADDR_A)) as HTMLInputElement
+    const input = await startArmToDelegatePicker()
     fireEvent.change(input, { target: { value: 'nope.eth' } })
 
     expect(await screen.findByText(/resolve that ENS name/)).toBeTruthy()
-    expect(screen.getByText('Claim ARM').closest('button')!.disabled).toBe(true)
+    expect(screen.getByRole('button', { name: 'Review' }).getAttribute('aria-disabled')).toBe(
+      'true',
+    )
     expect(lastClaimDelegate).toBeUndefined()
   })
 })
@@ -187,13 +206,11 @@ describe('ClaimFlowV2 wallet rejection', () => {
 
     renderClaim(<ClaimFlowV2 {...baseProps} signer={{} as never} walletAddress={ADDR_A} />)
 
-    // Submit from the review step.
-    const claimBtn = await screen.findByRole('button', { name: 'Claim ARM' })
-    fireEvent.click(claimBtn)
+    await startArmToReview()
+    fireEvent.click(screen.getByRole('button', { name: 'Claim ARM' }))
 
-    // Rejection routes back to review: the delegate input reappears and no
-    // red error message is shown.
-    expect(await screen.findByDisplayValue(ADDR_A)).toBeTruthy()
+    // Rejection routes back to review: Claim ARM reappears and no red error.
+    expect(await screen.findByRole('button', { name: 'Claim ARM' })).toBeTruthy()
     expect(screen.queryByText('Transaction reverted')).toBeNull()
     expect(screen.queryByText(/Cancelled in wallet/)).toBeNull()
   })
@@ -209,15 +226,15 @@ describe('ClaimFlowV2 read semantics', () => {
     expect(await screen.findByText("Couldn't load your allocation")).toBeTruthy()
   })
 
-  it('tolerates a failed claimed read (allocation still drives the review step)', async () => {
+  it('tolerates a failed claimed read (allocation still drives the intro step)', async () => {
     claimedFor = () => Promise.reject(new Error('rpc'))
     allocationFor = () => Promise.resolve([1_000_000_000_000_000_000n, 0n])
 
     renderClaim(<ClaimFlowV2 {...baseProps} walletAddress={ADDR_A} />)
 
-    // Allocation succeeded → review step (delegate input); the claimed failure
-    // is non-fatal and must not surface the allocation-error screen.
-    expect(await screen.findByDisplayValue(ADDR_A)).toBeTruthy()
+    // Allocation succeeded → intro; the claimed failure is non-fatal and must
+    // not surface the allocation-error screen.
+    expect(await screen.findByText('Claim your ARM tokens')).toBeTruthy()
     expect(screen.queryByText("Couldn't load your allocation")).toBeNull()
   })
 
@@ -266,9 +283,9 @@ describe('ClaimFlowV2 refund gate (contract-authoritative)', () => {
 
     renderClaim(<ClaimFlowV2 {...baseProps} phase={2} totalCommitted={0n} walletAddress={ADDR_A} />)
 
-    // The refund review renders from the contract amount — never the false
+    // Intro renders from the contract amount — never the false
     // "No refund to claim." terminal screen the graph total would have produced.
-    expect(await screen.findByText('Claim your refund')).toBeTruthy()
+    expect(await screen.findByText('Claim your USDC refund')).toBeTruthy()
     expect(screen.queryByText('No refund to claim.')).toBeNull()
   })
 

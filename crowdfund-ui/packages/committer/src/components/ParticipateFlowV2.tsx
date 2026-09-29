@@ -15,8 +15,10 @@ import {
   Step3Review,
   Step4Approve,
   Step5Confirmation,
+  StepBeforeYouStart,
   MaxOutBanner,
   hopPillDotColor,
+  truncateAddress,
   type CrowdfundInviteSlotSection,
   type ReceiptLogLike,
   type Step2CommitHopRow,
@@ -36,12 +38,32 @@ import { getHubNetworkLabel } from '@/config/network'
 import { resolveSigner, describeSignerError } from '@/lib/resolveSigner'
 import { isMobileBrowser } from '@/lib/isMobileBrowser'
 import { submitTxViaWagmi } from '@/lib/mobileTxSubmit'
+import { countFreeInviteSlots, hasFreeInviteSlot } from '@/lib/inviteSlots'
 import { useTxPipeline, type TxStep } from '@/hooks/useTxPipeline'
 import { useSelfFill } from '@/hooks/useSelfFill'
 import { useResetPipelineOnClose } from '@/hooks/useResetPipelineOnClose'
 import type { HopPosition } from '@/hooks/useEligibility'
 
-type FlowStep = 'wallet' | 'splash' | 'commit' | 'review' | 'approve' | 'confirmation' | 'invites'
+type FlowStep =
+  | 'wallet'
+  | 'splash'
+  | 'beforeYouStart'
+  | 'commit'
+  | 'review'
+  | 'approve'
+  | 'confirmation'
+  | 'invites'
+
+// Steps whose screen draws its own FlowChrome (back + close). On those the
+// modal drops its X so there is exactly one close control; everywhere else
+// (connect, eligibility, invite slots) the modal keeps it so nobody is trapped.
+const CHROME_STEPS: ReadonlySet<FlowStep> = new Set<FlowStep>([
+  'beforeYouStart',
+  'commit',
+  'review',
+  'approve',
+  'confirmation',
+])
 
 export interface ParticipateFlowV2Props {
   walletConnected: boolean
@@ -62,6 +84,9 @@ export interface ParticipateFlowV2Props {
   windowOpen: boolean
   onGoToMyPosition: () => void
   onGoToNetwork: () => void
+  /** Close the flow without navigating — wired to the FlowChrome X on every
+   *  commit step. Falls back to `onGoToNetwork` when the parent omits it. */
+  onClose?: () => void
   /** Live per-hop invite-slot sections. When non-empty, clicking Invite on
    *  the confirmation step opens the invite-slots screen inside the modal
    *  (matching the designer's reference). When omitted / empty (e.g. user
@@ -76,14 +101,20 @@ export interface ParticipateFlowV2Props {
   /** Notifies the parent when the approve/commit pipeline starts/stops, so the
    *  enclosing modal can confirm before closing mid-transaction. */
   onRunningChange?: (running: boolean) => void
-  /** True while the splash (invite) step is showing — parent hides the modal X
-   *  and shows a “Do it later” footer instead. */
+  /** True while the splash (invite) step is showing — parent shows a “Do it
+   *  later” footer instead of the step's own CTA row. */
   onSplashActiveChange?: (active: boolean) => void
+  /** Whether the enclosing modal should render its own close (X). False on the
+   *  steps that draw a FlowChrome close of their own. */
+  onModalCloseChange?: (showClose: boolean) => void
   /** True while contract events are still hydrating. Avoids flashing the
    *  "not whitelisted" screen at an eligible user before their positions load. */
   eventsLoading?: boolean
   /** Seconds remaining in the commit window — shown on the first-time splash card. */
   secondsLeft?: number
+  /** Absolute commit-window deadline (unix seconds) — the "Window closes" row
+   *  on Before you start. */
+  windowEndUnix?: number
 }
 
 // Convert a bigint USDC amount (6 decimals) into a plain number for the
@@ -113,6 +144,18 @@ const HOP_DOT_KEYS = ['seed', 'hop-1', 'hop-2'] as const
 type AmountsByHop = Record<0 | 1 | 2, number>
 const EMPTY_AMOUNTS: AmountsByHop = { 0: 0, 1: 0, 2: 0 }
 
+// "Window closes" value on Before you start. An em dash rather than a guessed
+// date when the deadline hasn't loaded — the screen's own default is demo copy.
+function formatWindowCloses(windowEndUnix: number | undefined): string {
+  if (!windowEndUnix || windowEndUnix <= 0) return '—'
+  return new Date(windowEndUnix * 1000).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export function ParticipateFlowV2({
   walletConnected,
   walletAddress,
@@ -130,12 +173,15 @@ export function ParticipateFlowV2({
   windowOpen,
   onGoToMyPosition,
   onGoToNetwork,
+  onClose,
   inviteSlotSections,
   onReceiptLogs,
   onRunningChange,
   onSplashActiveChange,
+  onModalCloseChange,
   eventsLoading,
   secondsLeft,
+  windowEndUnix,
 }: ParticipateFlowV2Props) {
   // The approve+commit pipeline lives in an address-keyed store so it survives a
   // modal close (re-attaching on reopen), pauses (rather than prompting) while
@@ -196,6 +242,23 @@ export function ParticipateFlowV2({
   const eligible = renderablePositions.length > 0
   const isMulti = renderablePositions.length > 1
   const primaryPosition = renderablePositions[0] ?? null
+
+  // Close the flow in place (no page change) — the FlowChrome X on every commit
+  // step. Without a parent handler, leaving via the network page is the next
+  // best exit.
+  const handleClose = onClose ?? onGoToNetwork
+
+  // A step only owns the close control when it actually renders a FlowChrome:
+  // the eligibility gates below pre-empt the step machine, and the commit step
+  // degrades to a plain "window isn't open" message.
+  const stepOwnsChrome =
+    walletConnected && eligible && CHROME_STEPS.has(step) && (step !== 'commit' || windowOpen)
+  const showModalClose = !stepOwnsChrome && step !== 'splash'
+
+  useEffect(() => {
+    onModalCloseChange?.(showModalClose)
+    return () => onModalCloseChange?.(true)
+  }, [showModalClose, onModalCloseChange])
 
   // Sum of the in-flow amounts (this flow's new commits, across all hops).
   // Drives the approve tx + the wallet-balance constraint.
@@ -264,10 +327,21 @@ export function ParticipateFlowV2({
       ? (['seed', 'hop-1', 'hop-2'] as const)[primaryPosition.hop]
       : 'hop-1'
 
+  // "Hop limit" on Before you start — summed across eligible hops so a
+  // multi-hop wallet sees its whole allowance, not just the first hop's.
+  const totalCapUsd = useMemo(
+    () => renderablePositions.reduce((sum, p) => sum + usdcToNumber(p.effectiveCap), 0),
+    [renderablePositions],
+  )
+  const freeInviteSlots = useMemo(
+    () => countFreeInviteSlots(inviteSlotSections),
+    [inviteSlotSections],
+  )
+
   // Auto-advance once the wallet connects: first-timers to the splash, everyone
   // else to commit. Disconnecting falls back to the wallet step. If a returning
-  // participant briefly landed on the splash before their positions hydrated,
-  // bump them onward.
+  // participant briefly landed on the intro screens before their positions
+  // hydrated, bump them onward.
   useEffect(() => {
     if (!walletConnected) {
       if (step !== 'wallet') setStep('wallet')
@@ -275,7 +349,7 @@ export function ParticipateFlowV2({
     }
     if (step === 'wallet') {
       setStep(showSplash ? 'splash' : 'commit')
-    } else if (step === 'splash' && !showSplash) {
+    } else if ((step === 'splash' || step === 'beforeYouStart') && !showSplash) {
       setStep('commit')
     }
   }, [walletConnected, step, showSplash])
@@ -377,7 +451,8 @@ export function ParticipateFlowV2({
         <Step5Confirmation
           onViewPosition={onGoToMyPosition}
           onBackToCrowdfund={onGoToNetwork}
-          canInvite={Boolean(inviteSlotSections && inviteSlotSections.length > 0)}
+          onClose={handleClose}
+          canInvite={hasFreeInviteSlot(inviteSlotSections)}
           onInvite={() => {
             if (inviteSlotSections && inviteSlotSections.length > 0) {
               setStep('invites')
@@ -567,7 +642,26 @@ export function ParticipateFlowV2({
         hopVariant={splashHopVariant}
         secondsLeft={secondsLeft}
         hideConnectEyebrow
-        onJoin={() => setStep('commit')}
+        onJoin={() => setStep('beforeYouStart')}
+      />
+    )
+  }
+
+  if (step === 'beforeYouStart') {
+    return (
+      <StepBeforeYouStart
+        hopVariant={splashHopVariant}
+        capUsdc={totalCapUsd}
+        inviteCount={freeInviteSlots}
+        maxOutCeilingUsdc={maxOutOption?.ceilingUsd}
+        // Empty string rather than undefined — the screen falls back to a demo
+        // address when it gets neither.
+        walletAddress={walletAddress ?? ''}
+        walletDisplayAddress={walletAddress ? truncateAddress(walletAddress) : '—'}
+        windowClosesLabel={formatWindowCloses(windowEndUnix)}
+        onBack={() => setStep('splash')}
+        onContinue={() => setStep('commit')}
+        onClose={handleClose}
       />
     )
   }
@@ -614,7 +708,9 @@ export function ParticipateFlowV2({
             setAmounts({ 0: next[0] ?? 0, 1: next[1] ?? 0, 2: next[2] ?? 0 })
             setStep('review')
           }}
-          onBack={() => (showSplash ? setStep('splash') : onGoToNetwork())}
+          showBack={showSplash}
+          onBack={() => (showSplash ? setStep('beforeYouStart') : onGoToNetwork())}
+          onClose={handleClose}
         />
       )
     } else if (primaryPosition) {
@@ -631,7 +727,9 @@ export function ParticipateFlowV2({
             })
             setStep('review')
           }}
-          onBack={() => (showSplash ? setStep('splash') : onGoToNetwork())}
+          showBack={showSplash}
+          onBack={() => (showSplash ? setStep('beforeYouStart') : onGoToNetwork())}
+          onClose={handleClose}
           maxAmount={effectiveCapUsd}
           availableBalance={availableBalance}
           maxArm={effectiveCapUsd}
@@ -699,6 +797,7 @@ export function ParticipateFlowV2({
             resetMax()
             setStep('commit')
           }}
+          onClose={handleClose}
           disabled={submitting || maxPlan.balanceLimited}
           hopCommits={hopCommits.length > 1 ? hopCommits : undefined}
           hopLevel={hopCommits.length === 1 ? HOP_LABELS[maxPlan.commits[0]!.hop] : undefined}
@@ -724,6 +823,7 @@ export function ParticipateFlowV2({
             void startPipeline()
           }}
           onBack={() => setStep('commit')}
+          onClose={handleClose}
           disabled={submitting}
           hopCommits={hopCommits}
           amount={totalNewAmountUsd}
@@ -739,6 +839,7 @@ export function ParticipateFlowV2({
           void startPipeline()
         }}
         onBack={() => setStep('commit')}
+        onClose={handleClose}
         disabled={submitting}
         hopLevel={HOP_LABELS[primaryPosition.hop]}
         amount={totalNewAmountUsd}
@@ -765,6 +866,7 @@ export function ParticipateFlowV2({
           setAttemptError(null)
           setStep('review')
         }}
+        onClose={handleClose}
         onRetry={() => {
           // Resume from the failed row (a succeeded approve isn't repeated).
           void startPipeline()

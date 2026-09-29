@@ -1,10 +1,10 @@
 /* ABOUTME: CSS Module for Step2Commit — see Step2Commit.tsx for usage. */
-/* ABOUTME: Ported byte-identical from the armada-crowdfund mockup. */
+/* ABOUTME: Ported from the armada-crowdfund mockup; FlowChrome carries the title, so the in-content title block is gone. */
 
 /*
   Figma: 480x500px, 32px padding all sides
-  gap 44px between Steps / content / button row (space-between)
-  Content block: title + amount + available, centered
+  gap 44px between chrome / content / button row (space-between)
+  Content block: amount + balance, centered
   Allocation bar: 6px, radius 999px
   Button row: two 202px buttons, gap 12px, 48px height
 */
@@ -13,7 +13,7 @@
   width: 480px;
   height: 500px;
   background: var(--semantic-color-surface-default);
-  border: 1px solid var(--semantic-color-border-lavender);
+  border: 1px solid var(--semantic-color-border-default);
   border-radius: calc(var(--semantic-borderRadius-modal) * 1px);
   padding: var(--primitives-spacing-8);
   display: flex;
@@ -41,7 +41,8 @@
   width: 100%;
 }
 
-/* Vertically centers title + amount + balance between Steps and the progress bar. */
+/* Vertically centers the hop badge + amount + balance between the chrome and
+ * the progress bar. */
 .amountGroup {
   display: flex;
   flex-direction: column;
@@ -52,14 +53,20 @@
   margin-bottom: auto;
 }
 
-.titleBlock {
+/* Fully-committed variant — no input, just the explanatory copy, centered in
+ * the same band the amount would occupy. */
+.fullyCommittedGroup {
   display: flex;
   flex-direction: column;
-  gap: var(--primitives-spacing-2);
   align-items: center;
+  gap: var(--primitives-spacing-3);
+  width: 100%;
+  max-width: 28ch;
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
-/* Hop badge above the title in the single-hop variant — colored dot + label
+/* Hop badge above the amount in the single-hop variant — colored dot + label
  * mirroring the multi-hop variant's row styling so the two paths read the
  * same. */
 .hopBadge {
@@ -84,15 +91,6 @@
   color: var(--semantic-color-text-primary);
 }
 
-.title {
-  font-family: var(--primitives-fontFamily-ui);
-  font-size: calc(var(--primitives-fontSize-xl) * 1px);
-  font-weight: var(--primitives-fontWeight-medium);
-  color: var(--semantic-color-text-primary);
-  margin: 0;
-  text-align: center;
-}
-
 .maxLabel {
   font-family: var(--primitives-fontFamily-ui);
   font-size: calc(var(--primitives-fontSize-sm) * 1px);
@@ -100,6 +98,7 @@
   color: var(--semantic-color-text-muted);
   margin: 0;
   text-align: center;
+  line-height: 1.45;
 }
 
 /* Centered amount with caret to the right of digits (display layer + transparent input) */
@@ -132,7 +131,9 @@
 
 .amountDisplay {
   display: block;
-  color: var(--semantic-color-text-primary);
+  text-align: right;
+  /* Resting "0" reads as a placeholder rather than an entered value. */
+  color: color-mix(in srgb, var(--semantic-color-text-primary) 30%, transparent);
   pointer-events: none;
   user-select: none;
 }
@@ -157,7 +158,7 @@
   -moz-appearance: textfield;
 }
 
-.amountInput:not(:placeholder-shown) {
+.amountFieldHasValue .amountInput {
   caret-color: var(--semantic-color-brand-lavender);
 }
 
@@ -269,7 +270,8 @@
   color: var(--semantic-color-brand-lavender);
 }
 
-.barScaleMax {
+.barScaleMax,
+.barScaleMaxBtn {
   font-family: var(--primitives-fontFamily-ui);
   font-size: calc(var(--primitives-fontSize-xs) * 1px);
   font-weight: var(--primitives-fontWeight-medium);
@@ -277,6 +279,35 @@
   text-transform: uppercase;
   color: var(--semantic-color-text-muted);
   text-align: right;
+}
+
+/* Single-hop MAX doubles as a fill-to-cap control. */
+.barScaleMaxBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: var(--primitives-spacing-6);
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.barScaleMaxBtn:hover:not(:disabled) {
+  color: var(--semantic-color-brand-lavender);
+}
+
+.barScaleMaxBtn:focus-visible {
+  outline: 2px solid var(--semantic-color-brand-lavender);
+  outline-offset: 2px;
+  border-radius: calc(var(--primitives-borderRadius-sm) * 1px);
+}
+
+.barScaleMaxBtn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .armCard {
@@ -436,16 +467,7 @@
   justify-content: center;
 }
 
-.multiTitle {
-  font-family: var(--primitives-fontFamily-ui);
-  font-size: calc(var(--primitives-fontSize-xl) * 1px);
-  font-weight: var(--primitives-fontWeight-medium);
-  color: var(--semantic-color-text-primary);
-  margin: 0;
-  text-align: center;
-}
-
-/* "Available {balance}" sits directly under the title (was lower down
+/* "Available {balance}" sits directly under the chrome title (was lower down
  * in v0 of the multi-hop variant). Caps/uppercase to match the single-
  * hop variant's `.availableLabel` styling. */
 .multiAvailableLabel {
