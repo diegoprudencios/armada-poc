@@ -50,6 +50,16 @@ const USDC = '0x' + 'd'.repeat(40)
 const CROWDFUND = '0x' + 'c'.repeat(40)
 const USDC_UNIT = 1_000_000n
 
+/** Minimal invite section with a free slot so confirmation shows Whitelist. */
+const inviteSlotSections = [
+  {
+    hop: 1 as const,
+    config: {
+      slots: [{ id: 1, status: 'empty' as const }],
+    },
+  },
+]
+
 const position: HopPosition = {
   hop: 0,
   invitesReceived: 1,
@@ -85,6 +95,7 @@ function makeProps(): ParticipateFlowV2Props {
     saleSize: 1_000_000n * USDC_UNIT,
     cappedDemand: 0n,
     windowOpen: true,
+    inviteSlotSections: inviteSlotSections as never,
     onGoToMyPosition: vi.fn(),
     onGoToNetwork: vi.fn(),
     onReceiptLogs: vi.fn(),
