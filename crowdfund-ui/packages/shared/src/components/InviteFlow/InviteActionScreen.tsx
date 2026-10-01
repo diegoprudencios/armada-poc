@@ -48,6 +48,10 @@ function isPasteableAddress(val: string): boolean {
   return isValidAddress(trimmed) || isEns(trimmed)
 }
 
+function sameAddress(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
 function inviteLinkPath(url: string): string {
   try {
     const parsed = new URL(url)
@@ -83,6 +87,8 @@ export interface InviteActionScreenProps {
   onConfirmCreated?: (id: number) => void
   /** Drop deferred invite revoked from confirmation (never shown in list). */
   onDiscardCreated?: (id: number) => void
+  /** Connected wallet — when the pasted address matches, CTA / confirm become self-invite. */
+  selfWalletAddress?: string
   copiedInviteId?: number | null
   /** Real ENS resolver — omit to use the internal mock (showcase only). */
   resolveEns?: (input: string) => Promise<SlotCardEnsResult>
@@ -101,6 +107,7 @@ export function InviteActionScreen({
   onRevoke,
   onConfirmCreated,
   onDiscardCreated,
+  selfWalletAddress,
   copiedInviteId = null,
   resolveEns,
 }: InviteActionScreenProps) {
@@ -130,10 +137,24 @@ export function InviteActionScreen({
   const hopLabel = hop != null ? formatInviteeHop(hop) : `Slot ${slotId}`
   const hopColor =
     hop != null ? hopPillDotColor(hopVariantForInvitee(hop)) : null
+
+  const resolvedInviteAddress =
+    resolvedAddress || (isValidAddress(addressInput) ? addressInput.trim() : '')
+  const isSelfInviteForm =
+    selfWalletAddress != null &&
+    resolvedInviteAddress !== '' &&
+    sameAddress(resolvedInviteAddress, selfWalletAddress)
+  const isSelfInviteConfirm =
+    createdOnchain != null &&
+    selfWalletAddress != null &&
+    sameAddress(createdOnchain.address, selfWalletAddress)
+
   const title = createdLink
     ? 'Link ready to share'
     : createdOnchain
-      ? 'Invite sent on-chain'
+      ? isSelfInviteConfirm
+        ? 'Self invite sent on-chain'
+        : 'Invite sent on-chain'
       : method === 'link'
         ? 'Create and share an invite link'
         : method === 'onchain'
@@ -158,7 +179,9 @@ export function InviteActionScreen({
         ? loading
           ? 'Inviting…'
           : hasAddressInput
-            ? 'Send invite'
+            ? isSelfInviteForm
+              ? 'Self invite'
+              : 'Send invite'
             : 'Insert address'
         : 'Continue'
 
@@ -482,7 +505,9 @@ export function InviteActionScreen({
             {display}
           </p>
           <p className={styles.meta}>
-            On-chain invites cannot be revoked. The invitee can commit when ready.
+            {isSelfInviteConfirm
+              ? 'You invited yourself. On-chain invites cannot be revoked; connect this wallet and commit when ready.'
+              : 'On-chain invites cannot be revoked. The invitee can commit when ready.'}
           </p>
         </div>
         <div className={styles.footer}>

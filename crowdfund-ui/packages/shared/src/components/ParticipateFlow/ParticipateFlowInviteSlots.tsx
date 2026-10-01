@@ -35,6 +35,8 @@ export interface ParticipateFlowInviteSlotsProps {
   /** One section per eligible hop, each carrying its own slot list +
    *  handlers. Pass an empty array for the "no invite slots" empty state. */
   sections: ReadonlyArray<CrowdfundInviteSlotSection>
+  /** Connected wallet — self-invite CTA when the pasted address matches. */
+  selfWalletAddress?: string
   onDoItLater?: () => void
   /** Rendered beneath the "Do it later" button — e.g. social links. */
   socials?: ReactNode
@@ -42,6 +44,7 @@ export interface ParticipateFlowInviteSlotsProps {
 
 export function ParticipateFlowInviteSlots({
   sections,
+  selfWalletAddress,
   onDoItLater,
   socials,
 }: ParticipateFlowInviteSlotsProps) {
@@ -253,6 +256,7 @@ export function ParticipateFlowInviteSlots({
             onRevoke={handleRevoke}
             copiedInviteId={copiedInviteId}
             resolveEns={resolveEns}
+            selfWalletAddress={selfWalletAddress}
             list={listFrame}
           />
         ) : (
