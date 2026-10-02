@@ -1595,6 +1595,15 @@ function DoneScreen({
         </div>
         <div className={styles.introFade} aria-hidden />
       </div>
+      <div className={styles.buttonRow}>
+        <ArmadaButton
+          variant="primary"
+          size="lg"
+          label="Done"
+          showIcon={false}
+          onClick={onClose}
+        />
+      </div>
     </CardFlowShell>
   )
 }

@@ -14,6 +14,7 @@ import {
   Step5Confirmation,
   StepBeforeYouStart,
   MaxOutBanner,
+  MaxOutFlowStack,
   INVITE_LINK_STEPS,
   type Step3ReviewHopCommit,
   type Step4Transaction,
@@ -511,11 +512,13 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
     // The maxed-out shortcut never runs a pipeline, so it always uses live state.
     const snap = maxedOut ? undefined : pipeline.state.confirmation
     return (
-      // Banner hoisted above the card, consistent with the commit flow. By this
-      // step the link is redeemed, so "Max out" offers to extend the invitee's
-      // ceiling (self-invite + commit) when headroom remains.
-      <div style={{ width: '100%' }}>
-        {maxOutOption && <MaxOutBanner maxOut={maxOutOption} />}
+      // Banner hoisted above the card on desktop; mobile shows it inside Step2Commit.
+      // By this step the link is redeemed, so "Max out" offers to extend the
+      // invitee's ceiling (self-invite + commit) when headroom remains.
+      <MaxOutFlowStack>
+        {maxOutOption ? (
+          <MaxOutBanner maxOut={maxOutOption} placement="aboveShell" />
+        ) : null}
         <Step5Confirmation
           steps={MODAL_STEPS}
           stepIndex={4}
@@ -544,7 +547,7 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
             }
           }}
         />
-      </div>
+      </MaxOutFlowStack>
     )
   }
 
@@ -654,23 +657,29 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
         const remaining = Math.max(0, maxAmount - existingCommitted)
         const availableBalance = usdcToNumber(balance)
         return (
-          <Step2Commit
-            steps={MODAL_STEPS}
-            stepIndex={2}
-            onNext={(nextAmount) => {
-              setAmount(nextAmount)
-              transitionTo('review')
-            }}
-            onBack={() => transitionTo('beforeYouStart')}
-            onClose={handleClose}
-            maxAmount={maxAmount}
-            existingCommittedUsdc={existingCommitted}
-            availableBalance={availableBalance}
-            maxArm={Math.round(estimateArmForAmount(remaining))}
-            estimateArm={estimateArmForAmount}
-            hopLabel={hopLabel(targetHop)}
-            hopColor={hopPillDotColor(targetHop === 2 ? 'hop-2' : 'hop-1')}
-          />
+          <MaxOutFlowStack>
+            {maxOutOption ? (
+              <MaxOutBanner maxOut={maxOutOption} placement="aboveShell" />
+            ) : null}
+            <Step2Commit
+              steps={MODAL_STEPS}
+              stepIndex={2}
+              onNext={(nextAmount) => {
+                setAmount(nextAmount)
+                transitionTo('review')
+              }}
+              onBack={() => transitionTo('beforeYouStart')}
+              onClose={handleClose}
+              maxAmount={maxAmount}
+              existingCommittedUsdc={existingCommitted}
+              availableBalance={availableBalance}
+              maxArm={Math.round(estimateArmForAmount(remaining))}
+              estimateArm={estimateArmForAmount}
+              hopLabel={hopLabel(targetHop)}
+              hopColor={hopPillDotColor(targetHop === 2 ? 'hop-2' : 'hop-1')}
+              maxOut={maxOutOption ?? undefined}
+            />
+          </MaxOutFlowStack>
         )
       }
 
@@ -782,6 +791,8 @@ export function InviteLinkFlowController({ inviteData }: InviteLinkFlowControlle
             sections={inviteSlots.sections}
             selfWalletAddress={lowerAddress ?? undefined}
             onDoItLater={() => navigate('/?view=myposition')}
+            onBack={() => transitionTo('confirmation')}
+            onClose={handleClose}
             socials={<FooterSocials />}
           />
         )
